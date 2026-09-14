@@ -1,20 +1,24 @@
 {
   "name": "@arena-kingdom/shared",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "main": "./dist/game.js",
-  "types": "./dist/game.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/game.d.ts",
-      "default": "./dist/game.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "test": "tsx --test test/*.test.ts",
+    "simulate": "tsx scripts/simulate.ts"
   },
   "devDependencies": {
+    "tsx": "^4.20.3",
     "typescript": "^5.9.2"
   }
 }

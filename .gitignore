@@ -9,3 +9,8 @@ coverage/
 *.log
 .idea/
 .vscode/*.local.json
+*.tsbuildinfo
+
+# Local SQLite database
+database/*.db
+database/*.db-*
