@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import {
-  BUILDABLE_TYPES,
   BUILDING_STATS,
   GAME_RULES,
   UNIT_STATS,
@@ -15,24 +14,18 @@ import {
 } from '@arena-kingdom/shared';
 import {
   SPRITE_ANCHOR_Y,
-  SPRITE_SIZE,
-  arenaMapArt,
-  buildingArt,
-  svgDataUrl,
-  troopArt
+  SPRITE_SIZE
 } from './art';
 import type { GameController } from './GameController';
+import { BATTLE_DEPTH, BattleVisualRenderer } from './visuals';
 
 const { width: W, height: H } = GAME_RULES.map;
 const UI_FONT = '"Segoe UI", Arial, system-ui, sans-serif';
-const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 const SIDE_COLOR: Record<Side, number> = { blue: 0x3b82f6, red: 0xef4444 };
 const UNIT_RADIUS = UNIT_STATS.soldier.radius;
 const DRAG_THRESHOLD = 6;
 const MAX_EFFECTS = 90;
-const SIDES: Side[] = ['blue', 'red'];
-
-const DEPTH = { decor: 1, ground: 2, entities: 10, bars: 1500, overlay: 1600, fx: 1700 };
+const DEPTH = BATTLE_DEPTH;
 
 interface UnitSprite {
   image: Phaser.GameObjects.Image;
@@ -50,10 +43,9 @@ interface BuildingSprite {
   hurtUntil: number;
 }
 
-const textureKey = (type: BuildingType | 'troop', side: Side) => (type === 'village' || type === 'fence' ? type : `${type}-${side}`);
-
 export class BattleScene extends Phaser.Scene {
   private controller!: GameController;
+  private visuals!: BattleVisualRenderer;
   private res = 1;
   private smoothing = false;
   private units = new Map<number, UnitSprite>();
@@ -76,22 +68,11 @@ export class BattleScene extends Phaser.Scene {
     this.controller = data.controller;
     this.res = data.resolution;
     this.smoothing = data.controller.session.mode === 'pvp';
+    this.visuals = new BattleVisualRenderer(this, this.res, W, H);
   }
 
   preload() {
-    const load = (key: string, markup: string, width: number, height: number) => {
-      if (this.textures.exists(key)) this.textures.remove(key);
-      this.load.svg(key, svgDataUrl(markup, width * this.res, height * this.res));
-    };
-    for (const side of SIDES) {
-      for (const type of ['castle', ...BUILDABLE_TYPES] as BuildingType[]) {
-        const key = textureKey(type, side);
-        if (side === 'red' && key === type) continue;
-        load(key, buildingArt(type, side), SPRITE_SIZE[type].width, SPRITE_SIZE[type].height);
-      }
-      load(textureKey('troop', side), troopArt(side), SPRITE_SIZE.troop.width, SPRITE_SIZE.troop.height);
-    }
-    load('arena-map', arenaMapArt(), W, H);
+    this.visuals.preload();
   }
 
   create() {
@@ -104,7 +85,10 @@ export class BattleScene extends Phaser.Scene {
     this.ground = this.add.graphics().setDepth(DEPTH.ground);
     this.bars = this.add.graphics().setDepth(DEPTH.bars);
     this.overlay = this.add.graphics().setDepth(DEPTH.overlay);
-    this.ghost = this.add.image(0, 0, 'village').setDepth(DEPTH.overlay).setVisible(false);
+    this.ghost = this.add
+      .image(0, 0, this.visuals.building('village', this.controller.mySide).key)
+      .setDepth(DEPTH.overlay)
+      .setVisible(false);
     this.bindInput();
   }
 
@@ -146,7 +130,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private drawWorld() {
-    this.add.image(W / 2, H / 2, 'arena-map').setOrigin(0.5).setDepth(0);
+    this.visuals.drawTerrain();
   }
 
   // ---------------------------------------------------------------- input
@@ -296,7 +280,7 @@ export class BattleScene extends Phaser.Scene {
       let sprite = this.units.get(u.id);
       if (!sprite) {
         const image = this.add
-          .image(u.x, u.y, textureKey('troop', u.side))
+          .image(u.x, u.y, this.visuals.unit(u.type, u.side).key)
           .setOrigin(0.5, SPRITE_ANCHOR_Y.troop)
           .setDisplaySize(troopSize.width, troopSize.height);
         sprite = { image, x: u.x, y: u.y, bob: Math.random() * 6, seen: frame };
@@ -352,7 +336,7 @@ export class BattleScene extends Phaser.Scene {
   private createBuilding(b: BuildingView): BuildingSprite {
     const size = SPRITE_SIZE[b.type];
     const image = this.add
-      .image(b.x, b.y, textureKey(b.type, b.side))
+      .image(b.x, b.y, this.visuals.building(b.type, b.side).key)
       .setOrigin(0.5, SPRITE_ANCHOR_Y[b.type])
       .setDisplaySize(size.width, size.height)
       .setDepth(DEPTH.entities + (b.y + BUILDING_STATS[b.type].halfHeight) / 10);
@@ -478,7 +462,7 @@ export class BattleScene extends Phaser.Scene {
         o.strokeCircle(point.x, point.y, stats.halfWidth + UNIT_RADIUS + stats.attack.range);
       }
       this.ghost
-        .setTexture(textureKey(type, c.mySide))
+        .setTexture(this.visuals.building(type, c.mySide).key)
         .setOrigin(0.5, SPRITE_ANCHOR_Y[type])
         .setDisplaySize(size.width, size.height)
         .setPosition(point.x, point.y)
@@ -547,7 +531,7 @@ export class BattleScene extends Phaser.Scene {
     const image = this.add
       .image(fromX, fromY, 'arrow')
       .setScale(1 / this.res)
-      .setDepth(DEPTH.fx)
+      .setDepth(DEPTH.effects)
       .setRotation(Math.atan2(toY - fromY, toX - fromX));
     this.track(image);
     this.tweens.add({
@@ -563,13 +547,13 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private spark(x: number, y: number, scale: number) {
-    const image = this.add.image(x, y, 'spark').setScale((scale * 0.6) / this.res).setDepth(DEPTH.fx);
+    const image = this.add.image(x, y, 'spark').setScale((scale * 0.6) / this.res).setDepth(DEPTH.effects);
     this.track(image);
     this.tweens.add({ targets: image, scale: (scale * 1.3) / this.res, alpha: 0, duration: 170, onComplete: () => image.destroy() });
   }
 
   private ring(x: number, y: number, color: number, from: number, to: number, duration: number) {
-    const image = this.add.image(x, y, 'ring').setTint(color).setScale(from / this.res).setDepth(DEPTH.fx);
+    const image = this.add.image(x, y, 'ring').setTint(color).setScale(from / this.res).setDepth(DEPTH.effects);
     this.track(image);
     this.tweens.add({ targets: image, scale: to / this.res, alpha: 0, duration, onComplete: () => image.destroy() });
   }
