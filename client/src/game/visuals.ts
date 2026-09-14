@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { BuildingType, Side, UnitType } from '@arena-kingdom/shared';
-import { arenaMapArt, buildingArt, SPRITE_SIZE, svgDataUrl, troopArt } from './art';
+import { buildingArt, SPRITE_SIZE, svgDataUrl, troopArt } from './art';
+import { arenaMapArtV2 } from './mapArt';
 import { villageArt } from './villageArt';
 
 /**
@@ -64,7 +65,7 @@ export class BattleVisualRenderer {
       load(unitTextureKey('soldier', side), troopArt(side), troop.width, troop.height);
     }
 
-    load('arena-map', arenaMapArt(), this.width, this.height);
+    load('arena-map', arenaMapArtV2(), this.width, this.height);
   }
 
   drawTerrain() {
