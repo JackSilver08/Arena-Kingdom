@@ -1,0 +1,20 @@
+{
+  "name": "@arena-kingdom/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/game.js",
+  "types": "./dist/game.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/game.d.ts",
+      "default": "./dist/game.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}
