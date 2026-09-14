@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { BuildingType, Side, UnitType } from '@arena-kingdom/shared';
 import { arenaMapArt, buildingArt, SPRITE_SIZE, svgDataUrl, troopArt } from './art';
+import { villageArt } from './villageArt';
 
 /**
  * Rendering-only depth bands. Game rules use world coordinates only; they
@@ -17,9 +18,7 @@ export const BATTLE_DEPTH = {
 } as const;
 
 export interface EntityVisual {
-  /** Phaser texture key for the production vector sprite. */
   key: string;
-  /** Kept deliberately separate so an unavailable asset never leaks into game logic. */
   fallbackEmoji: string;
 }
 
@@ -33,7 +32,6 @@ const fallbackBuilding: Record<BuildingType, string> = {
 
 const fallbackUnit: Record<UnitType, string> = { soldier: '🛡️' };
 
-/** Every building gets a team-aware texture, even visual-only structures. */
 export function buildingTextureKey(type: BuildingType, side: Side) {
   return `${type}-${side}`;
 }
@@ -42,10 +40,6 @@ export function unitTextureKey(type: UnitType, side: Side) {
   return `${type}-${side}`;
 }
 
-/**
- * Owns loading and lookup of presentation assets. The SVGs are compact,
- * original artwork; callers receive texture keys and never see SVG markup.
- */
 export class BattleVisualRenderer {
   constructor(
     private readonly scene: Phaser.Scene,
@@ -63,11 +57,13 @@ export class BattleVisualRenderer {
     for (const side of ['blue', 'red'] as const) {
       for (const type of ['castle', 'village', 'barracks', 'fence', 'tower'] as BuildingType[]) {
         const size = SPRITE_SIZE[type];
-        load(buildingTextureKey(type, side), buildingArt(type, side), size.width, size.height);
+        const markup = type === 'village' ? villageArt(side) : buildingArt(type, side);
+        load(buildingTextureKey(type, side), markup, size.width, size.height);
       }
       const troop = SPRITE_SIZE.troop;
       load(unitTextureKey('soldier', side), troopArt(side), troop.width, troop.height);
     }
+
     load('arena-map', arenaMapArt(), this.width, this.height);
   }
 
