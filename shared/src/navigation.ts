@@ -1,4 +1,4 @@
-import { BUILDING_STATS, GAME_RULES, UNIT_STATS } from './rules.js';
+import { BUILDING_STATS, GAME_RULES, UNIT_STATS, isWalkableLand } from './rules.js';
 import type { BuildingType, Side, Vec2 } from './types.js';
 
 const CELL = 16;
@@ -143,6 +143,16 @@ export class NavGrid {
     for (const side of ['blue', 'red'] as const) {
       const grid = this.blocked[side];
       grid.fill(0);
+      // Ocean is not navigable. Both islands and the two bridges share one grid,
+      // so troops can cross only through the bridge corridors.
+      for (let r = 0; r < this.rows; r++) {
+        for (let c = 0; c < this.cols; c++) {
+          const i = r * this.cols + c;
+          const cx = this.originX + (c + 0.5) * CELL;
+          const cy = this.originY + (r + 0.5) * CELL;
+          if (!isWalkableLand(cx, cy, UNIT_STATS.soldier.radius)) grid[i] = 1;
+        }
+      }
       for (const wall of this.walls[side]) {
         const c0 = Math.max(0, Math.floor((wall.minX - this.originX) / CELL));
         const c1 = Math.min(this.cols - 1, Math.floor((wall.maxX - this.originX) / CELL));
