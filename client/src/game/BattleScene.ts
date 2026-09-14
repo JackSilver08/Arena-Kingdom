@@ -16,21 +16,16 @@ import {
 import {
   SPRITE_ANCHOR_Y,
   SPRITE_SIZE,
-  WAVE_SIZE,
-  bigWaveArt,
+  arenaMapArt,
   buildingArt,
-  smallWaveArt,
   svgDataUrl,
   troopArt
 } from './art';
 import type { GameController } from './GameController';
 
-const { width: W, height: H, island: ISLAND, midlineY: MID } = GAME_RULES.map;
+const { width: W, height: H } = GAME_RULES.map;
 const UI_FONT = '"Segoe UI", Arial, system-ui, sans-serif';
 const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
-const OCEAN = 0x1f86f5;
-const LAND = 0x00bf63;
-const SHORE = 0x2e8b4e;
 const SIDE_COLOR: Record<Side, number> = { blue: 0x3b82f6, red: 0xef4444 };
 const UNIT_RADIUS = UNIT_STATS.soldier.radius;
 const DRAG_THRESHOLD = 6;
@@ -96,8 +91,7 @@ export class BattleScene extends Phaser.Scene {
       }
       load(textureKey('troop', side), troopArt(side), SPRITE_SIZE.troop.width, SPRITE_SIZE.troop.height);
     }
-    load('wave-big', bigWaveArt(), WAVE_SIZE.big.width, WAVE_SIZE.big.height);
-    load('wave-small', smallWaveArt(), WAVE_SIZE.small.width, WAVE_SIZE.small.height);
+    load('arena-map', arenaMapArt(), W, H);
   }
 
   create() {
@@ -152,37 +146,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private drawWorld() {
-    const g = this.add.graphics().setDepth(0);
-    g.fillStyle(OCEAN, 1);
-    g.fillRect(-W, -H, W * 3, H * 3);
-
-    const waves: [string, number, number][] = [
-      ['wave-big', 250, 270],
-      ['wave-small', 1690, 598],
-      ['wave-small', 230, 798],
-      ['wave-small', 1710, 968]
-    ];
-    waves.forEach(([key, x, y], i) => {
-      const size = key === 'wave-big' ? WAVE_SIZE.big : WAVE_SIZE.small;
-      const wave = this.add
-        .image(x, y, key)
-        .setDisplaySize(size.width, size.height)
-        .setDepth(DEPTH.decor)
-        .setAlpha(0.95);
-      this.tweens.add({ targets: wave, y: y + 6, x: x + 4, duration: 2200 + i * 350, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    });
-
-    const shore = 22;
-    g.fillStyle(SHORE, 1);
-    g.fillRoundedRect(ISLAND.x - shore, ISLAND.y - shore, ISLAND.width + shore * 2, ISLAND.height + shore * 2, 96);
-    g.fillStyle(LAND, 1);
-    g.fillRoundedRect(ISLAND.x, ISLAND.y, ISLAND.width, ISLAND.height, 76);
-
-    // Dashed frontier between the kingdoms.
-    g.fillStyle(0x111111, 1);
-    for (let x = ISLAND.x - shore / 2; x < ISLAND.x + ISLAND.width + shore / 2; x += 18) {
-      g.fillRect(x, MID - 1.5, 11, 3);
-    }
+    this.add.image(W / 2, H / 2, 'arena-map').setOrigin(0.5).setDepth(0);
   }
 
   // ---------------------------------------------------------------- input
