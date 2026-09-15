@@ -70,45 +70,46 @@ test('soldiers fight and destroying the castle ends the match', () => {
   assert.equal(engine.state.result.reason, 'castle');
 });
 
-test('fence segments snap together and block only the enemy', () => {
+test('fence segments stand vertically, snap together and block only the enemy', () => {
   const engine = new MatchEngine();
   engine.state.players.blue.gold = 1000;
-  const y = territoryBounds('blue', BUILDING_STATS.fence.halfWidth + 8, BUILDING_STATS.fence.halfHeight + 8).maxY;
-  assert.equal(engine.command('blue', { type: 'build', building: 'fence', x: 960, y }).ok, true);
-  const snapped = snapPlacement(engine.state.buildings, 'blue', 'fence', 960 + BUILDING_STATS.fence.halfWidth * 2 + 20, y + 6);
-  assert.deepEqual(snapped, { x: 960 + BUILDING_STATS.fence.halfWidth * 2, y });
+  const { halfWidth, halfHeight } = BUILDING_STATS.fence;
+  assert.ok(halfHeight > halfWidth, 'fences run north-south');
+  assert.equal(engine.command('blue', { type: 'build', building: 'fence', x: 600, y: 540 }).ok, true);
+  const snapped = snapPlacement(engine.state.buildings, 'blue', 'fence', 606, 540 + halfHeight * 2 + 20);
+  assert.deepEqual(snapped, { x: 600, y: 540 + halfHeight * 2 });
   assert.equal(engine.command('blue', { type: 'build', building: 'fence', x: snapped.x, y: snapped.y }).ok, true);
 
   const nav = new NavGrid();
   nav.rebuild(engine.state.buildings);
-  assert.ok(nav.firstWall('red', 1000, 700, 1000, 300), 'red troops are blocked by the blue wall');
-  assert.equal(nav.firstWall('blue', 1000, 300, 1000, 700), null, 'blue troops walk through their own wall');
-  const path = nav.findPath('red', { x: 1000, y: 700 }, { x: 1000, y: 300 });
+  assert.ok(nav.firstWall('red', 660, 560, 540, 560), 'red troops are blocked by the blue wall');
+  assert.equal(nav.firstWall('blue', 540, 560, 660, 560), null, 'blue troops walk through their own wall');
+  const path = nav.findPath('red', { x: 660, y: 560 }, { x: 540, y: 560 });
   assert.ok(path, 'red can walk around the wall');
   assert.ok(path.points.length >= 2, 'the route bends around the fence');
 });
 
-test('troops break through a wall that seals the island', () => {
+test('troops break through a wall that seals the bridges', () => {
   const engine = new MatchEngine();
   engine.state.players.blue.gold = 10_000;
   const { halfWidth, halfHeight } = BUILDING_STATS.fence;
   const bounds = territoryBounds('blue', halfWidth + 8, halfHeight + 8);
-  const build = (x: number, y: number) => assert.equal(engine.command('blue', { type: 'build', building: 'fence', x, y }).ok, true);
-  for (let x = bounds.minX; x <= bounds.maxX; x += halfWidth * 2) build(x, bounds.maxY);
-  // A second row closes the gap left at the right edge.
-  build(bounds.maxX, bounds.maxY - 40);
+  for (let y = bounds.minY; y <= bounds.maxY; y += halfHeight * 2) {
+    assert.equal(engine.command('blue', { type: 'build', building: 'fence', x: bounds.maxX, y }).ok, true);
+  }
 
   const nav = new NavGrid();
   nav.rebuild(engine.state.buildings);
   const castle = engine.castleOf('blue')!;
-  assert.equal(nav.findPath('red', { x: 960, y: 700 }, { x: castle.x, y: castle.y + 70 }), null, 'no way around');
+  const red = engine.castleOf('red')!;
+  assert.equal(nav.findPath('red', { x: red.x - 100, y: red.y }, { x: castle.x + 70, y: castle.y }), null, 'no way around');
 
   for (const unit of engine.armyOf('blue')) unit.hp = 0;
-  engine.command('red', { type: 'army', fraction: 'all', x: castle.x, y: castle.y + 70 });
+  engine.command('red', { type: 'army', fraction: 'all', x: castle.x + 70, y: castle.y });
   const fencesBefore = engine.buildingsOf('blue', 'fence').length;
   run(engine, 60_000);
   assert.ok(engine.buildingsOf('blue', 'fence').length < fencesBefore, 'a fence was destroyed');
-  assert.ok(engine.armyOf('red').some((u) => u.y < bounds.maxY - halfHeight), 'troops got through the gap');
+  assert.ok(engine.armyOf('red').some((u) => u.x < bounds.maxX - halfWidth), 'troops got through the gap');
 });
 
 test('an explicit attack order focuses the chosen target', () => {

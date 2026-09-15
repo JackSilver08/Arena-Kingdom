@@ -1,10 +1,12 @@
-import { BUILDING_STATS, GAME_RULES, UNIT_STATS, isWalkableLand } from './rules.js';
+import { BUILDING_STATS, GAME_RULES, UNIT_STATS, isWalkableLand, segmentOnLand } from './rules.js';
 import type { BuildingType, Side, Vec2 } from './types.js';
 
 const CELL = 16;
 /** Walls are inflated by a troop's radius plus a little slack. */
 const CLEARANCE = UNIT_STATS.soldier.radius + 2;
 const SEARCH_RADIUS_CELLS = 8;
+/** Extra cost of stepping through a cell covered by an enemy wall when looking for one to break. */
+const WALL_CELL_COST = 12;
 
 interface Wall {
   id: number;
@@ -114,7 +116,12 @@ export class NavGrid {
   version = 0;
   private readonly originX: number;
   private readonly originY: number;
+  /** Ocean cells. Both islands and the two bridges share one grid, so troops cross only on the bridges. */
+  private readonly terrain: Uint8Array;
+  /** Terrain plus enemy walls. */
   private readonly blocked: Record<Side, Uint8Array>;
+  /** How many enemy walls cover each cell. */
+  private readonly wallCover: Record<Side, Uint8Array>;
   private walls: Record<Side, Wall[]> = { blue: [], red: [] };
 
   constructor() {
@@ -123,7 +130,14 @@ export class NavGrid {
     this.originY = island.y;
     this.cols = Math.ceil(island.width / CELL);
     this.rows = Math.ceil(island.height / CELL);
-    this.blocked = { blue: new Uint8Array(this.cols * this.rows), red: new Uint8Array(this.cols * this.rows) };
+    const n = this.cols * this.rows;
+    this.terrain = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      const { x, y } = this.center(i);
+      if (!isWalkableLand(x, y, UNIT_STATS.soldier.radius)) this.terrain[i] = 1;
+    }
+    this.blocked = { blue: this.terrain.slice(), red: this.terrain.slice() };
+    this.wallCover = { blue: new Uint8Array(n), red: new Uint8Array(n) };
   }
 
   rebuild(buildings: readonly { id: number; side: Side; type: BuildingType; x: number; y: number; hp: number }[]) {
@@ -142,17 +156,9 @@ export class NavGrid {
     }
     for (const side of ['blue', 'red'] as const) {
       const grid = this.blocked[side];
-      grid.fill(0);
-      // Ocean is not navigable. Both islands and the two bridges share one grid,
-      // so troops can cross only through the bridge corridors.
-      for (let r = 0; r < this.rows; r++) {
-        for (let c = 0; c < this.cols; c++) {
-          const i = r * this.cols + c;
-          const cx = this.originX + (c + 0.5) * CELL;
-          const cy = this.originY + (r + 0.5) * CELL;
-          if (!isWalkableLand(cx, cy, UNIT_STATS.soldier.radius)) grid[i] = 1;
-        }
-      }
+      const cover = this.wallCover[side];
+      grid.set(this.terrain);
+      cover.fill(0);
       for (const wall of this.walls[side]) {
         const c0 = Math.max(0, Math.floor((wall.minX - this.originX) / CELL));
         const c1 = Math.min(this.cols - 1, Math.floor((wall.maxX - this.originX) / CELL));
@@ -163,16 +169,15 @@ export class NavGrid {
           if (cy < wall.minY || cy > wall.maxY) continue;
           for (let c = c0; c <= c1; c++) {
             const cx = this.originX + (c + 0.5) * CELL;
-            if (cx >= wall.minX && cx <= wall.maxX) grid[r * this.cols + c] = 1;
+            if (cx < wall.minX || cx > wall.maxX) continue;
+            const i = r * this.cols + c;
+            grid[i] = 1;
+            cover[i] = Math.min(255, cover[i] + 1);
           }
         }
       }
     }
     this.version += 1;
-  }
-
-  hasWalls(side: Side) {
-    return this.walls[side].length > 0;
   }
 
   /** The first wall crossed by the straight line A→B, or null when the line is clear. */
@@ -184,6 +189,11 @@ export class NavGrid {
       if (t !== null && (!best || t < best.t)) best = { id: wall.id, t };
     }
     return best;
+  }
+
+  /** True when a troop can walk straight from A to B: no ocean and no enemy wall on the way. */
+  lineClear(side: Side, ax: number, ay: number, bx: number, by: number, ignoreId?: number) {
+    return segmentOnLand(ax, ay, bx, by, UNIT_STATS.soldier.radius) && !this.firstWall(side, ax, ay, bx, by, ignoreId);
   }
 
   /** The wall covering a point, if any. */
@@ -209,6 +219,48 @@ export class NavGrid {
     const end = exactGoal ? { x: to.x, y: to.y } : this.center(goal);
     if (start === goal) return { points: [end], end };
 
+    const cells = this.search(grid, start, goal);
+    if (!cells) return null;
+    const raw = cells.map((c) => this.center(c));
+    raw[raw.length - 1] = end;
+
+    // String-pulling: skip waypoints while the straight line stays on land and clear of walls.
+    const points: Vec2[] = [];
+    let anchor = from;
+    let i = 0;
+    while (i < raw.length) {
+      let j = raw.length - 1;
+      while (j > i && !this.lineClear(side, anchor.x, anchor.y, raw[j].x, raw[j].y, ignoreId)) j--;
+      points.push(raw[j]);
+      anchor = raw[j];
+      i = j + 1;
+    }
+    return { points, end };
+  }
+
+  /**
+   * The enemy wall to break when `to` cannot be reached: the first wall on the cheapest route
+   * that may cut through walls at a cost. Unlike the straight line, this finds the wall that
+   * actually seals a bridge.
+   */
+  wallToBreach(side: Side, from: Vec2, to: Vec2): number | null {
+    if (!this.walls[side].length) return null;
+    const cover = this.wallCover[side];
+    const start = this.nearestOpen(this.terrain, this.cellOf(from.x, from.y));
+    const goal = this.nearestOpen(this.terrain, this.cellOf(to.x, to.y));
+    if (start < 0 || goal < 0) return null;
+    const cells = start === goal ? [] : this.search(this.terrain, start, goal, cover);
+    if (!cells) return null;
+    for (const cell of [start, ...cells]) {
+      if (!cover[cell]) continue;
+      const { x, y } = this.center(cell);
+      return this.wallAt(side, x, y);
+    }
+    return null;
+  }
+
+  /** A* over open cells; `penalty` adds WALL_CELL_COST per count. Returns the cells after `start` up to `goal`. */
+  private search(grid: Uint8Array, start: number, goal: number, penalty?: Uint8Array): number[] | null {
     const n = this.cols * this.rows;
     const cost = new Float32Array(n).fill(Infinity);
     const came = new Int32Array(n).fill(-1);
@@ -244,7 +296,7 @@ export class NavGrid {
           if (grid[next] || closed[next]) continue;
           // No cutting corners past a wall.
           if (dx && dy && (grid[cy * this.cols + nx] || grid[ny * this.cols + cx])) continue;
-          const nextCost = cost[current] + (dx && dy ? Math.SQRT2 : 1);
+          const nextCost = cost[current] + (dx && dy ? Math.SQRT2 : 1) + (penalty ? penalty[next] * WALL_CELL_COST : 0);
           if (nextCost < cost[next]) {
             cost[next] = nextCost;
             came[next] = current;
@@ -257,22 +309,7 @@ export class NavGrid {
 
     const cells: number[] = [];
     for (let c = goal; c !== start && c !== -1; c = came[c]) cells.push(c);
-    cells.reverse();
-    const raw = cells.map((c) => this.center(c));
-    raw[raw.length - 1] = end;
-
-    // String-pulling: skip waypoints while the straight line stays clear.
-    const points: Vec2[] = [];
-    let anchor = from;
-    let i = 0;
-    while (i < raw.length) {
-      let j = raw.length - 1;
-      while (j > i && this.firstWall(side, anchor.x, anchor.y, raw[j].x, raw[j].y, ignoreId)) j--;
-      points.push(raw[j]);
-      anchor = raw[j];
-      i = j + 1;
-    }
-    return { points, end };
+    return cells.reverse();
   }
 
   private gridWithout(side: Side, ignoreId: number) {

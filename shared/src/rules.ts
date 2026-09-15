@@ -9,6 +9,15 @@ const BRIDGES:readonly Rect[]=[
   {minX:830,maxX:1090,minY:390,maxY:496},
   {minX:830,maxX:1090,minY:584,maxY:690}
 ] as const;
+/**
+ * Padding shrinks each rect on its own, which would open a gap where a bridge meets an island.
+ * Walkable bridges therefore reach this far into both islands so their padded rects overlap.
+ */
+const BRIDGE_ANCHOR=48;
+const WALK_AREAS:readonly Rect[]=[
+  BLUE_LAND,RED_LAND,
+  ...BRIDGES.map(r=>({minX:r.minX-BRIDGE_ANCHOR,maxX:r.maxX+BRIDGE_ANCHOR,minY:r.minY,maxY:r.maxY}))
+];
 
 export const GAME_RULES={
   tickMs:50,
@@ -32,7 +41,7 @@ export const BUILDING_STATS:Record<BuildingType,BuildingStats>={
   castle:{label:'Castle',icon:'🏰',cost:0,hp:1500,shape:'circle',halfWidth:46,halfHeight:46,attack:{damage:9,range:80,cooldownMs:1000},description:'Your seat of power. Fires arrows at nearby attackers. If it falls, you lose.'},
   village:{label:'Village',icon:'🏘️',cost:75,hp:300,shape:'circle',halfWidth:26,halfHeight:26,description:`+${GAME_RULES.economy.villageIncome} gold every ${GAME_RULES.economy.incomeIntervalMs/1000}s.`},
   barracks:{label:'Barracks',icon:'⚔️',cost:120,hp:500,shape:'circle',halfWidth:28,halfHeight:28,description:'Trains troops. More barracks train in parallel.'},
-  fence:{label:'Fence',icon:'🪵',cost:30,hp:450,shape:'rect',halfWidth:64,halfHeight:11,description:'Wooden palisade. Enemy troops must go around or break through; yours pass freely.'},
+  fence:{label:'Fence',icon:'🪵',cost:30,hp:450,shape:'rect',halfWidth:11,halfHeight:64,description:'Wooden palisade. Enemy troops must go around or break through; yours pass freely.'},
   tower:{label:'Tower',icon:'🗼',cost:130,hp:700,shape:'circle',halfWidth:20,halfHeight:20,attack:{damage:18,range:100,cooldownMs:850},description:'Shoots enemy troops in range. Cannot move.'}
 };
 
@@ -76,7 +85,31 @@ export function territoryBounds(side:Side,padX=0,padY=padX){
 
 const inside=(r:Rect,x:number,y:number,p=0)=>x>=r.minX+p&&x<=r.maxX-p&&y>=r.minY+p&&y<=r.maxY-p;
 export function isWalkableLand(x:number,y:number,padding=0){
-  return inside(BLUE_LAND,x,y,padding)||inside(RED_LAND,x,y,padding)||BRIDGES.some(r=>inside(r,x,y,padding));
+  return WALK_AREAS.some(r=>inside(r,x,y,padding));
+}
+
+/** Parameter range [t0,t1] of segment A→B inside the padded rect, or null. Liang–Barsky clipping. */
+function clipSegment(r:Rect,ax:number,ay:number,bx:number,by:number,p:number):[number,number]|null{
+  const dx=bx-ax,dy=by-ay;let t0=0,t1=1;
+  const checks:[number,number][]=[[-dx,ax-(r.minX+p)],[dx,r.maxX-p-ax],[-dy,ay-(r.minY+p)],[dy,r.maxY-p-ay]];
+  for(const[k,q]of checks){
+    if(k===0){if(q<0)return null;continue;}
+    const t=q/k;
+    if(k<0){if(t>t1)return null;if(t>t0)t0=t;}
+    else{if(t<t0)return null;if(t<t1)t1=t;}
+  }
+  return[t0,t1];
+}
+
+/** True when the whole segment A→B stays on islands or bridges, i.e. it never crosses the ocean. */
+export function segmentOnLand(ax:number,ay:number,bx:number,by:number,padding=0){
+  const spans=WALK_AREAS.map(r=>clipSegment(r,ax,ay,bx,by,padding)).filter((s):s is[number,number]=>s!==null).sort((a,b)=>a[0]-b[0]);
+  let reach=0;
+  for(const[t0,t1]of spans){
+    if(t0>reach+1e-6)return false;
+    reach=Math.max(reach,t1);
+  }
+  return spans.length>0&&reach>=1-1e-6;
 }
 
 function clampRect(r:Rect,x:number,y:number,p:number){
@@ -86,9 +119,8 @@ function clampRect(r:Rect,x:number,y:number,p:number){
 /** Clamp a destination to the nearest island or bridge surface. */
 export function clampToIsland(x:number,y:number,padding=0){
   if(isWalkableLand(x,y,padding))return{x,y};
-  const rects=[BLUE_LAND,RED_LAND,...BRIDGES];
   let best:{x:number;y:number}|null=null;let bestD=Infinity;
-  for(const r of rects){const p=clampRect(r,x,y,padding);const d=(p.x-x)**2+(p.y-y)**2;if(d<bestD){best=p;bestD=d;}}
+  for(const r of WALK_AREAS){const p=clampRect(r,x,y,padding);const d=(p.x-x)**2+(p.y-y)**2;if(d<bestD){best=p;bestD=d;}}
   return best!;
 }
 
@@ -121,10 +153,11 @@ export function canPlaceBuilding(buildings:readonly(Located&{side?:Side})[],side
 
 export function snapPlacement(buildings:readonly(Located&{side:Side})[],side:Side,type:BuildableType,x:number,y:number){
   if(type!=='fence')return{x,y};
-  const width=BUILDING_STATS.fence.halfWidth*2;let best={x,y},bestDistance=FENCE_SNAP_DISTANCE;
+  // Fences stand vertically, so segments chain end to end along Y.
+  const height=BUILDING_STATS.fence.halfHeight*2;let best={x,y},bestDistance=FENCE_SNAP_DISTANCE;
   for(const fence of buildings){
     if(fence.type!=='fence'||fence.side!==side)continue;
-    for(const candidate of[{x:fence.x-width,y:fence.y},{x:fence.x+width,y:fence.y}]){
+    for(const candidate of[{x:fence.x,y:fence.y-height},{x:fence.x,y:fence.y+height}]){
       const d=Math.hypot(candidate.x-x,candidate.y-y);
       if(d<bestDistance&&canPlaceBuilding(buildings,side,'fence',candidate.x,candidate.y).ok){best=candidate;bestDistance=d;}
     }

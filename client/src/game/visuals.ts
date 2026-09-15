@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { BuildingType, Side, UnitType } from '@arena-kingdom/shared';
-import { buildingArt, SPRITE_SIZE, svgDataUrl, troopArt } from './art';
+import { buildingArt, fenceWallArt, SPRITE_SIZE, svgDataUrl, troopArt } from './art';
 import { arenaMapArtV2 } from './mapArt';
 import { villageArt } from './villageArt';
 
@@ -58,7 +58,8 @@ export class BattleVisualRenderer {
     for (const side of ['blue', 'red'] as const) {
       for (const type of ['castle', 'village', 'barracks', 'fence', 'tower'] as BuildingType[]) {
         const size = SPRITE_SIZE[type];
-        const markup = type === 'village' ? villageArt(side) : buildingArt(type, side);
+        // The build menu keeps the side-on fence icon; on the battlefield fences stand vertically.
+        const markup = type === 'village' ? villageArt(side) : type === 'fence' ? fenceWallArt() : buildingArt(type, side);
         load(buildingTextureKey(type, side), markup, size.width, size.height);
       }
       const troop = SPRITE_SIZE.troop;

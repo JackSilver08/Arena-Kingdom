@@ -612,13 +612,13 @@ export class MatchEngine {
   }
 
   /**
-   * Moves a unit towards a goal, walking around enemy fences.
+   * Moves a unit towards a goal, walking around the ocean (via the bridges) and enemy fences.
    * Returns false when no acceptable route exists.
    */
   private navigate(u: UnitState, gx: number, gy: number, step: number, tolerance: number, ignoreWallId?: number) {
     if (step <= 0) return true;
     const nav = this.nav;
-    if (!nav.hasWalls(u.side) || !nav.firstWall(u.side, u.x, u.y, gx, gy, ignoreWallId)) {
+    if (nav.lineClear(u.side, u.x, u.y, gx, gy, ignoreWallId)) {
       u.path = null;
       this.stepTowards(u, gx, gy, step);
       return true;
@@ -649,7 +649,7 @@ export class MatchEngine {
       u.path = null;
       return true;
     }
-    while (path.length > 1 && (dist(path[0].x, path[0].y, u.x, u.y) < 6 || !nav.firstWall(u.side, u.x, u.y, path[1].x, path[1].y, ignoreWallId))) {
+    while (path.length > 1 && (dist(path[0].x, path[0].y, u.x, u.y) < 6 || nav.lineClear(u.side, u.x, u.y, path[1].x, path[1].y, ignoreWallId))) {
       path.shift();
     }
     const next = path[0];
@@ -663,7 +663,11 @@ export class MatchEngine {
   }
 
   private markBlocked(u: UnitState, goal: Vec2, blockedFor: number) {
-    const wallId = this.nav.firstWall(u.side, u.x, u.y, goal.x, goal.y)?.id ?? this.nav.wallAt(u.side, goal.x, goal.y) ?? this.nearestWall(u);
+    const wallId =
+      this.nav.wallToBreach(u.side, u, goal) ??
+      this.nav.firstWall(u.side, u.x, u.y, goal.x, goal.y)?.id ??
+      this.nav.wallAt(u.side, goal.x, goal.y) ??
+      this.nearestWall(u);
     if (wallId === null) return;
     u.blockerId = wallId;
     u.blockedFor = blockedFor;

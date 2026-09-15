@@ -21,6 +21,7 @@ import { BATTLE_DEPTH, BattleVisualRenderer } from './visuals';
 
 const { width: W, height: H } = GAME_RULES.map;
 const UI_FONT = '"Segoe UI", Arial, system-ui, sans-serif';
+const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 const SIDE_COLOR: Record<Side, number> = { blue: 0x3b82f6, red: 0xef4444 };
 const UNIT_RADIUS = UNIT_STATS.soldier.radius;
 const DRAG_THRESHOLD = 6;
@@ -564,16 +565,16 @@ export class BattleScene extends Phaser.Scene {
     this.ring(x, y, wood ? 0x8b5a2b : 0xff9f1c, 0.3, big ? 3.2 : 1.8, big ? 700 : 500);
     this.ring(x, y, 0xffffff, 0.2, big ? 2.2 : 1.2, 400);
     for (let i = 0; i < (big ? 10 : 5); i++) {
-      this.spark(x + Phaser.Math.Between(-30, 30), y + Phaser.Math.Between(-20, 20), big ? 1.4 : 0.9);
+      this.spark(x + Phaser.Math.Between(wood ? -12 : -30, wood ? 12 : 30), y + Phaser.Math.Between(wood ? -60 : -20, wood ? 60 : 20), big ? 1.4 : 0.9);
     }
     const boom = this.add
       .text(x, y - 10, wood ? '🪵' : '💥', { fontFamily: EMOJI_FONT, fontSize: big ? '72px' : '40px', resolution: this.res })
       .setOrigin(0.5)
-      .setDepth(DEPTH.fx);
+      .setDepth(DEPTH.effects);
     this.tweens.add({ targets: boom, scale: 1.5, alpha: 0, duration: 650, onComplete: () => boom.destroy() });
     const rubble = this.add.graphics().setDepth(DEPTH.ground);
     rubble.fillStyle(0x3f3a2a, 0.35);
-    rubble.fillEllipse(x, y + 6, big ? 120 : wood ? 130 : 64, big ? 54 : 22);
+    rubble.fillEllipse(x, y + 6, big ? 120 : wood ? 30 : 64, big ? 54 : wood ? 130 : 22);
     this.tweens.add({ targets: rubble, alpha: 0, delay: 12_000, duration: 4000, onComplete: () => rubble.destroy() });
     if (big) this.cameras.main.shake(350, 0.006);
   }
