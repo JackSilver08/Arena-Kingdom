@@ -6,8 +6,8 @@ export interface RouteContext {
 
 export interface Page {
   title: string;
-  /** `bare` hides the site navigation (used by the battle screen). */
-  layout?: 'site' | 'bare';
+  /** `bare` hides the site navigation (used by the battle screen); `landing` overlays it on a full-bleed page with its own footer. */
+  layout?: 'site' | 'bare' | 'landing';
   mount(root: HTMLElement): void;
   destroy?(): void;
 }

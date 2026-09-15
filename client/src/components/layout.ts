@@ -76,6 +76,7 @@ export function createLayout(app: HTMLElement) {
     currentPath = ctx.path;
     document.title = page.title ? `${page.title} · Arena Kingdom` : 'Arena Kingdom';
     document.body.classList.toggle('is-bare', page.layout === 'bare');
+    document.body.classList.toggle('is-landing', page.layout === 'landing');
     renderNav();
     outlet.replaceChildren();
     page.mount(outlet);
