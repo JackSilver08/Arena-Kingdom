@@ -17,12 +17,12 @@ const required = [
 ];
 
 const checks = [
-  ['documentary map style', 'mapStyle: \'documentary\'', 'client/src/game/displaySettings.ts'],
+  ['documentary map style', "mapStyle: 'documentary'", 'client/src/game/displaySettings.ts'],
   ['vintage map style', "'vintage'", 'client/src/game/mapArt.ts'],
   ['frontline depth below entities', 'frontline:', 'client/src/game/visuals.ts'],
   ['command arrow depth below entities', 'arrows:', 'client/src/game/visuals.ts'],
   ['replay integration', 'setReplayView', 'client/src/game/BattleScene.ts'],
-  ['recap recorder', 'record(view, events)', 'client/src/game/battleRecap.ts'],
+  ['recap recorder', 'record(view: MatchView, events:', 'client/src/game/battleRecap.ts'],
   ['reduced motion class', 'reduced-motion', 'client/src/game/displaySettingsPanel.ts'],
   ['40px influence grid', 'INFLUENCE_CELL_SIZE = 40', 'shared/src/influence.ts'],
   ['documented QA workflow', 'npm run check:bundle', '.github/workflows/qa.yml']
