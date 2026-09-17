@@ -68,6 +68,8 @@ test('barracks train queued soldiers', () => {
 test('soldiers fight and destroying the castle ends the match', () => {
   const engine = new MatchEngine();
   const castle = engine.castleOf('red')!;
+  // This is a focused castle-combat test. Remove enemy villages so village militia is not part of this case.
+  engine.state.buildings = engine.state.buildings.filter((b) => !(b.side === 'red' && b.type === 'village'));
   // Remove the red defenders and weaken the castle so the siege resolves deterministically.
   for (const unit of engine.armyOf('red')) unit.hp = 0;
   castle.hp = 300;
@@ -117,6 +119,8 @@ test('fences reach the shore, seal the front line and troops break through', () 
   assert.equal(nav.findPath('red', { x: red.x - 100, y: red.y }, { x: castle.x + 70, y: castle.y }), null, 'no way around');
 
   for (const unit of engine.armyOf('blue')) unit.hp = 0;
+  // Remove red villages for this pathing-only assertion so autonomous garrisons cannot interfere with the route.
+  engine.state.buildings = engine.state.buildings.filter((b) => !(b.side === 'red' && b.type === 'village'));
   engine.command('red', { type: 'army', fraction: 'all', x: castle.x + 70, y: castle.y });
   const fencesBefore = engine.buildingsOf('blue', 'fence').length;
   run(engine, 60_000);
@@ -127,7 +131,13 @@ test('fences reach the shore, seal the front line and troops break through', () 
 test('an explicit attack order focuses the chosen target', () => {
   const engine = new MatchEngine();
   const village = engine.buildingsOf('red', 'village')[0];
-  for (const unit of engine.armyOf('red')) unit.hp = 0;
+  // Keep the target village, but station the three regular defenders beside it so the militia trigger is not needed.
+  const defenders = engine.armyOf('red');
+  defenders.forEach((unit, index) => {
+    unit.x = village.x + BUILDING_STATS.village.halfWidth + 18;
+    unit.y = village.y + (index - 1) * 24;
+    unit.order = { kind: 'idle' };
+  });
   const ids = engine.armyOf('blue').map((u) => u.id);
   assert.equal(engine.command('blue', { type: 'move', unitIds: ids, x: 0, y: 0, attack: true, targetId: village.id }).ok, true);
   run(engine, 60_000);
