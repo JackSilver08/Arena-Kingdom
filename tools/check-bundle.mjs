@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { join, relative } from 'node:path';
 
-const root = new URL('../', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../', import.meta.url));
 const dist = join(root, 'client', 'dist');
 const budgetKb = Number(process.env.BUNDLE_BUDGET_KB ?? 4096);
 
