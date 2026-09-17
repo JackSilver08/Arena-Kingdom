@@ -28,6 +28,7 @@ interface StrategyProfile {
   targets: Partial<Record<BuildableType, number>>;
   buildOrder: BuildableType[];
   reserveGold: number;
+  defendFraction: number;
 }
 
 const PROFILES: Record<Strategy, StrategyProfile> = {
@@ -38,6 +39,7 @@ const PROFILES: Record<Strategy, StrategyProfile> = {
     targets: { barracks: 2, village: 1 },
     buildOrder: ['barracks', 'barracks', 'village'],
     reserveGold: 0,
+    defendFraction: 0.85,
   },
   economy: {
     attackAtMs: 90_000,
@@ -46,6 +48,7 @@ const PROFILES: Record<Strategy, StrategyProfile> = {
     targets: { village: 6, barracks: 2, tower: 1 },
     buildOrder: ['village', 'village', 'village', 'barracks', 'barracks', 'tower'],
     reserveGold: 50,
+    defendFraction: 0.7,
   },
   defensive: {
     attackAtMs: 110_000,
@@ -54,6 +57,7 @@ const PROFILES: Record<Strategy, StrategyProfile> = {
     targets: { village: 4, barracks: 1, tower: 2, fence: 4 },
     buildOrder: ['village', 'tower', 'village', 'fence', 'fence', 'fence', 'fence', 'barracks', 'tower'],
     reserveGold: 40,
+    defendFraction: 1,
   },
   balanced: {
     attackAtMs: 80_000,
@@ -62,6 +66,7 @@ const PROFILES: Record<Strategy, StrategyProfile> = {
     targets: { village: 5, barracks: 2, tower: 1, fence: 2 },
     buildOrder: ['village', 'barracks', 'village', 'barracks', 'village', 'tower', 'fence', 'fence'],
     reserveGold: 30,
+    defendFraction: 0.7,
   },
 };
 
@@ -114,6 +119,8 @@ class StrategyController {
   private firstAttackMs: number | null = null;
   private firstOverSupplyMs: number | null = null;
   private nextBuildIndex = 0;
+  private underPressure = false;
+  private defenseTimer = 0;
 
   constructor(readonly side: Side, readonly profile: StrategyProfile) {}
 
@@ -121,8 +128,10 @@ class StrategyController {
     if (engine.ended) return;
     this.elapsedMs += deltaMs;
     this.attackTimer -= deltaMs;
+    this.defenseTimer -= deltaMs;
 
     this.tryBuildNext(engine);
+    this.respondToIncursion(engine);
 
     const army = engine.armyOf(this.side).length;
     const supply = armySupplyCapacity(engine.buildingsOf(this.side));
@@ -138,7 +147,12 @@ class StrategyController {
       }
     }
 
-    if (this.elapsedMs >= this.profile.attackAtMs && army >= this.profile.attackArmy && this.attackTimer <= 0) {
+    if (
+      !this.underPressure &&
+      this.elapsedMs >= this.profile.attackAtMs &&
+      army >= this.profile.attackArmy &&
+      this.attackTimer <= 0
+    ) {
       const target = this.attackTarget(engine);
       if (target) {
         const ids = engine.armyOf(this.side).map((u) => u.id);
@@ -159,6 +173,38 @@ class StrategyController {
 
   get metrics() {
     return { firstAttackMs: this.firstAttackMs, firstOverSupplyMs: this.firstOverSupplyMs };
+  }
+
+  private respondToIncursion(engine: MatchEngine) {
+    if (this.defenseTimer > 0) return;
+    const enemy: Side = this.side === 'blue' ? 'red' : 'blue';
+    const castle = engine.castleOf(this.side);
+    const buildings = engine.buildingsOf(this.side).filter((b) => b.type !== 'fence');
+    const intruders = engine.armyOf(enemy).filter(
+      (u) =>
+        forwardDir(this.side) * (u.x - GAME_RULES.map.midlineX) < 0 &&
+        (buildings.some((b) => Math.hypot(b.x - u.x, b.y - u.y) <= 180) ||
+          (castle ? Math.hypot(castle.x - u.x, castle.y - u.y) <= 260 : false))
+    );
+
+    if (!intruders.length) {
+      this.underPressure = false;
+      return;
+    }
+
+    this.underPressure = true;
+    const cx = intruders.reduce((sum, u) => sum + u.x, 0) / intruders.length;
+    const cy = intruders.reduce((sum, u) => sum + u.y, 0) / intruders.length;
+    const defenders = engine
+      .armyOf(this.side)
+      .slice()
+      .sort((a, b) => Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy));
+    const count = Math.min(defenders.length, Math.max(1, Math.ceil(defenders.length * this.profile.defendFraction)));
+    const ids = defenders.slice(0, count).map((u) => u.id);
+    if (ids.length) {
+      engine.command(this.side, { type: 'move', unitIds: ids, x: cx, y: cy, attack: true, formation: this.profile.formation });
+    }
+    this.defenseTimer = 5_000;
   }
 
   private nextProjectType(engine: MatchEngine): BuildableType | null {
