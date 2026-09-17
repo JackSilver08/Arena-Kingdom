@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import {
   BUILDING_STATS,
+  FORMATION_STATS,
   GAME_RULES,
   UNIT_STATS,
   distanceToBuilding,
+  formationOffsets,
   territoryOutline,
   type BuildingType,
   type BuildingView,
@@ -56,6 +58,7 @@ export class BattleScene extends Phaser.Scene {
   private recap!: ReturnType<typeof createBattleRecap>;
   private replayView: MatchView | null = null;
   private overlaysEnabled = true;
+  private formationsEnabled = false;
   private reducedMotion = false;
   private res = 1;
   private smoothing = false;
@@ -109,6 +112,7 @@ export class BattleScene extends Phaser.Scene {
     if (battleRoot) {
       this.displaySettings = new DisplaySettingsPanel(battleRoot, (settings) => {
         this.overlaysEnabled = settings.overlays;
+        this.formationsEnabled = settings.formations;
         this.reducedMotion = settings.reducedMotion;
       });
       this.recap = createBattleRecap(this, battleRoot, this.controller);
@@ -472,6 +476,40 @@ export class BattleScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- overlay
 
+  private formationCount(view: MatchView) {
+    const army = view.units.filter((u) => u.side === this.controller.mySide);
+    if (this.controller.fraction === 'one-third') return Math.max(1, Math.ceil(army.length / 3));
+    if (this.controller.fraction === 'two-thirds') return Math.max(1, Math.ceil((army.length * 2) / 3));
+    return army.length;
+  }
+
+  private drawFormationPreview(view: MatchView, x: number, y: number) {
+    if (!this.formationsEnabled || this.controller.mode !== 'troops' || !this.controller.canCommand || !view.units.length) return;
+    const count = this.formationCount(view);
+    if (count <= 0) return;
+    const army = view.units.filter((u) => u.side === this.controller.mySide);
+    if (!army.length) return;
+    const center = army.reduce((sum, unit) => ({ x: sum.x + unit.x / army.length, y: sum.y + unit.y / army.length }), { x: 0, y: 0 });
+    const facing = Math.atan2(y - center.y, x - center.x);
+    const formation = this.controller.formation;
+    const offsets = formationOffsets(count, formation, FORMATION_STATS[formation].spacing, facing);
+    const color = SIDE_COLOR[this.controller.mySide];
+    const scale = Math.min(1, Math.max(0.7, 24 / Math.max(24, Math.sqrt(count) * 24)));
+
+    for (const offset of offsets) {
+      const px = x + offset.x;
+      const py = y + offset.y;
+      this.overlay.lineStyle(2, INK, 0.55);
+      this.overlay.strokeCircle(px, py, 8 * scale);
+      this.overlay.fillStyle(color, 0.38);
+      this.overlay.fillCircle(px, py, 5.2 * scale);
+    }
+
+    this.overlay.lineStyle(2, color, 0.7);
+    const formationRadius = Math.max(18, ...offsets.map((offset) => Math.hypot(offset.x, offset.y)));
+    this.overlay.strokeCircle(x, y, formationRadius + 14);
+  }
+
   private drawOverlay(view: MatchView | null) {
     const g = this.ground;
     const o = this.overlay;
@@ -542,6 +580,7 @@ export class BattleScene extends Phaser.Scene {
         o.lineBetween(x, y - 28, x, y - 10);
         o.lineBetween(x, y + 10, x, y + 28);
       }
+      this.drawFormationPreview(view, x, y);
     }
 
     if (!this.replayView && this.dragStart && this.input.activePointer.isDown) {
