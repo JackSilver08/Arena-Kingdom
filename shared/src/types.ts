@@ -27,7 +27,8 @@ export interface UnitView {
   id: number;
   side: Side;
   type: UnitType;
-  formation: FormationType;
+  /** Present in clients that render formation metadata; live wire snapshots may omit it. */
+  formation?: FormationType;
   x: number;
   y: number;
   hp: number;
@@ -82,6 +83,9 @@ export function emptyStats(): PlayerStats {
     goldSpent: 0,
     unitsTrained: 0,
     unitsLost: 0,
+    kills: 0,
+    buildingsBuilt: 0,
+    buildingsLost: 0,
     kills: 0,
     buildingsBuilt: 0,
     buildingsLost: 0,
