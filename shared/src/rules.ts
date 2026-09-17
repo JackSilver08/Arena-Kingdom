@@ -1,7 +1,7 @@
 import { coastline, isWalkableLand } from './island.js';
 import type { ArmyFraction, BuildableType, BuildingType, Side, UnitType, Vec2 } from './types.js';
 
-export const GAME_VERSION = '0.4.1';
+export const GAME_VERSION = '0.4.2';
 
 type Rect={minX:number;maxX:number;minY:number;maxY:number};
 /** Each kingdom builds on its side of its front line; the strip between them is no man's land. */
@@ -51,6 +51,17 @@ export const GAME_RULES={
     /** Soft army capacity: the kingdom can exceed it, but the excess consumes gold. */
     supply:{castle:6,barracks:3,village:1,tower:2,upkeepPerUnit:1}
   },
+  militia:{
+    /** Local village defenders are a three-person reserve, not part of the regular army. */
+    count:3,
+    triggerRange:150,
+    leashRange:205,
+    returnDistance:22,
+    spawnDistance:42,
+    /** 1.5x the regular soldier's HP and 1/1.5x its damage. */
+    hpMultiplier:1.5,
+    damageMultiplier:2/3
+  },
   limits:{maxUnitsPerSide:40,maxBuildingsPerSide:30},
   peace:{responseWindowMs:15_000,cooldownMs:30_000}
 } as const;
@@ -68,7 +79,8 @@ export const BUILDING_STATS:Record<BuildingType,BuildingStats>={
 
 export interface UnitStats{label:string;cost:number;trainMs:number;hp:number;radius:number;speed:number;aggroRange:number;attack:AttackStats}
 export const UNIT_STATS:Record<UnitType,UnitStats>={
-  soldier:{label:'Troop',cost:18,trainMs:2200,hp:100,radius:10,speed:52,aggroRange:120,attack:{damage:12,range:14,cooldownMs:800}}
+  soldier:{label:'Troop',cost:18,trainMs:2200,hp:100,radius:10,speed:52,aggroRange:120,attack:{damage:12,range:14,cooldownMs:800}},
+  militia:{label:'Militia',cost:0,trainMs:0,hp:150,radius:10,speed:52,aggroRange:205,attack:{damage:8,range:14,cooldownMs:800}}
 };
 
 export interface Placement{side:Side;type:BuildingType;x:number;y:number}
