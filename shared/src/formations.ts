@@ -51,6 +51,7 @@ export const FORMATION_STATS: Record<FormationType, FormationDefinition> = {
   }
 };
 
+/** Returns world offsets centred on the destination and rotated so local +Y faces the destination. */
 export function formationOffsets(count: number, formation: FormationType = 'line', spacing = FORMATION_STATS[formation].spacing, facing = 0): Vec2[] {
   if (count <= 0) return [];
 
@@ -93,8 +94,8 @@ export function formationOffsets(count: number, formation: FormationType = 'line
     const lx = (p.x - meanX) * spacing;
     const ly = (p.y - meanY) * spacing;
     return {
-      x: lx * cos - ly * sin,
-      y: lx * sin + ly * cos
+      x: lx * -sin + ly * cos,
+      y: lx * cos + ly * sin
     };
   });
 }
