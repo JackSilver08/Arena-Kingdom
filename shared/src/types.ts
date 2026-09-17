@@ -3,6 +3,7 @@ export type BuildingType = 'castle' | 'village' | 'barracks' | 'fence' | 'tower'
 export type BuildableType = Exclude<BuildingType, 'castle'>;
 export type UnitType = 'soldier';
 export type ArmyFraction = 'all' | 'one-third' | 'two-thirds';
+export type FormationType = 'line' | 'column' | 'wedge' | 'square';
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export type MatchMode = 'ai' | 'pvp';
 export type EndReason = 'castle' | 'surrender' | 'peace' | 'timeout' | 'disconnect';
@@ -11,6 +12,7 @@ export const SIDES: readonly Side[] = ['blue', 'red'];
 export const BUILDABLE_TYPES: readonly BuildableType[] = ['village', 'barracks', 'fence', 'tower'];
 export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'normal', 'hard'];
 export const ARMY_FRACTIONS: readonly ArmyFraction[] = ['all', 'one-third', 'two-thirds'];
+export const FORMATIONS: readonly FormationType[] = ['line', 'column', 'wedge', 'square'];
 
 export function opponentOf(side: Side): Side {
   return side === 'blue' ? 'red' : 'blue';
@@ -25,6 +27,7 @@ export interface UnitView {
   id: number;
   side: Side;
   type: UnitType;
+  formation: FormationType;
   x: number;
   y: number;
   hp: number;
@@ -123,8 +126,8 @@ export type Command =
   | { type: 'build'; building: BuildableType; x: number; y: number }
   | { type: 'train'; barracksId?: number; count?: number }
   /** With `targetId` the troops attack that enemy unit or building until it falls. */
-  | { type: 'move'; unitIds: number[]; x: number; y: number; attack: boolean; targetId?: number }
-  | { type: 'army'; fraction: ArmyFraction; x: number; y: number; targetId?: number }
+  | { type: 'move'; unitIds: number[]; x: number; y: number; attack: boolean; targetId?: number; formation?: FormationType }
+  | { type: 'army'; fraction: ArmyFraction; x: number; y: number; targetId?: number; formation?: FormationType }
   | { type: 'stop'; unitIds: number[] }
   | { type: 'proposePeace' }
   | { type: 'respondPeace'; accept: boolean }
