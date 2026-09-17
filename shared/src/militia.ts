@@ -4,6 +4,7 @@ import { BUILDING_STATS, GAME_RULES, UNIT_STATS } from './rules.js';
 import { opponentOf, type Command, type Side, type Vec2 } from './types.js';
 
 interface MilitiaRuntime {
+  knownVillages: Set<number>;
   readyVillages: Set<number>;
   activeVillages: Map<number, Set<number>>;
 }
@@ -14,6 +15,7 @@ function runtimeOf(engine: MatchEngine): MilitiaRuntime {
   let runtime = runtimes.get(engine);
   if (!runtime) {
     runtime = {
+      knownVillages: new Set<number>(),
       readyVillages: new Set<number>(),
       activeVillages: new Map<number, Set<number>>()
     };
@@ -114,13 +116,12 @@ function deploy(engine: MatchEngine, villageId: number) {
 function prepare(engine: MatchEngine) {
   const runtime = runtimeOf(engine);
   const villages = engine.state.buildings.filter((b) => b.type === 'village' && b.hp > 0);
-  const liveVillageIds = new Set(villages.map((v) => v.id));
-
-  for (const id of [...runtime.readyVillages]) if (!liveVillageIds.has(id)) runtime.readyVillages.delete(id);
-  for (const [id] of [...runtime.activeVillages]) if (!liveVillageIds.has(id)) runtime.activeVillages.delete(id);
 
   for (const village of villages) {
-    if (!runtime.readyVillages.has(village.id)) runtime.readyVillages.add(village.id);
+    if (!runtime.knownVillages.has(village.id)) {
+      runtime.knownVillages.add(village.id);
+      runtime.readyVillages.add(village.id);
+    }
   }
 
   for (const village of villages) {
@@ -188,6 +189,7 @@ function settle(engine: MatchEngine) {
       promoteSurvivors(engine, villageId);
       runtime.activeVillages.delete(villageId);
       runtime.readyVillages.delete(villageId);
+      runtime.knownVillages.delete(villageId);
       continue;
     }
 
