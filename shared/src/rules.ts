@@ -54,9 +54,16 @@ export const GAME_RULES={
   militia:{
     /** Local village defenders are a three-person reserve, not part of the regular army. */
     count:3,
+    /** Enemy units entering this edge-distance from a Village can trigger a local response. */
     triggerRange:150,
+    /** Once deployed, militia continue responding until the threat leaves this larger bubble. */
     leashRange:205,
-    returnDistance:22,
+    /** Regular soldiers within the village bubble are its local response force. */
+    localDefenderRange:205,
+    /** Militia deploy when local regular defenders are fewer than the nearby attackers. */
+    localDefenderRatio:1,
+    /** Collision keeps units outside the Village footprint, so this is the practical return point. */
+    returnDistance:42,
     spawnDistance:42,
     /** 1.5x the regular soldier's HP and 1/1.5x its damage. */
     hpMultiplier:1.5,
