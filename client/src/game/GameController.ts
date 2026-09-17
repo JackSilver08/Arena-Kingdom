@@ -4,13 +4,17 @@ import {
   BUILDABLE_TYPES,
   BUILDING_STATS,
   DIFFICULTY_LABELS,
+  FORMATION_STATS,
+  FORMATION_TYPES,
   GAME_RULES,
   UNIT_STATS,
   canPlaceBuilding,
+  formationPercent,
   fractionOf,
   snapPlacement,
   type ArmyFraction,
   type BuildableType,
+  type FormationType,
   type GameEvent,
   type MatchView,
   type Side
@@ -27,6 +31,13 @@ import type { GameSession, SessionSignal } from './session';
 export type ControlMode = 'idle' | 'build' | 'troops';
 
 const FRACTION_LABELS: Record<ArmyFraction, string> = { all: 'All', 'one-third': '⅓', 'two-thirds': '⅔' };
+const FORMATION_KEYS: Record<FormationType, string> = { line: 'Q', column: 'W', wedge: 'E', square: 'D' };
+const FORMATION_LABELS: Record<FormationType, string> = {
+  line: 'Line',
+  column: 'Column',
+  wedge: 'V-Wedge',
+  square: 'Square'
+};
 const HUD_INTERVAL_MS = 100;
 const CASTLE_ALERT_COOLDOWN_MS = 12_000;
 const END_MODAL_DELAY_MS = 1200;
@@ -36,10 +47,23 @@ interface Actions {
   playAgain(): void;
 }
 
+function formationGlyph(type: FormationType) {
+  const points: Record<FormationType, Array<[number, number]>> = {
+    line: [[6, 16], [16, 16], [26, 16], [36, 16]],
+    column: [[21, 4], [21, 11], [21, 18], [21, 25]],
+    wedge: [[21, 5], [15, 13], [27, 13], [9, 22], [33, 22]],
+    square: [[12, 8], [28, 8], [12, 22], [28, 22]]
+  };
+  return `<svg aria-hidden="true" viewBox="0 0 42 29" width="42" height="29" focusable="false">${points[type]
+    .map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.2" fill="currentColor"/>`)
+    .join('')}</svg>`;
+}
+
 export class GameController {
   mode: ControlMode = 'idle';
   buildType: BuildableType = 'village';
   fraction: ArmyFraction = 'all';
+  formation: FormationType = 'line';
   readonly selection = new Set<number>();
 
   private game: Phaser.Game;
@@ -131,7 +155,7 @@ export class GameController {
     if (mode !== 'idle' && !this.canCommand) return;
     this.mode = mode;
     if (mode === 'build') this.setHint('Click inside your territory to build. Shift-click to keep building. Right-click or Esc to cancel.');
-    else if (mode === 'troops') this.setHint('Click a destination — or an enemy to attack it. Right-click or Esc to cancel.');
+    else if (mode === 'troops') this.setHint(`Choose a formation, then click a destination. ${FORMATION_LABELS[this.formation]}: ${formationPercent(FORMATION_STATS[this.formation].attackMultiplier)} attack, ${formationPercent(FORMATION_STATS[this.formation].defenseMultiplier)} defence, ${formationPercent(FORMATION_STATS[this.formation].speedMultiplier)} speed.`);
     this.refreshHud(true);
   }
 
@@ -145,6 +169,14 @@ export class GameController {
     this.fraction = fraction;
     if (this.mode !== 'troops') this.setMode('troops');
     else this.refreshHud(true);
+  }
+
+  chooseFormation(formation: FormationType) {
+    if (!FORMATION_TYPES.includes(formation)) return;
+    this.formation = formation;
+    if (this.mode !== 'troops') this.setMode('troops');
+    else this.setHint(`${FORMATION_LABELS[formation]} formation selected: ${formationPercent(FORMATION_STATS[formation].attackMultiplier)} attack, ${formationPercent(FORMATION_STATS[formation].defenseMultiplier)} defence, ${formationPercent(FORMATION_STATS[formation].speedMultiplier)} speed.`);
+    this.refreshHud(true);
   }
 
   /** Where a building would land for a pointer position (fences snap to neighbours). */
@@ -179,7 +211,7 @@ export class GameController {
 
   commandArmy(x: number, y: number, targetId?: number) {
     if (!this.canCommand) return;
-    this.session.send({ type: 'army', fraction: this.fraction, x, y, targetId });
+    this.session.send({ type: 'army', fraction: this.fraction, x, y, targetId, formation: this.formation });
     this.setMode('idle');
   }
 
@@ -194,7 +226,7 @@ export class GameController {
       this.flash('Select troops first: drag a box around them, press A for the whole army, or use T.');
       return;
     }
-    this.session.send({ type: 'move', unitIds: [...this.selection], x, y, attack: !shift, targetId: shift ? undefined : targetId });
+    this.session.send({ type: 'move', unitIds: [...this.selection], x, y, attack: !shift, targetId: shift ? undefined : targetId, formation: this.formation });
   }
 
   recruit(count = 1, barracksId?: number) {
@@ -269,6 +301,18 @@ export class GameController {
         case 's':
           if (this.selection.size && this.canCommand) this.session.send({ type: 'stop', unitIds: [...this.selection] });
           return true;
+        case 'q':
+          this.chooseFormation('line');
+          return true;
+        case 'w':
+          this.chooseFormation('column');
+          return true;
+        case 'e':
+          this.chooseFormation('wedge');
+          return true;
+        case 'd':
+          this.chooseFormation('square');
+          return true;
         case '1':
         case '2':
         case '3':
@@ -308,6 +352,9 @@ export class GameController {
           break;
         case 'choose-fraction':
           this.chooseFraction(button.dataset.fraction as ArmyFraction);
+          break;
+        case 'choose-formation':
+          this.chooseFormation(button.dataset.formation as FormationType);
           break;
         case 'messenger':
           this.toggleMessenger();
@@ -584,7 +631,8 @@ export class GameController {
     }
     if (this.mode === 'troops') {
       const army = view?.units.filter((u) => u.side === me).length ?? 0;
-      return html`<div class="popup-title">Troops <small>keys 1-3 · then click a destination</small></div>
+      const selected = FORMATION_STATS[this.formation];
+      return html`<div class="popup-title">Troops <small>1-3 army fraction · Q/W/E/D formation · click a destination</small></div>
         <div class="popup-options">
           ${ARMY_FRACTIONS.map(
             (fraction, i) => html`<button
@@ -601,6 +649,23 @@ export class GameController {
               <span class="yb option-cost">${army ? Math.max(1, Math.ceil(army * fractionOf(fraction))) : 0}</span>
             </button>`
           )}
+        </div>
+        <div class="popup-title"><span>Formation</span><small>${formationPercent(selected.attackMultiplier)} attack · ${formationPercent(selected.defenseMultiplier)} defence · ${formationPercent(selected.speedMultiplier)} speed</small></div>
+        <div class="popup-options">
+          ${FORMATION_TYPES.map(
+            (formation) => html`<button
+              type="button"
+              class="option ${this.formation === formation ? 'active' : ''}"
+              data-action="choose-formation"
+              data-formation="${formation}"
+              title="${FORMATION_STATS[formation].description}"
+            >
+              <span class="option-key">${FORMATION_KEYS[formation]}</span>
+              <span class="option-art formation-glyph">${trusted(formationGlyph(formation))}</span>
+              <b>${FORMATION_LABELS[formation]}</b>
+              <span class="yb option-cost">${formationPercent(FORMATION_STATS[formation].attackMultiplier)}</span>
+            </button>`
+          )}
           <button
             type="button"
             class="option option-recruit ${gold < UNIT_STATS.soldier.cost ? 'unaffordable' : ''}"
@@ -613,7 +678,8 @@ export class GameController {
             <b>Recruit</b>
             <span class="yb option-cost">${UNIT_STATS.soldier.cost}$</span>
           </button>
-        </div>`;
+        </div>
+        <p class="popup-note">${selected.description}</p>`;
     }
     return null;
   }
@@ -626,7 +692,7 @@ export class GameController {
     if (force) this.hudElapsed = 0;
 
     const army = view ? view.units.filter((u) => u.side === me).length : 0;
-    const contextKey = `${me}|${this.mode}|${this.buildType}|${this.fraction}|${this.mode === 'troops' ? army : ''}`;
+    const contextKey = `${me}|${this.mode}|${this.buildType}|${this.fraction}|${this.formation}|${this.mode === 'troops' ? army : ''}`;
     if (contextKey !== this.contextKey) {
       this.contextKey = contextKey;
       const popup = $(this.root, '[data-context]');
@@ -735,7 +801,10 @@ export class GameController {
   private defaultHint() {
     if (this.session.status === 'ended') return 'The battle is over.';
     if (this.mode === 'build') return `${BUILDING_STATS[this.buildType].label}: click inside your territory to place it.`;
-    if (this.mode === 'troops') return `Send ${FRACTION_LABELS[this.fraction]} of your army: click a destination or an enemy.`;
+    if (this.mode === 'troops') {
+      const f = FORMATION_STATS[this.formation];
+      return `Send ${FRACTION_LABELS[this.fraction]} in ${FORMATION_LABELS[this.formation]}: ${formationPercent(f.attackMultiplier)} attack · ${formationPercent(f.defenseMultiplier)} defence · ${formationPercent(f.speedMultiplier)} speed.`;
+    }
     if (this.selection.size) {
       return `${this.selection.size} troop${this.selection.size > 1 ? 's' : ''} selected · right-click to attack · Shift+right-click to move · S to hold`;
     }
