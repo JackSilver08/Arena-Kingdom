@@ -7,13 +7,14 @@ import type { BuildingType, Side } from '@arena-kingdom/shared';
  * - circle: places. Castle = capital star.
  * - tent: settlement / camp glyph. Village = a standalone teepee; Barracks = a field-camp glyph.
  * - triangle: defensive post. Tower = observation post dot.
- * - line with teeth: obstacle. Fence, teeth facing the enemy.
+ * - line: obstacle. Fence = a bold defensive line with crossbars.
+ * - shield: local defence. Militia = a small shield that only appears while a village garrison is active.
  *
  * Each symbol is drawn at world size; `anchorY` is where the footprint centre sits in the image.
  * Keep the markup ASCII: it is Base64-encoded with `btoa`.
  */
 
-export type SymbolType = BuildingType | 'troop';
+export type SymbolType = BuildingType | 'troop' | 'militia';
 
 export interface SymbolSize {
   width: number;
@@ -27,7 +28,8 @@ export const SYMBOL_SIZE: Record<SymbolType, SymbolSize> = {
   barracks: { width: 68, height: 58, anchorY: 31 / 58 },
   tower: { width: 56, height: 54, anchorY: 32 / 54 },
   fence: { width: 34, height: 140, anchorY: 0.5 },
-  troop: { width: 30, height: 24, anchorY: 11 / 24 }
+  troop: { width: 30, height: 24, anchorY: 11 / 24 },
+  militia: { width: 22, height: 24, anchorY: 12 / 24 }
 };
 
 export const COLORS: Record<Side, { fill: string; ink: string }> = {
@@ -132,6 +134,22 @@ export function symbolArt(type: SymbolType, side: Side) {
         size,
         `${frame('<rect x="3" y="3" width="24" height="16"/>', side, 1.8)}
         <path d="${cross(3, 3, 24, 16)}" stroke="${ink}" stroke-width="1.6"/>`
+      );
+    case 'militia':
+      return svg(
+        size,
+        `<g fill="none" stroke="${SHADOW}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" opacity=".28" transform="translate(1.2 1.8)">
+          <path d="M4 5 L11 2 L18 5 V11 C18 17 15 20 11 22 C7 20 4 17 4 11 Z"/>
+          <path d="M11 7 V16 M8 10 H14"/>
+        </g>
+        <g fill="${HALO}" stroke="${HALO}" stroke-width="5.2" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M4 5 L11 2 L18 5 V11 C18 17 15 20 11 22 C7 20 4 17 4 11 Z"/>
+          <path d="M11 7 V16 M8 10 H14" fill="none"/>
+        </g>
+        <g fill="${COLORS[side].fill}" stroke="${ink}" stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M4 5 L11 2 L18 5 V11 C18 17 15 20 11 22 C7 20 4 17 4 11 Z"/>
+          <path d="M11 7 V16 M8 10 H14" fill="none"/>
+        </g>`
       );
   }
 }
