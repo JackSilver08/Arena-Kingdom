@@ -1,39 +1,14 @@
 import type { BuildingType, Side } from '@arena-kingdom/shared';
 
 /**
- * Vector art for the battlefield and HUD. Each function returns a standalone SVG
- * (viewBox only), used both as Phaser textures and inline in the DOM.
+ * Illustrated vector art for menus, the HUD and the home page. Each function returns a standalone
+ * SVG (viewBox only) for inline use in the DOM. The battlefield itself draws map symbols (symbols.ts).
  */
 
 const INK = '#1f2937';
 const TEAM: Record<Side, { main: string; dark: string; light: string }> = {
   blue: { main: '#3b82f6', dark: '#1d4ed8', light: '#93c5fd' },
   red: { main: '#ef4444', dark: '#b91c1c', light: '#fca5a5' }
-};
-
-export interface ArtSize {
-  width: number;
-  height: number;
-}
-
-/** Display size of each sprite in world pixels. */
-export const SPRITE_SIZE: Record<BuildingType | 'troop', ArtSize> = {
-  castle: { width: 120, height: 116 },
-  village: { width: 66, height: 58 },
-  barracks: { width: 66, height: 62 },
-  fence: { width: 44, height: 166 },
-  tower: { width: 48, height: 74 },
-  troop: { width: 26, height: 36 }
-};
-
-/** Vertical anchor of each sprite: the building's footprint centre sits this far down the image. */
-export const SPRITE_ANCHOR_Y: Record<BuildingType | 'troop', number> = {
-  castle: 0.6,
-  village: 0.58,
-  barracks: 0.58,
-  fence: 0.6,
-  tower: 0.7,
-  troop: 0.72
 };
 
 const svg = (viewBox: string, body: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${body}</svg>`;
@@ -126,30 +101,6 @@ export function fenceArt() {
     <g fill="#8b5a2b" stroke="#5b3413" stroke-width="1.5">
       <rect x="0.8" y="16" width="130.4" height="5"/>
       <rect x="0.8" y="32" width="130.4" height="5"/>
-    </g>`
-  );
-}
-
-/** Battlefield sprite: a palisade running north-south, each log overlapping the one behind it. */
-export function fenceWallArt() {
-  let stakes = '';
-  for (let i = 0; i < 12; i++) {
-    const top = 2 + i * 11.6;
-    const x = i % 2 ? 1 : -1;
-    stakes += `<path d="M${14 + x} ${top + 7} Q${22 + x} ${top - 2} ${30 + x} ${top + 7} V${top + 34} H${14 + x} Z" fill="#c08448"/>`;
-    stakes += `<path d="M${22 + x} ${top + 1.5} Q${27 + x} ${top + 2} ${30 + x} ${top + 7} V${top + 34} H${22 + x} Z" fill="#8b5a2b" opacity=".32" stroke="none"/>`;
-  }
-  return svg(
-    '0 0 44 166',
-    `<g fill="#8b5a2b" stroke="#5b3413" stroke-width="1.5">
-      <rect x="9" y="14" width="5" height="146"/>
-      <rect x="30" y="14" width="5" height="146"/>
-    </g>
-    <g stroke="#6b3f1d" stroke-width="1.6" stroke-linejoin="round">${stakes}</g>
-    <g fill="#6b3f1d" stroke="#4a2a10" stroke-width="1">
-      <rect x="10" y="28" width="24" height="5" rx="1.5"/>
-      <rect x="10" y="74" width="24" height="5" rx="1.5"/>
-      <rect x="10" y="120" width="24" height="5" rx="1.5"/>
     </g>`
   );
 }

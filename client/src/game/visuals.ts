@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { GAME_RULES, type BuildingType, type Side, type UnitType } from '@arena-kingdom/shared';
-import { buildingArt, fenceWallArt, SPRITE_SIZE, svgDataUrl, troopArt } from './art';
+import { svgDataUrl } from './art';
 import { arenaMapArtV2, type MapViewSize } from './mapArt';
-import { villageArt } from './villageArt';
+import { SYMBOL_SIZE, symbolArt, type SymbolSize } from './symbols';
 
 /**
  * Rendering-only depth bands. Game rules use world coordinates only; they
@@ -32,20 +32,10 @@ export function battleView(stageWidth: number, stageHeight: number): MapViewSize
   return { width: even(Math.max(width, height * aspect)), height: even(Math.max(height, width / aspect)) };
 }
 
-export interface EntityVisual {
+/** How an entity is drawn: its texture and the world-size footprint of the image. */
+export interface EntityVisual extends SymbolSize {
   key: string;
-  fallbackEmoji: string;
 }
-
-const fallbackBuilding: Record<BuildingType, string> = {
-  castle: '🏰',
-  village: '🏘️',
-  barracks: '⚔️',
-  fence: '🪵',
-  tower: '🗼'
-};
-
-const fallbackUnit: Record<UnitType, string> = { soldier: '🛡️' };
 
 export function buildingTextureKey(type: BuildingType, side: Side) {
   return `${type}-${side}`;
@@ -75,15 +65,14 @@ export class BattleVisualRenderer {
   preload() {
     const load = this.load.bind(this);
 
+    // The battlefield uses map symbols; menus and the HUD keep the illustrated art.
     for (const side of ['blue', 'red'] as const) {
       for (const type of ['castle', 'village', 'barracks', 'fence', 'tower'] as BuildingType[]) {
-        const size = SPRITE_SIZE[type];
-        // The build menu keeps the side-on fence icon; on the battlefield fences stand vertically.
-        const markup = type === 'village' ? villageArt(side) : type === 'fence' ? fenceWallArt() : buildingArt(type, side);
-        load(buildingTextureKey(type, side), markup, size.width, size.height);
+        const size = SYMBOL_SIZE[type];
+        load(buildingTextureKey(type, side), symbolArt(type, side), size.width, size.height);
       }
-      const troop = SPRITE_SIZE.troop;
-      load(unitTextureKey('soldier', side), troopArt(side), troop.width, troop.height);
+      const troop = SYMBOL_SIZE.troop;
+      load(unitTextureKey('soldier', side), symbolArt('troop', side), troop.width, troop.height);
     }
 
     load(mapTextureKey(this.view), arenaMapArtV2(this.view), this.view.width, this.view.height);
@@ -119,10 +108,10 @@ export class BattleVisualRenderer {
   }
 
   building(type: BuildingType, side: Side): EntityVisual {
-    return { key: buildingTextureKey(type, side), fallbackEmoji: fallbackBuilding[type] };
+    return { key: buildingTextureKey(type, side), ...SYMBOL_SIZE[type] };
   }
 
   unit(type: UnitType, side: Side): EntityVisual {
-    return { key: unitTextureKey(type, side), fallbackEmoji: fallbackUnit[type] };
+    return { key: unitTextureKey(type, side), ...SYMBOL_SIZE.troop };
   }
 }

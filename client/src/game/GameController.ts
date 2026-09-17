@@ -20,6 +20,7 @@ import { formatDuration, signed } from '../lib/format';
 import { $, html, setHtml, trusted, type SafeHtml } from '../lib/html';
 import { bannerIcon, buildingArt, castleArt, envelopeIcon, hammerIcon, helmetIcon, houseIcon, moneyBagIcon, troopArt } from './art';
 import { BattleScene } from './BattleScene';
+import { symbolArt } from './symbols';
 import { battleView } from './visuals';
 import type { GameSession, SessionSignal } from './session';
 
@@ -572,6 +573,7 @@ export class GameController {
               title="${stats.description}"
             >
               <span class="option-key">${i + 1}</span>
+              <span class="option-symbol" title="Map symbol">${trusted(symbolArt(type, me))}</span>
               <span class="option-art option-art-${type}">${trusted(buildingArt(type, me))}</span>
               <b>${stats.label}</b>
               <span class="yb option-cost">${stats.cost}$</span>

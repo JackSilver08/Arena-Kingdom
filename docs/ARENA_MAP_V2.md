@@ -45,5 +45,17 @@ The battlefield is drawn as an **old military campaign map**, with the kingdoms'
 - woods marked with tree symbols, hills with contour rings and spot heights; both are mirrored so neither kingdom gets different-looking terrain
 - a lettered and numbered grid (A–P, 1–9), a graduated neatline, compass rose, scale bar and title in the margin
 - dashed front lines in blue and red ink mark where each kingdom may build, with no man's land between them
+- buildings and troops are drawn as situation-map symbols (loosely NATO APP-6), filled in the kingdom's colour: the frame's shape gives the kind and the mark inside gives the role
+
+| Symbol | Meaning |
+|---|---|
+| Circle with a star, dashed inner ring | Castle (capital) |
+| Circle with `$` | Village (gold) |
+| Rectangle with a cross under a solid bar | Barracks (infantry installation) |
+| Small rectangle with a cross | Troop (infantry) |
+| Triangle with a dot | Tower (observation / defensive post) |
+| Line with teeth facing the enemy | Fence (obstacle) |
+
+  The build menu shows each building's symbol in the corner of its card, as the map legend. Menus, the HUD and the home page's illustrations keep the illustrated art.
 - the drawn coastline always lies outside the walkable rectangle, so every reachable point looks like land
 - all gameplay logic remains independent from the renderer

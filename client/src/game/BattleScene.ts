@@ -12,10 +12,6 @@ import {
   type Side,
   type UnitView
 } from '@arena-kingdom/shared';
-import {
-  SPRITE_ANCHOR_Y,
-  SPRITE_SIZE
-} from './art';
 import type { GameController } from './GameController';
 import type { MapViewSize } from './mapArt';
 import { BATTLE_DEPTH, BattleVisualRenderer, battleView } from './visuals';
@@ -303,15 +299,15 @@ export class BattleScene extends Phaser.Scene {
   private sync(view: MatchView, delta: number) {
     const frame = ++this.frameNo;
     const smooth = this.smoothing ? Math.min(1, delta / 90) : 1;
-    const troopSize = SPRITE_SIZE.troop;
 
     for (const u of view.units) {
       let sprite = this.units.get(u.id);
       if (!sprite) {
+        const visual = this.visuals.unit(u.type, u.side);
         const image = this.add
-          .image(u.x, u.y, this.visuals.unit(u.type, u.side).key)
-          .setOrigin(0.5, SPRITE_ANCHOR_Y.troop)
-          .setDisplaySize(troopSize.width, troopSize.height);
+          .image(u.x, u.y, visual.key)
+          .setOrigin(0.5, visual.anchorY)
+          .setDisplaySize(visual.width, visual.height);
         sprite = { image, x: u.x, y: u.y, bob: Math.random() * 6, seen: frame };
         this.units.set(u.id, sprite);
         if (!this.firstSync) {
@@ -363,16 +359,16 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private createBuilding(b: BuildingView): BuildingSprite {
-    const size = SPRITE_SIZE[b.type];
+    const visual = this.visuals.building(b.type, b.side);
     const image = this.add
-      .image(b.x, b.y, this.visuals.building(b.type, b.side).key)
-      .setOrigin(0.5, SPRITE_ANCHOR_Y[b.type])
-      .setDisplaySize(size.width, size.height)
+      .image(b.x, b.y, visual.key)
+      .setOrigin(0.5, visual.anchorY)
+      .setDisplaySize(visual.width, visual.height)
       .setDepth(DEPTH.entities + (b.y + BUILDING_STATS[b.type].halfHeight) / 10);
     const queue =
       b.type === 'barracks'
         ? this.add
-            .text(b.x + size.width / 2 - 4, b.y - size.height * SPRITE_ANCHOR_Y.barracks, '', {
+            .text(b.x + visual.width / 2 - 4, b.y - visual.height * visual.anchorY, '', {
               fontFamily: UI_FONT,
               fontSize: '15px',
               fontStyle: 'bold',
@@ -398,8 +394,8 @@ export class BattleScene extends Phaser.Scene {
     g.clear();
     for (const b of view.buildings) {
       const stats = BUILDING_STATS[b.type];
-      const size = SPRITE_SIZE[b.type];
-      const top = b.y - size.height * SPRITE_ANCHOR_Y[b.type];
+      const visual = this.visuals.building(b.type, b.side);
+      const top = b.y - visual.height * visual.anchorY;
       if (b.hp < b.maxHp) {
         const width = Math.min(90, Math.max(44, stats.halfWidth * 1.6));
         const share = Phaser.Math.Clamp(b.hp / b.maxHp, 0, 1);
@@ -409,11 +405,12 @@ export class BattleScene extends Phaser.Scene {
         g.fillRoundedRect(b.x - width / 2, top - 10, Math.max(3, width * share), 5, 2);
       }
       if (b.type === 'barracks' && b.queue > 0) {
-        const width = size.width - 12;
+        const width = visual.width - 12;
+        const bottom = b.y + visual.height * (1 - visual.anchorY);
         g.fillStyle(0x111111, 0.75);
-        g.fillRoundedRect(b.x - width / 2, b.y + size.height * (1 - SPRITE_ANCHOR_Y.barracks) + 3, width, 6, 3);
+        g.fillRoundedRect(b.x - width / 2, bottom + 3, width, 6, 3);
         g.fillStyle(0xffe500, 1);
-        g.fillRoundedRect(b.x - width / 2 + 1, b.y + size.height * (1 - SPRITE_ANCHOR_Y.barracks) + 4, (width - 2) * b.trainProgress, 4, 2);
+        g.fillRoundedRect(b.x - width / 2 + 1, bottom + 4, (width - 2) * b.trainProgress, 4, 2);
       }
     }
     for (const u of view.units) {
@@ -421,7 +418,8 @@ export class BattleScene extends Phaser.Scene {
       if (u.hp >= u.maxHp && !selected) continue;
       const sprite = this.units.get(u.id);
       const ux = sprite?.x ?? u.x;
-      const uy = (sprite?.y ?? u.y) - SPRITE_SIZE.troop.height * SPRITE_ANCHOR_Y.troop - 7;
+      const troop = this.visuals.unit(u.type, u.side);
+      const uy = (sprite?.y ?? u.y) - troop.height * troop.anchorY - 7;
       const share = Phaser.Math.Clamp(u.hp / u.maxHp, 0, 1);
       g.fillStyle(0x111111, 0.85);
       g.fillRect(ux - 12, uy, 24, 5);
@@ -440,26 +438,14 @@ export class BattleScene extends Phaser.Scene {
     o.clear();
     if (!view) return;
 
-    // Soft shadows ground the sprites on the grass.
-    g.fillStyle(0x000000, 0.14);
-    for (const b of view.buildings) {
-      const stats = BUILDING_STATS[b.type];
-      const size = SPRITE_SIZE[b.type];
-      const baseY = b.y + size.height * (1 - SPRITE_ANCHOR_Y[b.type]) - 4;
-      g.fillEllipse(b.x, baseY, stats.shape === 'rect' ? size.width + 6 : size.width * 0.9, 14);
-    }
-    for (const u of view.units) {
-      const sprite = this.units.get(u.id);
-      g.fillEllipse(sprite?.x ?? u.x, (sprite?.y ?? u.y) + 9, 22, 8);
-    }
-
     if (c.selection.size) {
       for (const [width, color, alpha] of [[6, INK, 0.6], [3, 0xffe500, 1]]) {
         g.lineStyle(width, color, alpha);
         for (const u of view.units) {
           if (!c.selection.has(u.id)) continue;
           const sprite = this.units.get(u.id);
-          g.strokeEllipse(sprite?.x ?? u.x, (sprite?.y ?? u.y) + 9, 32, 14);
+          // A box around the unit's map symbol, which is centred on its position.
+          g.strokeRoundedRect((sprite?.x ?? u.x) - 18, (sprite?.y ?? u.y) - 14, 36, 26, 4);
         }
       }
     }
@@ -477,7 +463,7 @@ export class BattleScene extends Phaser.Scene {
 
       const type = c.buildType;
       const stats = BUILDING_STATS[type];
-      const size = SPRITE_SIZE[type];
+      const visual = this.visuals.building(type, c.mySide);
       const point = c.placementPoint(x, y);
       const valid = c.placementCheck(point.x, point.y).ok && view.players[c.mySide].gold >= stats.cost;
       const color = valid ? 0x22c55e : 0xef4444;
@@ -495,9 +481,9 @@ export class BattleScene extends Phaser.Scene {
         o.strokeCircle(point.x, point.y, stats.halfWidth + UNIT_RADIUS + stats.attack.range);
       }
       this.ghost
-        .setTexture(this.visuals.building(type, c.mySide).key)
-        .setOrigin(0.5, SPRITE_ANCHOR_Y[type])
-        .setDisplaySize(size.width, size.height)
+        .setTexture(visual.key)
+        .setOrigin(0.5, visual.anchorY)
+        .setDisplaySize(visual.width, visual.height)
         .setPosition(point.x, point.y)
         .setAlpha(valid ? 0.8 : 0.4)
         .setVisible(true);

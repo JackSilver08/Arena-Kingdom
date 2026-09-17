@@ -2980,6 +2980,21 @@ input:not([type='radio']):focus {
   font-weight: 800;
 }
 
+.option-symbol {
+  position: absolute;
+  top: calc(var(--s) * 0.4);
+  right: calc(var(--s) * 0.5);
+  display: grid;
+  place-items: center;
+  width: calc(var(--s) * 2.6);
+  height: calc(var(--s) * 2.6);
+}
+
+.option-symbol svg {
+  width: 100%;
+  height: 100%;
+}
+
 .option-art {
   display: grid;
   place-items: center;

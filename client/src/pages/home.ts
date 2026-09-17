@@ -2,14 +2,11 @@ import {
   DIFFICULTY_LABELS,
   GAME_RULES,
   startingLayout,
-  type BuildingType,
   type LeaderboardEntry,
   type MatchSummary,
   type Side
 } from '@arena-kingdom/shared';
 import {
-  SPRITE_ANCHOR_Y,
-  SPRITE_SIZE,
   barracksArt,
   bigWaveArt,
   castleArt,
@@ -20,6 +17,7 @@ import {
   troopArt
 } from '../game/art';
 import { arenaMapArtV2 } from '../game/mapArt';
+import { SYMBOL_SIZE, symbolArt, type SymbolType } from '../game/symbols';
 import { villageArt } from '../game/villageArt';
 import { api } from '../lib/api';
 import { formatNumber, timeAgo } from '../lib/format';
@@ -56,30 +54,23 @@ function sprite(markup: string, width: number, height: number, style: string) {
   return html`<img class="ak-sprite" src="${artUrl(markup, width, height)}" alt="" style="${style}" />`;
 }
 
-function buildingMarkup(type: BuildingType, side: Side) {
-  if (type === 'village') return villageArt(side);
-  if (type === 'barracks') return barracksArt(side);
-  if (type === 'tower') return towerArt(side);
-  return castleArt(side);
-}
-
-/** The real starting battlefield: the island with every opening building and troop, drawn at `scale`. */
+/** The real starting battlefield: the island with every opening building and troop as map symbols, drawn at `scale`. */
 function battlefield(scale: number) {
-  const place = (type: BuildingType | 'troop', markup: string, x: number, y: number) => {
-    const size = SPRITE_SIZE[type];
+  const place = (type: SymbolType, side: Side, x: number, y: number) => {
+    const size = SYMBOL_SIZE[type];
     return sprite(
-      markup,
+      symbolArt(type, side),
       size.width,
       size.height,
-      `left:${(x / WORLD.width) * 100}%;top:${(y / WORLD.height) * 100}%;width:${((size.width * scale) / WORLD.width) * 100}%;transform:translate(-50%,-${SPRITE_ANCHOR_Y[type] * 100}%)`
+      `left:${(x / WORLD.width) * 100}%;top:${(y / WORLD.height) * 100}%;width:${((size.width * scale) / WORLD.width) * 100}%;transform:translate(-50%,-${size.anchorY * 100}%)`
     );
   };
   const sides: Side[] = ['blue', 'red'];
   return html`<img class="ak-map" src="${artUrl(arenaMapArtV2(), WORLD.width, WORLD.height)}" alt="" />
     ${sides.map((side) => {
       const layout = startingLayout(side);
-      return html`${layout.buildings.map((b) => place(b.type, buildingMarkup(b.type, side), b.x, b.y))}
-      ${layout.units.map((u) => place('troop', troopArt(side), u.x, u.y))}`;
+      return html`${layout.buildings.map((b) => place(b.type, side, b.x, b.y))}
+      ${layout.units.map((u) => place('troop', side, u.x, u.y))}`;
     })}`;
 }
 
