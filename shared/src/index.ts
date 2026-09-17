@@ -8,3 +8,4 @@ export * from './ai.js';
 export * from './network.js';
 export * from './api.js';
 export * from './influence.js';
+export * from './militia.js';
