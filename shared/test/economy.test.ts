@@ -15,7 +15,9 @@ function run(engine: MatchEngine, ms: number) {
 test('starting kingdom supply leaves the opening army maintenance-free', () => {
   const engine = new MatchEngine();
   const capacity = armySupplyCapacity(engine.buildingsOf('blue'));
-  assert.equal(capacity, 22);
+  const expectedStartingSupply = GAME_RULES.economy.supply.castle + 3 * GAME_RULES.economy.supply.village + GAME_RULES.economy.supply.barracks;
+  assert.equal(capacity, expectedStartingSupply);
+  assert.equal(capacity, 12);
   assert.equal(engine.armyOf('blue').length, 3);
   assert.equal(armyUpkeep(engine.armyOf('blue').length, capacity), 0);
 });
@@ -56,16 +58,26 @@ test('army upkeep charges only troops above supply and never creates debt', () =
 
   const army = engine.armyOf('blue').length;
   assert.equal(army, 28);
-  assert.equal(armyUpkeep(army, capacity), 5);
+  assert.equal(armyUpkeep(army, capacity), 16);
 
   engine.state.players.blue.gold = 0;
   run(engine, GAME_RULES.economy.incomeIntervalMs);
-  assert.equal(engine.state.players.blue.gold, engine.state.players.blue.income - 5);
-  assert.equal(engine.state.players.blue.stats.goldSpent, 5);
+  assert.equal(engine.state.players.blue.gold, engine.state.players.blue.income - 16);
+  assert.equal(engine.state.players.blue.stats.goldSpent, 16);
 
   engine.state.players.blue.gold = 1;
   run(engine, GAME_RULES.economy.incomeIntervalMs);
   assert.ok(engine.state.players.blue.gold >= 0, 'upkeep must never create negative gold');
+});
+
+test('upkeep starts when a rush-sized army pushes beyond the tightened starting supply', () => {
+  const engine = new MatchEngine();
+  const capacity = armySupplyCapacity(engine.buildingsOf('blue'));
+  assert.equal(capacity, 12);
+  assert.equal(armyUpkeep(12, capacity), 0);
+  assert.equal(armyUpkeep(15, capacity), 3);
+  assert.equal(armyUpkeep(16, capacity), 4);
+  assert.equal(armyUpkeep(18, capacity), 6);
 });
 
 test('destroying a barracks removes its supply capacity', () => {
