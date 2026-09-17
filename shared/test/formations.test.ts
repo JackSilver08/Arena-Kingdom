@@ -40,7 +40,7 @@ test('wedge exposes a forward point and square forms a compact grid', () => {
   assert.ok(wedge.some((p) => p.x > 0 && p.y < 0), 'wedge should spread to the rear-right');
   assert.ok(wedge.some((p) => p.x < 0 && p.y < 0), 'wedge should spread to the rear-left');
 
-  const square = formationOffsets(9, 'square', undefined, Math.PI / 2);
+  const square = formationOffsets(9, 'square');
   const xs = new Set(square.map((p) => p.x));
   const ys = new Set(square.map((p) => p.y));
   assert.equal(xs.size, 3);
