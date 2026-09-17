@@ -1,6 +1,7 @@
 import { DIFFICULTIES, type Difficulty } from '@arena-kingdom/shared';
 import { toast } from '../components/ui';
 import { GameController } from '../game/GameController';
+import { DisplaySettingsPanel } from '../game/displaySettingsPanel';
 import {
   LocalSession,
   OnlineSession,
@@ -17,6 +18,7 @@ import { session as auth } from '../lib/session';
 export function battlePage(ctx: RouteContext): Page {
   let controller: GameController | null = null;
   let current: GameSession | null = null;
+  let displaySettings: DisplaySettingsPanel | null = null;
   let alive = true;
 
   const requested = ctx.query.get('difficulty') as Difficulty | null;
@@ -33,6 +35,7 @@ export function battlePage(ctx: RouteContext): Page {
           lobby: () => navigate('/play'),
           playAgain: () => navigate(isAi ? `/battle?mode=ai&difficulty=${difficulty}` : '/play', { replace: isAi })
         });
+        displaySettings = new DisplaySettingsPanel(root, () => undefined);
       };
 
       if (isAi) {
@@ -69,6 +72,7 @@ export function battlePage(ctx: RouteContext): Page {
     },
     destroy() {
       alive = false;
+      displaySettings?.destroy();
       controller?.destroy();
       current?.dispose();
     }
