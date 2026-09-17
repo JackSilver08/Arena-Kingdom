@@ -1,13 +1,13 @@
 import type { BuildingType, Side } from '@arena-kingdom/shared';
 
 /**
- * Battlefield symbols in the style of military situation maps (loosely NATO APP-6): the frame's
+ * Battlefield symbols in the style of military situation maps (loosely NATO APP-6): the
  * shape says what kind of thing it is and the mark inside says its role.
  *
  * - circle: places. Castle = capital star.
  * - tent: settlement / camp glyph. Village = a standalone teepee; Barracks = a field-camp glyph.
  * - triangle: defensive post. Tower = observation post dot.
- * - line with teeth: obstacle. Fence, teeth facing the enemy.
+ * - wooden palisade: obstacle. Fence = a row of pointed timber stakes.
  *
  * Each symbol is drawn at world size; `anchorY` is where the footprint centre sits in the image.
  * Keep the markup ASCII: it is Base64-encoded with `btoa`.
@@ -112,14 +112,45 @@ export function symbolArt(type: SymbolType, side: Side) {
         <circle cx="28" cy="32" r="5" fill="${ink}"/>`
       );
     case 'fence': {
-      // Teeth point towards the enemy: right for blue, left for red.
-      const teeth = Array.from({ length: 8 }, (_, i) => `M17 ${10 + i * 16}L28 ${16 + i * 16}L17 ${22 + i * 16}Z`).join('');
-      const body = `<path d="M17 6V134" fill="none" stroke="${HALO}" stroke-width="10" stroke-linecap="round"/>
-        <g transform="translate(1.5 2.5)" opacity=".3"><path d="M17 6V134" stroke="${SHADOW}" stroke-width="6"/></g>
-        <path d="M17 6V134" stroke="${ink}" stroke-width="6.5" stroke-linecap="round"/>
-        <path d="M17 8V132" stroke="${COLORS[side].fill}" stroke-width="2.4"/>
-        <path d="${teeth}" fill="${ink}" stroke="${HALO}" stroke-width="1" stroke-linejoin="round"/>`;
-      return svg(size, side === 'blue' ? body : `<g transform="matrix(-1 0 0 1 ${size.width} 0)">${body}</g>`);
+      // A wooden palisade: staggered pointed logs with timber braces behind them.
+      const stakes = [
+        { x: 1, top: 16, lean: -3, fill: '#8d6f4b' },
+        { x: 7, top: 9, lean: 2, fill: '#a48158' },
+        { x: 13, top: 14, lean: -1.5, fill: '#7d6344' },
+        { x: 19, top: 7, lean: 2.5, fill: '#987851' },
+        { x: 25, top: 13, lean: -2, fill: '#846747' }
+      ];
+      const stakePath = (x: number) => `M${x} 136 L${x + 1.1} 28 L${x + 3.3} 10 L${x + 5.6} 28 L${x + 6.1} 136 Z`;
+      const shadowStakes = stakes.map(({ x, lean }) =>
+        `<path d="${stakePath(x)}" transform="rotate(${lean} ${x + 3.1} 136)"/>`
+      ).join('');
+      const haloStakes = stakes.map(({ x, lean }) =>
+        `<path d="${stakePath(x)}" transform="rotate(${lean} ${x + 3.1} 136)"/>`
+      ).join('');
+      const inkStakes = stakes.map(({ x, lean, fill }) =>
+        `<path d="${stakePath(x)}" transform="rotate(${lean} ${x + 3.1} 136)" fill="${fill}"/>`
+      ).join('');
+
+      return svg(
+        size,
+        `<g fill="none" stroke="${HALO}" stroke-width="8" stroke-linejoin="round" opacity=".96">
+          <path d="M0 48 H34 M0 94 H34"/>
+          ${haloStakes}
+        </g>
+        <g fill="none" stroke="${SHADOW}" stroke-width="5" stroke-linecap="round" opacity=".28" transform="translate(1.5 2.5)">
+          <path d="M0 48 H34 M0 94 H34"/>
+          ${shadowStakes}
+        </g>
+        <g fill="none" stroke="#5e4630" stroke-width="4.8" stroke-linecap="round" opacity=".9">
+          <path d="M0 48 H34 M0 94 H34"/>
+        </g>
+        <g stroke="#4f3928" stroke-width="1.35" stroke-linejoin="round">
+          ${inkStakes}
+        </g>
+        <g fill="none" stroke="${ink}" stroke-width="2.1" stroke-linecap="round" opacity=".9">
+          <path d="M2 101 H32"/>
+        </g>`
+      );
     }
     case 'troop':
       return svg(
