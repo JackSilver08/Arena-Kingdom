@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
-const root = new URL('../', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../', import.meta.url));
 const required = [
   'client/src/game/displaySettings.ts',
   'client/src/game/displaySettingsPanel.ts',
