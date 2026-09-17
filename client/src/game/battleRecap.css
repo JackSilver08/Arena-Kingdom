@@ -1,0 +1,178 @@
+.battle-recap-trigger {
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 111;
+  box-shadow: 0 8px 24px rgba(0, 24, 64, 0.24);
+}
+
+.battle-recap-trigger:hover {
+  transform: translateX(-50%) translateY(-1px);
+}
+
+.battle-recap-panel {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 120;
+  width: min(1040px, calc(100vw - 28px));
+  transform: translateX(-50%);
+  padding: 14px 16px 12px;
+  border: 1px solid rgba(22, 36, 54, 0.16);
+  border-radius: 18px;
+  background: rgba(245, 242, 233, 0.96);
+  color: #20252d;
+  box-shadow: 0 20px 60px rgba(0, 18, 45, 0.34);
+  backdrop-filter: blur(12px);
+  user-select: text;
+}
+
+.battle-recap-head,
+.battle-recap-toolbar,
+.battle-recap-summary,
+.battle-recap-scale {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.battle-recap-head {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.battle-recap-head > div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.battle-recap-kicker {
+  color: #6a7078;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+}
+
+.battle-recap-head strong {
+  font: 900 20px/1.1 Georgia, 'Times New Roman', serif;
+}
+
+.battle-recap-head small {
+  color: #67707b;
+  font-size: 11px;
+}
+
+.battle-recap-toolbar {
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.battle-recap-clock {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font: 800 13px/1 'Segoe UI', Arial, sans-serif;
+}
+
+.battle-recap-speeds {
+  display: flex;
+  gap: 4px;
+}
+
+.battle-recap-speeds .btn-light.active {
+  background: #1f2937;
+  color: #fff;
+  box-shadow: none;
+}
+
+.battle-recap-timeline {
+  position: relative;
+  padding-top: 10px;
+}
+
+.battle-recap-timeline input[type='range'] {
+  width: 100%;
+  margin: 0;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.battle-recap-events {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4px;
+  height: 12px;
+  pointer-events: none;
+}
+
+.battle-recap-event {
+  position: absolute;
+  top: 2px;
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  transform: translateX(-50%);
+  border: 1px solid #fff;
+  border-radius: 50%;
+  background: #b7791f;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.battle-recap-scale {
+  justify-content: space-between;
+  margin-top: 1px;
+  color: #737982;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.battle-recap-summary {
+  flex-wrap: wrap;
+  margin-top: 8px;
+  color: #5b6470;
+  font-size: 11px;
+}
+
+.battle-recap-summary span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(31, 41, 55, 0.06);
+}
+
+.battle-recap-events-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-top: 8px;
+  scrollbar-width: thin;
+}
+
+.battle-recap-events-list span {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.08);
+  color: #4b5563;
+  font-size: 10px;
+}
+
+@media (max-width: 720px) {
+  .battle-recap-panel {
+    bottom: 8px;
+    padding: 12px;
+  }
+  .battle-recap-clock {
+    width: 100%;
+    margin-left: 0;
+  }
+  .battle-recap-speeds {
+    margin-left: auto;
+  }
+  .battle-recap-head small {
+    display: none;
+  }
+}
