@@ -112,19 +112,19 @@ export function symbolArt(type: SymbolType, side: Side) {
         <circle cx="28" cy="32" r="5" fill="${ink}"/>`
       );
     case 'fence': {
-      // Defensive line symbol: one bold continuous line plus short perpendicular field marks.
-      // It reads as a fortification/front line rather than a literal wooden fence.
-      const lineY = 78;
-      const lineX1 = 5;
-      const lineX2 = 29;
-      const markXs = [8, 14.5, 21, 27];
-      const marks = markXs.map((x) => `M${x} 70 V86`).join('');
-      const shadow = `<path d="M${lineX1} ${lineY} H${lineX2}" stroke="${SHADOW}" stroke-width="6.8" stroke-linecap="round"/>
-        <path d="${marks}" stroke="${SHADOW}" stroke-width="3.2" stroke-linecap="round"/>`;
-      const halo = `<path d="M${lineX1} ${lineY} H${lineX2}" stroke="${HALO}" stroke-width="8.5" stroke-linecap="round"/>
-        <path d="${marks}" stroke="${HALO}" stroke-width="5.5" stroke-linecap="round"/>`;
-      const inkLine = `<path d="M${lineX1} ${lineY} H${lineX2}" stroke="${ink}" stroke-width="5.2" stroke-linecap="round"/>
-        <path d="${marks}" stroke="${ink}" stroke-width="2.1" stroke-linecap="round"/>`;
+      // Defensive-line glyph: one long bold vertical line with short perpendicular marks.
+      // The repeated crossbars make the symbol read as a fortification line on the military map.
+      const lineX = 17;
+      const lineY1 = 7;
+      const lineY2 = 133;
+      const markYs = [18, 37, 56, 75, 94, 113, 128];
+      const marks = markYs.map((y) => `M9 ${y} H25`).join('');
+      const shadow = `<path d="M${lineX} ${lineY1} V${lineY2}" stroke="${SHADOW}" stroke-width="7" stroke-linecap="round"/>
+        <path d="${marks}" stroke="${SHADOW}" stroke-width="3.1" stroke-linecap="round"/>`;
+      const halo = `<path d="M${lineX} ${lineY1} V${lineY2}" stroke="${HALO}" stroke-width="9" stroke-linecap="round"/>
+        <path d="${marks}" stroke="${HALO}" stroke-width="5.2" stroke-linecap="round"/>`;
+      const inkLine = `<path d="M${lineX} ${lineY1} V${lineY2}" stroke="${ink}" stroke-width="5.4" stroke-linecap="round"/>
+        <path d="${marks}" stroke="${ink}" stroke-width="2.2" stroke-linecap="round"/>`;
       return svg(size, `${shadow}${halo}${inkLine}`);
     }
     case 'troop':
