@@ -8,13 +8,14 @@ function run(engine: MatchEngine, ms: number) {
 
 function deployBlueMilitia() {
   const engine = new MatchEngine();
+  const regularBefore = new Set(engine.armyOf('blue').map((u) => u.id));
   const village = engine.buildingsOf('blue', 'village')[0];
   const attacker = engine.armyOf('red')[0];
   attacker.x = village.x + BUILDING_STATS.village.halfWidth + GAME_RULES.militia.triggerRange - 8;
   attacker.y = village.y;
   run(engine, GAME_RULES.tickMs);
   const militia = engine.state.units.filter((u) => u.type === 'militia' && u.garrisonVillageId === village.id && u.hp > 0);
-  return { engine, village, attacker, militia };
+  return { engine, village, attacker, militia, regularBefore };
 }
 
 test('a threatened village deploys three militia with 1.5x hp and 2/3 damage', () => {
@@ -36,8 +37,8 @@ test('militia ignore direct move/stop commands while tied to a living village', 
 
 test('army command targets only regular troops and leaves militia autonomous', () => {
   const { engine, militia } = deployBlueMilitia();
-  const before = militia.map((u) => ({ id: u.id, order: u.order }));
-  const result = engine.command('blue', { type: 'army', fraction: 'all', x: 600, y: 540, attack: true } as never);
+  const before = militia.map((u) => ({ id: u.id, order: { ...u.order } }));
+  const result = engine.command('blue', { type: 'army', fraction: 'all', x: 600, y: 540 });
   assert.equal(result.ok, true);
   for (const item of before) {
     const current = engine.state.units.find((u) => u.id === item.id)!;
@@ -46,7 +47,7 @@ test('army command targets only regular troops and leaves militia autonomous', (
 });
 
 test('village destruction promotes surviving militia into regular soldiers', () => {
-  const { engine, village, attacker, militia } = deployBlueMilitia();
+  const { engine, village, attacker, militia, regularBefore } = deployBlueMilitia();
   attacker.hp = 0;
   for (const unit of militia) unit.hp = 60;
   const oldIds = new Set(militia.map((u) => u.id));
@@ -55,12 +56,13 @@ test('village destruction promotes surviving militia into regular soldiers', () 
 
   assert.equal(engine.state.buildings.some((b) => b.id === village.id), false);
   assert.equal(engine.state.units.filter((u) => oldIds.has(u.id)).length, 0, 'promotion creates fresh regular-unit ids');
-  const promoted = engine.armyOf('blue').filter((u) => ![1, 2, 3].includes(u.id));
-  assert.ok(promoted.some((u) => u.type === 'soldier' && u.maxHp === UNIT_STATS.soldier.hp && u.hp === 60));
+  const promoted = engine.armyOf('blue').filter((u) => !regularBefore.has(u.id));
+  assert.equal(promoted.length, GAME_RULES.militia.count);
+  assert.ok(promoted.every((u) => u.type === 'soldier' && u.maxHp === UNIT_STATS.soldier.hp && u.hp === 60));
 });
 
-test('if a village falls and militia survive, the survivors become controllable', () => {
-  const { engine, village, attacker, militia } = deployBlueMilitia();
+test('if a village falls and one militia survives, the survivor becomes controllable', () => {
+  const { engine, village, attacker, militia, regularBefore } = deployBlueMilitia();
   attacker.hp = 0;
   militia[0].hp = 70;
   militia[1].hp = 0;
@@ -68,7 +70,7 @@ test('if a village falls and militia survive, the survivors become controllable'
   village.hp = 0;
   run(engine, GAME_RULES.tickMs);
 
-  const survivor = engine.armyOf('blue').find((u) => u.hp === 70);
+  const survivor = engine.armyOf('blue').find((u) => !regularBefore.has(u.id) && u.hp === 70);
   assert.ok(survivor && survivor.type === 'soldier');
   const result = engine.command('blue', { type: 'move', unitIds: [survivor.id], x: 650, y: 540, attack: false });
   assert.equal(result.ok, true, 'promoted militia can receive regular orders');
@@ -99,7 +101,7 @@ test('a wiped militia garrison permanently leaves the village without defenders'
 });
 
 test('surviving militia withdraw to the village and the garrison can respond again later', () => {
-  const { engine, village, attacker, militia } = deployBlueMilitia();
+  const { engine, village, attacker } = deployBlueMilitia();
   attacker.hp = 0;
   run(engine, 1500);
   assert.equal(engine.state.units.some((u) => u.type === 'militia' && u.garrisonVillageId === village.id), false);
