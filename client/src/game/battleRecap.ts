@@ -246,7 +246,7 @@ export class BattleRecap implements BattleReplayRecorder {
     this.index = Math.max(0, Math.min(this.recorded.length - 1, index));
     this.cursorMs = this.recorded[this.index]?.view.timeMs ?? 0;
     const frame = this.recorded[this.index];
-    if (frame) this.scene.setReplayView(frame.view, frame.events);
+    if (frame) this.scene.setReplayView(frame.view);
     if (rerender) {
       this.render();
       this.renderPlayState();
