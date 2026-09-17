@@ -95,6 +95,8 @@ export class BattleVisualRenderer {
       }
       const troop = SYMBOL_SIZE.troop;
       load(unitTextureKey('soldier', side), symbolArt('troop', side), troop.width, troop.height);
+      const militia = SYMBOL_SIZE.militia;
+      load(unitTextureKey('militia', side), symbolArt('militia', side), militia.width, militia.height);
     }
 
     load(mapTextureKey(this.view, this.mapStyle), arenaMapArtV2(this.view, this.mapStyle), this.view.width, this.view.height);
@@ -155,6 +157,8 @@ export class BattleVisualRenderer {
   }
 
   unit(type: UnitType, side: Side): EntityVisual {
-    return { key: unitTextureKey(type, side), ...SYMBOL_SIZE.troop };
+    const glyph = type === 'militia' ? SYMBOL_SIZE.militia : SYMBOL_SIZE.troop;
+    const symbolType = type === 'militia' ? 'militia' : 'troop';
+    return { key: unitTextureKey(type, side), ...glyph, anchorY: glyph.anchorY };
   }
 }
