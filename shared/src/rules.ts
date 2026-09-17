@@ -41,7 +41,15 @@ export const GAME_RULES={
     /** Width of the unbuildable strip between the two kingdoms. */
     neutralZone:RED_LAND.minX-BLUE_LAND.maxX
   },
-  economy:{startingGold:100,castleIncome:4,villageIncome:5,incomeIntervalMs:5000,maxQueuePerBarracks:5},
+  economy:{
+    startingGold:100,
+    castleIncome:4,
+    villageIncome:5,
+    incomeIntervalMs:5000,
+    maxQueuePerBarracks:5,
+    /** Soft army capacity: the kingdom can exceed it, but the excess consumes gold. */
+    supply:{castle:10,barracks:6,village:2,tower:2,upkeepPerUnit:0.75}
+  },
   limits:{maxUnitsPerSide:40,maxBuildingsPerSide:30},
   peace:{responseWindowMs:15_000,cooldownMs:30_000}
 } as const;
@@ -51,10 +59,10 @@ export interface BuildingStats{label:string;icon:string;cost:number;hp:number;sh
 
 export const BUILDING_STATS:Record<BuildingType,BuildingStats>={
   castle:{label:'Castle',icon:'🏰',cost:0,hp:1500,shape:'circle',halfWidth:46,halfHeight:46,attack:{damage:9,range:80,cooldownMs:1000},description:'Your seat of power. Fires arrows at nearby attackers. If it falls, you lose.'},
-  village:{label:'Village',icon:'🏘️',cost:75,hp:300,shape:'circle',halfWidth:26,halfHeight:26,description:`+${GAME_RULES.economy.villageIncome} gold every ${GAME_RULES.economy.incomeIntervalMs/1000}s.`},
-  barracks:{label:'Barracks',icon:'⚔️',cost:120,hp:500,shape:'circle',halfWidth:28,halfHeight:28,description:'Trains troops. More barracks train in parallel.'},
+  village:{label:'Village',icon:'🏘️',cost:75,hp:300,shape:'circle',halfWidth:26,halfHeight:26,description:`+${GAME_RULES.economy.villageIncome} gold every ${GAME_RULES.economy.incomeIntervalMs/1000}s. Also expands army supply by ${GAME_RULES.economy.supply.village}.`},
+  barracks:{label:'Barracks',icon:'⚔️',cost:120,hp:500,shape:'circle',halfWidth:28,halfHeight:28,description:`Trains troops. More barracks train in parallel and each adds ${GAME_RULES.economy.supply.barracks} army supply.`},
   fence:{label:'Fence',icon:'🪵',cost:30,hp:450,shape:'rect',halfWidth:11,halfHeight:64,description:'Wooden palisade. Enemy troops must go around or break through; yours pass freely.'},
-  tower:{label:'Tower',icon:'🗼',cost:130,hp:700,shape:'circle',halfWidth:20,halfHeight:20,attack:{damage:18,range:100,cooldownMs:850},description:'Shoots enemy troops in range. Cannot move.'}
+  tower:{label:'Tower',icon:'🗼',cost:130,hp:700,shape:'circle',halfWidth:20,halfHeight:20,attack:{damage:18,range:100,cooldownMs:850},description:`Shoots enemy troops in range. Cannot move. Adds ${GAME_RULES.economy.supply.tower} army supply.`}
 };
 
 export interface UnitStats{label:string;cost:number;trainMs:number;hp:number;radius:number;speed:number;aggroRange:number;attack:AttackStats}
@@ -150,4 +158,22 @@ export function snapPlacement(buildings:readonly(Located&{side:Side})[],side:Sid
 }
 
 export function incomeFor(villages:number){return GAME_RULES.economy.castleIncome+villages*GAME_RULES.economy.villageIncome}
+
+export function armySupplyCapacity(buildings:readonly Located[]){
+  let capacity=0;
+  for(const building of buildings){
+    if(building.type==='castle') capacity+=GAME_RULES.economy.supply.castle;
+    else if(building.type==='barracks') capacity+=GAME_RULES.economy.supply.barracks;
+    else if(building.type==='village') capacity+=GAME_RULES.economy.supply.village;
+    else if(building.type==='tower') capacity+=GAME_RULES.economy.supply.tower;
+  }
+  return capacity;
+}
+
+/** Gold paid every income interval for the army above the kingdom's supply capacity. */
+export function armyUpkeep(armySize:number,supplyCapacity:number){
+  const overCapacity=Math.max(0,Math.floor(armySize)-Math.floor(supplyCapacity));
+  return Math.ceil(overCapacity*GAME_RULES.economy.supply.upkeepPerUnit);
+}
+
 export function fractionOf(fraction:ArmyFraction){return fraction==='all'?1:fraction==='one-third'?1/3:2/3}
