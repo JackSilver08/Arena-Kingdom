@@ -31,6 +31,37 @@ For the profiled side the lab records:
 
 The lab also checks that gold remains finite and never drops below zero.
 
+## Baseline result
+
+The first four-repeat lab completed **24 scripted matches**. In the baseline economy model, the Rush profile reached its first attack at about 58s and recorded:
+
+| Matchup | Rush-side result |
+| --- | ---: |
+| Rush vs Economy | 3/4 wins |
+| Rush vs Defensive | 4/4 wins |
+| Rush vs Balanced | 4/4 wins |
+
+Across those rush matchups, peak supply averaged 28 and peak upkeep was 0.0 except for a small 0.3 average in Rush vs Economy. The Rush build order was therefore often reaching a decisive troop mass while remaining inside or barely touching its large supply allowance.
+
+This is simulation evidence for a tuning change, not proof that Rush is universally optimal. The result can still depend on scripted build timing, target selection, building placement, defensive response and combat rules.
+
+## Phase 6 tuning pass
+
+The first tuning pass tightens logistics without making troop production a hard-cap system:
+
+| Rule | Baseline | Phase 6 tuned |
+| --- | ---: | ---: |
+| Castle supply | +10 | +6 |
+| Barracks supply | +6 | +3 |
+| Village supply | +2 | +1 |
+| Tower supply | +2 | +2 |
+| Upkeep rate | 0.75 gold / excess troop | 1.0 gold / excess troop |
+| Starting supply | 22 | 12 |
+
+With the tuned model, the opening army remains maintenance-free, a second Barracks takes the kingdom to 15 supply, and a 16-troop standing army produces 4 gold of upkeep every 5 seconds.
+
+The intended effect is a clearer economic decision point: early aggression stays available, but sustained troop spam begins consuming treasury before the army reaches the hard 40-unit ceiling.
+
 ## Current command
 
 ```text
@@ -43,8 +74,12 @@ The CI workflow runs the same four-repeat lab after static checks, type checking
 
 Simulation output is evidence for tuning, not proof of a single universally correct strategy. A result can be driven by timing, scripted target selection, defensive reactions, building placement, or the underlying combat rules. Gameplay values should only be changed after repeated outputs point to a consistent imbalance.
 
-## Current tuning loop
+## Tuning loop
 
-The economy system already uses soft army supply and maintenance. The next tuning pass should focus on the first point at which a rush becomes expensive enough to create a meaningful opportunity for infrastructure investment, while keeping early aggression possible.
+1. Establish a 4-repeat baseline.
+2. Change one balance lever at a time.
+3. Run the same 24-match matrix.
+4. Compare army, supply, upkeep, gold, infrastructure, first attack and duration.
+5. Keep the change only when the repeated output shows a healthier tradeoff between aggression and infrastructure.
 
 Do not use the Influence Field as an economic modifier. It remains a presentation and battlefield-readability layer.
