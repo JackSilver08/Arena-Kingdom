@@ -172,7 +172,7 @@ export class BattleRecap implements BattleReplayRecorder {
         <span><b>Blue</b> ${blueAlive} troops</span>
         <span><b>Red</b> ${redAlive} troops</span>
         <span>${totalEvents} recorded events</span>
-        <span>Frontline + influence reconstructed from each frame</span>
+        <span>Influence + frontline reconstructed from each frame</span>
       </div>
       <div class="battle-recap-events-list">
         ${events.slice(Math.max(0, events.length - 6)).reverse().map((event) => `<span>${formatTime(event.timeMs)} · ${event.labels.join(' · ')}</span>`).join('') || '<span>No discrete events were recorded.</span>'}
@@ -246,7 +246,16 @@ export class BattleRecap implements BattleReplayRecorder {
     this.index = Math.max(0, Math.min(this.recorded.length - 1, index));
     this.cursorMs = this.recorded[this.index]?.view.timeMs ?? 0;
     const frame = this.recorded[this.index];
-    if (frame) this.scene.setReplayView(frame.view);
+    if (frame) {
+      this.scene.setReplayView(frame.view);
+      if (frame.events.length) {
+        // BattleScene owns the existing combat effects. The cast only exposes
+        // that already-present private renderer to recap, without duplicating
+        // the visual effects implementation.
+        const effects = this.scene as unknown as { playEvents(events: GameEvent[]): void };
+        effects.playEvents(frame.events);
+      }
+    }
     if (rerender) {
       this.render();
       this.renderPlayState();
