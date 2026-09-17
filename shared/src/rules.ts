@@ -1,7 +1,7 @@
 import { coastline, isWalkableLand } from './island.js';
 import type { ArmyFraction, BuildableType, BuildingType, Side, UnitType, Vec2 } from './types.js';
 
-export const GAME_VERSION = '0.4.0';
+export const GAME_VERSION = '0.4.1';
 
 type Rect={minX:number;maxX:number;minY:number;maxY:number};
 /** Each kingdom builds on its side of its front line; the strip between them is no man's land. */
@@ -42,9 +42,10 @@ export const GAME_RULES={
     neutralZone:RED_LAND.minX-BLUE_LAND.maxX
   },
   economy:{
-    startingGold:100,
-    castleIncome:4,
-    villageIncome:5,
+    /** Tuned for faster match tempo: more opening liquidity and faster infrastructure payback. */
+    startingGold:110,
+    castleIncome:5,
+    villageIncome:6,
     incomeIntervalMs:5000,
     maxQueuePerBarracks:5,
     /** Soft army capacity: the kingdom can exceed it, but the excess consumes gold. */
@@ -59,15 +60,15 @@ export interface BuildingStats{label:string;icon:string;cost:number;hp:number;sh
 
 export const BUILDING_STATS:Record<BuildingType,BuildingStats>={
   castle:{label:'Castle',icon:'🏰',cost:0,hp:1500,shape:'circle',halfWidth:46,halfHeight:46,attack:{damage:9,range:80,cooldownMs:1000},description:'Your seat of power. Fires arrows at nearby attackers. If it falls, you lose.'},
-  village:{label:'Village',icon:'🏘️',cost:75,hp:300,shape:'circle',halfWidth:26,halfHeight:26,description:`+${GAME_RULES.economy.villageIncome} gold every ${GAME_RULES.economy.incomeIntervalMs/1000}s. Also expands army supply by ${GAME_RULES.economy.supply.village}.`},
-  barracks:{label:'Barracks',icon:'⚔️',cost:120,hp:500,shape:'circle',halfWidth:28,halfHeight:28,description:`Trains troops. More barracks train in parallel and each adds ${GAME_RULES.economy.supply.barracks} army supply.`},
-  fence:{label:'Fence',icon:'🪵',cost:30,hp:450,shape:'rect',halfWidth:11,halfHeight:64,description:'Wooden palisade. Enemy troops must go around or break through; yours pass freely.'},
-  tower:{label:'Tower',icon:'🗼',cost:130,hp:700,shape:'circle',halfWidth:20,halfHeight:20,attack:{damage:18,range:100,cooldownMs:850},description:`Shoots enemy troops in range. Cannot move. Adds ${GAME_RULES.economy.supply.tower} army supply.`}
+  village:{label:'Village',icon:'🏘️',cost:70,hp:300,shape:'circle',halfWidth:26,halfHeight:26,description:`+${GAME_RULES.economy.villageIncome} gold every ${GAME_RULES.economy.incomeIntervalMs/1000}s. Also expands army supply by ${GAME_RULES.economy.supply.village}.`},
+  barracks:{label:'Barracks',icon:'⚔️',cost:110,hp:500,shape:'circle',halfWidth:28,halfHeight:28,description:`Trains troops. More barracks train in parallel and each adds ${GAME_RULES.economy.supply.barracks} army supply.`},
+  fence:{label:'Fence',icon:'🪵',cost:25,hp:450,shape:'rect',halfWidth:11,halfHeight:64,description:'Wooden palisade. Enemy troops must go around or break through; yours pass freely.'},
+  tower:{label:'Tower',icon:'🗼',cost:120,hp:700,shape:'circle',halfWidth:20,halfHeight:20,attack:{damage:18,range:100,cooldownMs:850},description:`Shoots enemy troops in range. Cannot move. Adds ${GAME_RULES.economy.supply.tower} army supply.`}
 };
 
 export interface UnitStats{label:string;cost:number;trainMs:number;hp:number;radius:number;speed:number;aggroRange:number;attack:AttackStats}
 export const UNIT_STATS:Record<UnitType,UnitStats>={
-  soldier:{label:'Troop',cost:20,trainMs:2500,hp:100,radius:10,speed:52,aggroRange:120,attack:{damage:12,range:14,cooldownMs:800}}
+  soldier:{label:'Troop',cost:18,trainMs:2200,hp:100,radius:10,speed:52,aggroRange:120,attack:{damage:12,range:14,cooldownMs:800}}
 };
 
 export interface Placement{side:Side;type:BuildingType;x:number;y:number}
