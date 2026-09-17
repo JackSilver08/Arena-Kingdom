@@ -17,13 +17,11 @@ import {
   type FormationType,
   type Side,
 } from '../src/index.js';
-import { BotController } from '../src/index.js';
 
 const STRATEGIES = ['rush', 'economy', 'defensive', 'balanced'] as const;
 type Strategy = (typeof STRATEGIES)[number];
 
 interface StrategyProfile {
-  name: Strategy;
   attackAtMs: number;
   attackArmy: number;
   formation: FormationType;
@@ -34,7 +32,6 @@ interface StrategyProfile {
 
 const PROFILES: Record<Strategy, StrategyProfile> = {
   rush: {
-    name: 'rush',
     attackAtMs: 45_000,
     attackArmy: 12,
     formation: 'wedge',
@@ -43,7 +40,6 @@ const PROFILES: Record<Strategy, StrategyProfile> = {
     reserveGold: 0,
   },
   economy: {
-    name: 'economy',
     attackAtMs: 120_000,
     attackArmy: 12,
     formation: 'line',
@@ -52,7 +48,6 @@ const PROFILES: Record<Strategy, StrategyProfile> = {
     reserveGold: 75,
   },
   defensive: {
-    name: 'defensive',
     attackAtMs: 140_000,
     attackArmy: 12,
     formation: 'square',
@@ -61,7 +56,6 @@ const PROFILES: Record<Strategy, StrategyProfile> = {
     reserveGold: 60,
   },
   balanced: {
-    name: 'balanced',
     attackAtMs: 95_000,
     attackArmy: 10,
     formation: 'line',
@@ -93,26 +87,17 @@ function placeBuilding(engine: MatchEngine, side: Side, type: BuildableType): bo
   const castle = engine.castleOf(side);
   if (!castle) return false;
   const dir = forwardDir(side);
+  const land = side === 'blue' ? GAME_RULES.map.blueLand : GAME_RULES.map.redLand;
   const stats = BUILDING_STATS[type];
-  const bounds = engine.buildingsOf(side).length
-    ? {
-        minX: GAME_RULES.map[side === 'blue' ? 'blueLand' : 'redLand'].minX,
-        maxX: GAME_RULES.map[side === 'blue' ? 'blueLand' : 'redLand'].maxX,
-        minY: GAME_RULES.map[side === 'blue' ? 'blueLand' : 'redLand'].minY,
-        maxY: GAME_RULES.map[side === 'blue' ? 'blueLand' : 'redLand'].maxY,
-      }
-    : GAME_RULES.map[side === 'blue' ? 'blueLand' : 'redLand'];
-
   const candidates: { x: number; y: number }[] = [];
   const ys = [-360, -240, -120, 0, 120, 240, 360];
   const xs = [70, 130, 190, 250, 310, 370];
+
   for (const distance of xs) {
-    for (const y of ys) {
-      candidates.push({ x: castle.x + dir * distance, y: castle.y + y });
-    }
+    for (const y of ys) candidates.push({ x: castle.x + dir * distance, y: castle.y + y });
   }
   if (type === 'tower' || type === 'fence') {
-    const frontX = dir > 0 ? bounds.maxX - stats.halfWidth - 12 : bounds.minX + stats.halfWidth + 12;
+    const frontX = dir > 0 ? land.maxX - stats.halfWidth - 12 : land.minX + stats.halfWidth + 12;
     for (const y of ys) candidates.unshift({ x: frontX, y: castle.y + y });
   }
 
@@ -128,8 +113,7 @@ class StrategyController {
   private attackTimer = 0;
   private firstAttackMs: number | null = null;
   private firstOverSupplyMs: number | null = null;
-  private lastBuildAt = -Infinity;
-  private buildStep = 0;
+  private nextBuildIndex = 0;
 
   constructor(readonly side: Side, readonly profile: StrategyProfile) {}
 
@@ -138,22 +122,19 @@ class StrategyController {
     this.elapsedMs += deltaMs;
     this.attackTimer -= deltaMs;
 
-    if (this.elapsedMs - this.lastBuildAt >= 1000) {
-      this.lastBuildAt = this.elapsedMs;
-      this.buildNext(engine);
-    }
+    this.tryBuildNext(engine);
 
     const army = engine.armyOf(this.side).length;
     const supply = armySupplyCapacity(engine.buildingsOf(this.side));
     if (army > supply && this.firstOverSupplyMs === null) this.firstOverSupplyMs = this.elapsedMs;
 
-    const reserve = this.nextProjectCost(engine) > 0 ? Math.max(this.profile.reserveGold, this.nextProjectCost(engine)) : this.profile.reserveGold;
+    const projectCost = this.nextProjectCost(engine);
+    const reserve = Math.max(this.profile.reserveGold, projectCost);
     if (engine.state.players[this.side].gold >= 20 + reserve) {
       for (const barracks of engine.buildingsOf(this.side, 'barracks')) {
         if (barracks.queue >= 2) continue;
         if (engine.armyOf(this.side).length + barracks.queue >= GAME_RULES.limits.maxUnitsPerSide) break;
-        const result = engine.command(this.side, { type: 'train', barracksId: barracks.id, count: 1 });
-        if (!result.ok) break;
+        if (!engine.command(this.side, { type: 'train', barracksId: barracks.id, count: 1 }).ok) break;
       }
     }
 
@@ -180,44 +161,36 @@ class StrategyController {
     return { firstAttackMs: this.firstAttackMs, firstOverSupplyMs: this.firstOverSupplyMs };
   }
 
-  private nextProjectCost(engine: MatchEngine) {
-    const order = this.profile.buildOrder;
-    for (let guard = 0; guard < order.length + 2; guard++) {
-      const type = order[this.buildStep % order.length];
-      const built = engine.buildingsOf(this.side, type).length;
+  private nextProjectType(engine: MatchEngine): BuildableType | null {
+    while (this.nextBuildIndex < this.profile.buildOrder.length) {
+      const type = this.profile.buildOrder[this.nextBuildIndex];
       const target = this.profile.targets[type] ?? 0;
-      if (built < target) return BUILDING_STATS[type].cost;
-      this.buildStep += 1;
-      if (this.buildStep >= order.length) return 0;
+      if (engine.buildingsOf(this.side, type).length < target) return type;
+      this.nextBuildIndex += 1;
     }
-    return 0;
+    return null;
   }
 
-  private buildNext(engine: MatchEngine) {
-    if (this.profile.name === 'rush' && this.elapsedMs < 18_000) return;
-    const cost = this.nextProjectCost(engine);
-    if (!cost || engine.state.players[this.side].gold < cost) return;
-    const type = this.profile.buildOrder[(this.buildStep + 1) % this.profile.buildOrder.length] ?? 'village';
-    if (type === 'village' && engine.buildingsOf(this.side, 'village').length >= (this.profile.targets.village ?? 0)) {
-      this.buildStep += 1;
-      return;
-    }
-    if (type !== 'village' && engine.buildingsOf(this.side, type).length >= (this.profile.targets[type] ?? 0)) {
-      this.buildStep += 1;
-      return;
-    }
-    if (placeBuilding(engine, this.side, type)) this.buildStep += 1;
+  private nextProjectCost(engine: MatchEngine) {
+    const type = this.nextProjectType(engine);
+    return type ? BUILDING_STATS[type].cost : 0;
+  }
+
+  private tryBuildNext(engine: MatchEngine) {
+    const type = this.nextProjectType(engine);
+    if (!type) return;
+    if (engine.state.players[this.side].gold < BUILDING_STATS[type].cost) return;
+    if (placeBuilding(engine, this.side, type)) this.nextBuildIndex += 1;
   }
 
   private attackTarget(engine: MatchEngine) {
-    const enemy = this.side === 'blue' ? 'red' : 'blue';
+    const enemy: Side = this.side === 'blue' ? 'red' : 'blue';
     const dir = forwardDir(this.side);
     const candidates = engine
       .buildingsOf(enemy)
       .filter((b) => b.type !== 'fence')
-      .sort((a, b) => Math.abs(a.x - (dir > 0 ? 960 : 960)) - Math.abs(b.x - (dir > 0 ? 960 : 960)));
-    const pick = candidates.find((b) => b.type === 'tower' || b.type === 'barracks') ?? engine.castleOf(enemy) ?? candidates[0];
-    return pick ?? null;
+      .sort((a, b) => dir * (a.x - b.x));
+    return candidates.find((b) => b.type === 'tower' || b.type === 'barracks') ?? engine.castleOf(enemy) ?? candidates[0] ?? null;
   }
 }
 
