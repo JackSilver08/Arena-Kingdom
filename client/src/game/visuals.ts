@@ -7,11 +7,15 @@ import { SYMBOL_SIZE, symbolArt, type SymbolSize } from './symbols';
 /**
  * Rendering-only depth bands. Game rules use world coordinates only; they
  * never need to know how a building, a unit, or the terrain is drawn.
+ * Documentary overlays remain below entity symbols and health bars.
  */
 export const BATTLE_DEPTH = {
   water: 0,
   terrain: 10,
+  influence: 20,
+  frontline: 30,
   ground: 50,
+  arrows: 55,
   entities: 60,
   bars: 1500,
   overlay: 1600,
