@@ -1,4 +1,5 @@
 export * from './types.js';
+export * from './island.js';
 export * from './rules.js';
 export * from './navigation.js';
 export * from './engine.js';

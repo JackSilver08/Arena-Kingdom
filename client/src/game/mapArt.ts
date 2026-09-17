@@ -1,39 +1,199 @@
+import { COAST_PERIMETER, GAME_RULES, coastSamples, type CoastSample } from '@arena-kingdom/shared';
+
 /**
- * Arena Kingdom v2 battlefield: two equal 2D flat islands.
- * Rendering only. Gameplay geometry lives in shared/rules.ts.
+ * Arena Kingdom battlefield drawn as an old military campaign map: one island on aged paper,
+ * shared by both kingdoms. Rendering only: the coastline comes from shared/island.ts, so the drawn
+ * shore is exactly where troops stop and fences may reach.
+ *
+ * Keep the markup ASCII (use XML entities): it is Base64-encoded with `btoa`.
  */
 const svg=(viewBox:string,body:string)=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${body}</svg>`;
 
-export function arenaMapArtV2() {
-  const left='M125 270C125 205 185 160 270 166C335 172 365 125 445 148C515 168 585 132 650 175C710 215 785 205 825 268C858 320 846 380 870 430L870 470L910 470L910 610L870 610L870 650C845 710 858 775 816 822C765 880 696 866 645 902C575 948 500 900 435 918C360 938 315 900 250 905C172 910 125 850 138 780C148 720 102 690 128 620C154 550 112 500 130 435C148 372 125 330 125 270Z';
-  const right='M1795 270C1795 205 1735 160 1650 166C1585 172 1555 125 1475 148C1405 168 1335 132 1270 175C1210 215 1135 205 1095 268C1062 320 1074 380 1050 430L1050 470L1010 470L1010 610L1050 610L1050 650C1075 710 1062 775 1104 822C1155 880 1224 866 1275 902C1345 948 1420 900 1485 918C1560 938 1605 900 1670 905C1748 910 1795 850 1782 780C1772 720 1818 690 1792 620C1766 550 1808 500 1790 435C1772 372 1795 330 1795 270Z';
-  const beach=(d:string)=>d;
-  return svg('0 0 1920 1080',`
+const PAPER='#e9d9b1';
+const INK='#3a2a18';
+const BLUE_INK='#2c4a78';
+const RED_INK='#8c2b22';
+const FONT=`font-family="Georgia, 'Times New Roman', serif"`;
+/** Map sheet: coordinates and the scale live in the margin between the frame and the neatline. */
+const NEATLINE=46;
+const GRID=120;
+/** Woods fade out over this band before the midline, so the mirrored halves never meet in a symmetric blot. */
+const WOODS_FADE={from:190,to:70};
+
+const SAMPLE_SPACING=7;
+/** Baseline of the kingdom names near the top of the island. */
+const LABEL_Y=210;
+
+type Point=[number,number];
+const fmt=([x,y]:Point)=>`${x.toFixed(1)} ${y.toFixed(1)}`;
+
+/** Deterministic hash noise in [-1, 1]. */
+const hash=(i:number,seed:number)=>{const v=Math.sin(i*127.1+seed*311.7)*43758.5453;return(v-Math.floor(v))*2-1;};
+
+/** A smooth closed curve through `points`, using quadratic curves between midpoints. */
+function smoothClosed(points:Point[]){
+  const mid=(i:number):Point=>{const a=points[i],b=points[(i+1)%points.length];return[(a[0]+b[0])/2,(a[1]+b[1])/2];};
+  return`M${fmt(mid(points.length-1))}`+points.map((p,i)=>`Q${fmt(p)} ${fmt(mid(i))}`).join('')+'Z';
+}
+
+const along=({x,y,nx,ny,margin}:CoastSample,outset:number):Point=>[x+nx*(margin+outset),y+ny*(margin+outset)];
+
+/**
+ * The coastline pushed `outset` further out, with a ragged hand-inked edge baked into the
+ * geometry because an SVG displacement filter over the whole map is slow to rasterise.
+ */
+function coastPath(samples:CoastSample[],outset:number,rough:number,seed:number){
+  const n=samples.length;
+  const coarse=(i:number)=>{const a=Math.floor(i/4),f=i/4-a,u=f*f*(3-2*f);return hash(a%(n/4),seed)*(1-u)+hash((a+1)%(n/4),seed)*u;};
+  return'M'+samples.map((s,i)=>fmt(along(s,outset+rough*(.65*coarse(i)+.35*hash(i,seed+1))))).join('L')+'Z';
+}
+
+/** A smooth, sparsely sampled copy of the coastline, for the engraved water lines around the island. */
+const waterLine=(samples:CoastSample[],outset:number)=>smoothClosed(samples.filter((_,i)=>i%3===0).map(s=>along(s,outset)));
+
+/** Contour rings with a spot height; `mirror` draws the same hill reflected for the red half. */
+function hill(cx:number,cy:number,rx:number,ry:number,height:number,seed:number,mirror=false){
+  const flip=(x:number)=>mirror?GAME_RULES.map.width-x:x;
+  const rings=[1,.72,.46,.22].map((scale,ring)=>smoothClosed(Array.from({length:32},(_,i):Point=>{
+    const t=i/32*Math.PI*2;
+    const wobble=1+.13*Math.sin(3*t+seed+ring*.6)+.07*Math.sin(5*t+seed*2.3);
+    return[flip(cx+Math.cos(t)*rx*scale*wobble),cy+Math.sin(t)*ry*scale*wobble];
+  })));
+  const x=flip(cx);
+  return`<path d="${rings.join('')}" fill="#9c7443" fill-opacity=".07" stroke="#86653d" stroke-width="1.3"/>
+    <path d="M${x-4} ${cy+3}h8l-4-7z" fill="${INK}"/>
+    <text x="${x+7}" y="${cy+4}" font-size="12" fill="${INK}" stroke="${PAPER}" stroke-width="5" stroke-opacity=".9" paint-order="stroke" ${FONT}>${height}</text>`;
+}
+
+/** Eight-point compass rose with alternating inked and blank halves. */
+function compassRose(cx:number,cy:number,r:number){
+  const point=(angle:number,length:number,width:number)=>`<g transform="rotate(${angle})">
+      <path d="M0 ${-length}L${width} ${-width}L0 0Z" fill="${INK}"/><path d="M0 ${-length}L${-width} ${-width}L0 0Z" fill="${PAPER}" stroke="${INK}" stroke-width="1"/>
+    </g>`;
+  return`<g transform="translate(${cx} ${cy})" opacity=".62">
+    <circle r="${r*.74}" fill="none" stroke="${INK}" stroke-width="1.2"/>
+    <circle r="${r*.66}" fill="none" stroke="${INK}" stroke-width=".8" stroke-dasharray="2 5"/>
+    ${[45,135,225,315].map(a=>point(a,r*.62,r*.09)).join('')}
+    ${[0,90,180,270].map(a=>point(a,r,r*.13)).join('')}
+    <circle r="3" fill="${INK}"/>
+    <text y="${-r-8}" text-anchor="middle" font-size="18" font-weight="bold" fill="${INK}" stroke="${PAPER}" stroke-width="5" stroke-opacity=".9" paint-order="stroke" ${FONT}>N</text>
+  </g>`;
+}
+
+/** The part of the world a map is drawn for; the battlefield always sits in its centre. */
+export interface MapViewSize{width:number;height:number}
+
+/** Grid cells whose centre falls inside [min, max], numbered from the first visible one. */
+function gridCentres(min:number,max:number){
+  const first=Math.ceil((min-GRID/2)/GRID),last=Math.floor((max-GRID/2)/GRID);
+  return Array.from({length:Math.max(0,last-first+1)},(_,i)=>GRID/2+(first+i)*GRID);
+}
+
+/** The map sheet: frame, graduated neatline, grid references, scale bar and title. */
+function sheet({x,y,width,height}:{x:number;y:number;width:number;height:number}){
+  const right=x+width,bottom=y+height,n=NEATLINE-3;
+  const label=(lx:number,ly:number,text:string|number)=>`<text x="${lx}" y="${ly}" text-anchor="middle">${text}</text>`;
+  // Graduation marks line up with the world grid whatever the sheet size.
+  const phase=(v:number)=>((v%60)+60)%60;
+  const graduation=(d:string,offset:number)=>`<path d="${d}" fill="none" stroke="${INK}" stroke-width="6" stroke-dasharray="60 60" stroke-dashoffset="${phase(offset)}"/>`;
+  const scale=Array.from({length:5},(_,i)=>`<rect x="${x+70+i*48}" y="${bottom-33}" width="48" height="6" fill="${i%2?PAPER:INK}"/>`).join('');
+  return`
+    <rect x="${x+8}" y="${y+8}" width="${width-16}" height="${height-16}" fill="none" stroke="${INK}" stroke-width="2.6"/>
+    <rect x="${x+14}" y="${y+14}" width="${width-28}" height="${height-28}" fill="none" stroke="${INK}" stroke-width=".8"/>
+    ${graduation(`M${x+n} ${y+n}H${right-n}M${x+n} ${bottom-n}H${right-n}`,x+n)}
+    ${graduation(`M${x+n} ${y+n}V${bottom-n}M${right-n} ${y+n}V${bottom-n}`,y+n)}
+    <rect x="${x+NEATLINE}" y="${y+NEATLINE}" width="${width-2*NEATLINE}" height="${height-2*NEATLINE}" fill="none" stroke="${INK}" stroke-width="1.6"/>
+    <g font-size="14" fill="${INK}" ${FONT}>
+      ${gridCentres(x+NEATLINE,right-NEATLINE).map((cx,i)=>label(cx,y+34,String.fromCharCode(65+i))).join('')}
+      ${gridCentres(y+NEATLINE,bottom-NEATLINE).map((cy,i)=>label(x+29,cy+5,i+1)+label(right-29,cy+5,i+1)).join('')}
+    </g>
+    <g ${FONT} fill="${INK}">
+      ${scale}<rect x="${x+70}" y="${bottom-33}" width="240" height="6" fill="none" stroke="${INK}" stroke-width="1"/>
+      <g font-size="11" text-anchor="middle">${[0,1,2,3,4,5].map(i=>label(x+70+i*48,bottom-17,i)).join('')}</g>
+      <text x="${x+324}" y="${bottom-25}" font-size="12" font-style="italic">leagues</text>
+      <text x="${x+width/2}" y="${bottom-19}" font-size="13" text-anchor="middle" letter-spacing="3">SCALE 1 : 50 000</text>
+      <text x="${right-70}" y="${bottom-19}" font-size="13" text-anchor="end" letter-spacing="3">ARENA KINGDOM &#183; THEATRE OF WAR &#183; SHEET I</text>
+    </g>`;
+}
+
+/**
+ * The battlefield map. `view` may be larger than the world, e.g. to fill a wide screen: the extra
+ * room is open sea and paper, and the sheet's frame follows the view's edges.
+ */
+export function arenaMapArtV2(view:MapViewSize=GAME_RULES.map){
+  const {width:W,height:H,blueLand,redLand}=GAME_RULES.map;
+  const sheetRect={x:(W-view.width)/2,y:(H-view.height)/2,width:view.width,height:view.height};
+  const full=`x="${sheetRect.x}" y="${sheetRect.y}" width="${view.width}" height="${view.height}"`;
+  // A multiple of 4 so the coarse jitter in coastPath wraps cleanly.
+  const samples=coastSamples(Math.round(COAST_PERIMETER/SAMPLE_SPACING/4)*4);
+  const waterLines=[14,25,38,53,70,90].map((outset,i)=>
+    `<path d="${waterLine(samples,outset)}" stroke-width="${(1.5-i*.12).toFixed(2)}" opacity="${(.6-i*.09).toFixed(2)}"/>`).join('');
+  // Front lines: the edge of each kingdom's buildable half, with teeth pointing at no man's land.
+  const teeth=(x:number,dir:number)=>Array.from({length:Math.ceil(H/24)},(_,i)=>`M${x} ${i*24+6}h${dir*9}`).join('');
+  const frontLine=(x:number,dir:number,color:string)=>
+    `<path d="M${x} 0V${H}" stroke="${color}" stroke-width="2.6" stroke-dasharray="16 8"/><path d="${teeth(x,dir)}" stroke="${color}" stroke-width="2.2"/>`;
+  const territoryLabel=(x:number,text:string,color:string)=>
+    `<text x="${x}" y="${LABEL_Y}" text-anchor="middle" font-size="22" letter-spacing="7" fill="${color}" stroke="${PAPER}" stroke-width="5" stroke-opacity=".9" paint-order="stroke" ${FONT}>${text}</text>`;
+  return svg(`${sheetRect.x} ${sheetRect.y} ${view.width} ${view.height}`,`
     <defs>
-      <linearGradient id="ocean" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#073c5d"/><stop offset=".5" stop-color="#07567a"/><stop offset="1" stop-color="#042f4d"/></linearGradient>
-      <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#77b95b"/><stop offset="1" stop-color="#4f963f"/></linearGradient>
-      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="18"/></filter>
-      <pattern id="specks" width="70" height="70" patternUnits="userSpaceOnUse"><circle cx="12" cy="16" r="1.4" fill="#3c813b" opacity=".35"/><circle cx="47" cy="39" r="1.2" fill="#b9d97c" opacity=".3"/><path d="M28 60l2-5 2 5" stroke="#8fc66a" stroke-width="1.5" opacity=".35"/></pattern>
+      <path id="coast" d="${coastPath(samples,0,3.5,7)}"/>
+      <clipPath id="land"><use href="#coast"/></clipPath>
+      <clipPath id="map"><rect x="${sheetRect.x+NEATLINE}" y="${sheetRect.y+NEATLINE}" width="${view.width-2*NEATLINE}" height="${view.height-2*NEATLINE}"/></clipPath>
+      <!-- Woods are drawn on the blue half only and mirrored, so neither kingdom gets different terrain. -->
+      <filter id="forest" filterUnits="userSpaceOnUse" x="0" y="0" width="${W/2}" height="${H}" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency=".0068" numOctaves="4" seed="11"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  4.1 0 0 0 -2.25"/>
+        <feComponentTransfer><feFuncA type="discrete" tableValues="0 1"/></feComponentTransfer>
+        <feComposite in="SourceGraphic" operator="in"/>
+      </filter>
+      <filter id="stains" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency=".0032" numOctaves="2" seed="21"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  2.4 0 0 0 -1.1"/>
+        <feComposite in="SourceGraphic" operator="in"/>
+      </filter>
+      <filter id="grain" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency=".75" numOctaves="1" seed="2"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  3 0 0 0 -1.35"/>
+        <feComposite in="SourceGraphic" operator="in"/>
+      </filter>
+      <linearGradient id="woods-fade" gradientUnits="userSpaceOnUse" x1="${W/2-WOODS_FADE.from}" x2="${W/2-WOODS_FADE.to}"><stop stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>
+      <mask id="woods-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="${W/2}" height="${H}"><rect width="${W/2}" height="${H}" fill="url(#woods-fade)"/></mask>
+      <pattern id="trees" width="30" height="26" patternUnits="userSpaceOnUse">
+        <path id="tree" d="M8 11.5v3.5M4 11.5a2.7 2.7 0 0 1 .9-4.9a3.2 3.2 0 0 1 6.2 0a2.7 2.7 0 0 1 .9 4.9z" fill="#cfc795" stroke="#4f5a2a" stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round"/>
+        <use href="#tree" x="15" y="12"/>
+      </pattern>
+      <pattern id="grid" width="${GRID}" height="${GRID}" patternUnits="userSpaceOnUse"><path d="M${GRID} 0V${GRID}H0" fill="none" stroke="${INK}" stroke-width="1.1"/></pattern>
+      <radialGradient id="vignette" cx=".5" cy=".5" r=".75"><stop offset=".55" stop-color="#6b4a22" stop-opacity="0"/><stop offset="1" stop-color="#6b4a22" stop-opacity=".5"/></radialGradient>
+      <linearGradient id="fold-v" x1="0" x2="1"><stop stop-color="#fff6dc" stop-opacity="0"/><stop offset=".5" stop-color="#fff6dc" stop-opacity=".7"/><stop offset=".52" stop-color="#6b4a22" stop-opacity=".45"/><stop offset="1" stop-color="#6b4a22" stop-opacity="0"/></linearGradient>
+      <linearGradient id="fold-h" x1="0" x2="0" y1="0" y2="1"><stop stop-color="#fff6dc" stop-opacity="0"/><stop offset=".5" stop-color="#fff6dc" stop-opacity=".7"/><stop offset=".52" stop-color="#6b4a22" stop-opacity=".45"/><stop offset="1" stop-color="#6b4a22" stop-opacity="0"/></linearGradient>
     </defs>
-    <rect width="1920" height="1080" fill="url(#ocean)"/>
-    <g fill="none" stroke="#62b6c6" stroke-width="4" stroke-linecap="round" opacity=".28">
-      <path d="M90 180c70-30 125-20 190 7s120 25 180-5"/><path d="M1460 190c70-26 130-20 190 5s105 24 170-2"/>
-      <path d="M120 850c65-25 120-20 175 5s110 22 170-4"/><path d="M1450 850c70-27 130-20 190 6s110 22 180-3"/>
+    <rect ${full} fill="${PAPER}"/>
+    <g clip-path="url(#map)">
+      <rect ${full} fill="#6d8c90" opacity=".34"/>
+      <g fill="none" stroke="#3f5b5c">${waterLines}</g>
+      <use href="#coast" fill="#efe3c0" stroke="#3f5b5c" stroke-width="16" stroke-opacity=".12"/>
+      <g clip-path="url(#land)">
+        <use href="#coast" fill="none" stroke="#b89560" stroke-width="22" stroke-opacity=".35"/>
+        <g id="woods" filter="url(#forest)" mask="url(#woods-mask)"><rect width="${W}" height="${H}" fill="#a7ad73" opacity=".55"/><rect width="${W}" height="${H}" fill="url(#trees)"/></g>
+        <use href="#woods" transform="matrix(-1 0 0 1 ${W} 0)"/>
+        <path d="${coastPath(samples,-7,0,0)}" fill="none" stroke="${INK}" stroke-width="1.6" stroke-dasharray="1 6" stroke-linecap="round" opacity=".55"/>
+        ${hill(720,270,72,42,184,1)}${hill(720,270,72,42,184,1,true)}
+        ${hill(390,860,84,46,212,4)}${hill(390,860,84,46,212,4,true)}
+        ${hill(W/2,820,92,52,247,2.5)}
+        <g fill="none">${frontLine(blueLand.maxX,1,BLUE_INK)}${frontLine(redLand.minX,-1,RED_INK)}</g>
+        ${territoryLabel((blueLand.minX+blueLand.maxX)/2,'BLUE KINGDOM',BLUE_INK)}
+        ${territoryLabel((redLand.minX+redLand.maxX)/2,'RED KINGDOM',RED_INK)}
+        <text x="${W/2}" y="${LABEL_Y-6}" text-anchor="middle" font-size="13" font-style="italic" letter-spacing="3" fill="${INK}" stroke="${PAPER}" stroke-width="5" stroke-opacity=".9" paint-order="stroke" ${FONT}>No Man&#8217;s Land</text>
+        ${compassRose(W/2,H/2-10,68)}
+      </g>
+      <use href="#coast" fill="none" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round"/>
+      <rect ${full} fill="url(#grid)" opacity=".2"/>
     </g>
-    <path d="${left}" fill="#001f2e" opacity=".45" filter="url(#shadow)" transform="translate(0 22)"/>
-    <path d="${right}" fill="#001f2e" opacity=".45" filter="url(#shadow)" transform="translate(0 22)"/>
-    <path d="${left}" fill="#f2d58b" stroke="#e7bd63" stroke-width="16" stroke-linejoin="round"/>
-    <path d="${right}" fill="#f2d58b" stroke="#e7bd63" stroke-width="16" stroke-linejoin="round"/>
-    <path d="${left}" fill="none" stroke="#fff0b8" stroke-width="5" stroke-linejoin="round" opacity=".9"/>
-    <path d="${right}" fill="none" stroke="#fff0b8" stroke-width="5" stroke-linejoin="round" opacity=".9"/>
-    <path d="M160 285C160 230 208 195 280 200C345 205 378 165 450 183C520 201 585 170 642 210C700 250 755 240 790 295C818 338 802 390 830 438L830 642C800 690 818 748 785 795C738 850 682 832 630 870C570 912 505 865 440 883C370 902 322 865 260 870C202 875 162 830 176 770C190 710 148 680 170 620C192 560 150 510 172 450C194 390 160 345 160 285Z" fill="url(#grass)"/>
-    <path d="M1760 285C1760 230 1712 195 1640 200C1575 205 1542 165 1470 183C1400 201 1335 170 1278 210C1220 250 1165 240 1130 295C1102 338 1118 390 1090 438L1090 642C1120 690 1102 748 1135 795C1182 850 1238 832 1290 870C1350 912 1415 865 1480 883C1550 902 1598 865 1660 870C1718 875 1758 830 1744 770C1730 710 1772 680 1750 620C1728 560 1770 510 1748 450C1726 390 1760 345 1760 285Z" fill="url(#grass)"/>
-    <path d="M160 280H830V870H160Z" fill="url(#specks)" opacity=".65" clip-path="url(#clipL)"/>
-    <g>
-      <rect x="842" y="400" width="236" height="86" rx="7" fill="#aeb5b7" stroke="#58666b" stroke-width="7"/><path d="M860 420h200M860 445h200M860 470h200" stroke="#d8dddc" stroke-width="4" opacity=".65"/>
-      <rect x="842" y="594" width="236" height="86" rx="7" fill="#aeb5b7" stroke="#58666b" stroke-width="7"/><path d="M860 614h200M860 639h200M860 664h200" stroke="#d8dddc" stroke-width="4" opacity=".65"/>
-      <g fill="#d9dfdf" stroke="#59666a" stroke-width="5"><rect x="830" y="390" width="24" height="106" rx="6"/><rect x="1066" y="390" width="24" height="106" rx="6"/><rect x="830" y="584" width="24" height="106" rx="6"/><rect x="1066" y="584" width="24" height="106" rx="6"/></g>
-    </g>
-    <g fill="none" stroke="#b9e6e8" stroke-width="7" opacity=".38" stroke-linecap="round"><path d="M825 500c40-18 70-18 110 0M985 500c40-18 70-18 110 0M825 580c40 18 70 18 110 0M985 580c40 18 70 18 110 0"/></g>
+    <rect ${full} fill="#7a5228" opacity=".2" filter="url(#stains)"/>
+    <rect ${full} fill="#5c3f1e" opacity=".1" filter="url(#grain)"/>
+    <rect x="${W/2-14}" y="${sheetRect.y}" width="28" height="${view.height}" fill="url(#fold-v)" opacity=".35"/>
+    <rect x="${sheetRect.x}" y="${H/2-14}" width="${view.width}" height="28" fill="url(#fold-h)" opacity=".35"/>
+    ${sheet(sheetRect)}
+    <rect ${full} fill="url(#vignette)"/>
   `);
 }

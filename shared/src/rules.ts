@@ -1,33 +1,45 @@
-import type { ArmyFraction, BuildableType, BuildingType, Side, UnitType } from './types.js';
+import { coastline, isWalkableLand } from './island.js';
+import type { ArmyFraction, BuildableType, BuildingType, Side, UnitType, Vec2 } from './types.js';
 
 export const GAME_VERSION = '0.4.0';
 
 type Rect={minX:number;maxX:number;minY:number;maxY:number};
-const BLUE_LAND:Rect={minX:160,maxX:830,minY:180,maxY:900};
-const RED_LAND:Rect={minX:1090,maxX:1760,minY:180,maxY:900};
-const BRIDGES:readonly Rect[]=[
-  {minX:830,maxX:1090,minY:390,maxY:496},
-  {minX:830,maxX:1090,minY:584,maxY:690}
-] as const;
-/**
- * Padding shrinks each rect on its own, which would open a gap where a bridge meets an island.
- * Walkable bridges therefore reach this far into both islands so their padded rects overlap.
- */
-const BRIDGE_ANCHOR=48;
-const WALK_AREAS:readonly Rect[]=[
-  BLUE_LAND,RED_LAND,
-  ...BRIDGES.map(r=>({minX:r.minX-BRIDGE_ANCHOR,maxX:r.maxX+BRIDGE_ANCHOR,minY:r.minY,maxY:r.maxY}))
-];
+/** Each kingdom builds on its side of its front line; the strip between them is no man's land. */
+const FRONT_LINE:Record<Side,number>={blue:830,red:1090};
+
+/** Sutherland-Hodgman clip of a closed polygon to one side of a vertical line. */
+function clipToSide(points:readonly Vec2[],x:number,keepLeft:boolean){
+  const inside=(p:Vec2)=>keepLeft?p.x<=x:p.x>=x;
+  const cross=(a:Vec2,b:Vec2)=>({x,y:a.y+(b.y-a.y)*(x-a.x)/(b.x-a.x)});
+  const out:Vec2[]=[];
+  points.forEach((p,i)=>{
+    const prev=points[(i+points.length-1)%points.length];
+    if(inside(p)){if(!inside(prev))out.push(cross(prev,p));out.push(p);}
+    else if(inside(prev))out.push(cross(prev,p));
+  });
+  return out;
+}
+const boundsOf=(points:readonly Vec2[]):Rect=>({
+  minX:Math.min(...points.map(p=>p.x)),maxX:Math.max(...points.map(p=>p.x)),
+  minY:Math.min(...points.map(p=>p.y)),maxY:Math.max(...points.map(p=>p.y))
+});
+const COAST=coastline();
+const TERRITORY:Record<Side,readonly Vec2[]>={blue:clipToSide(COAST,FRONT_LINE.blue,true),red:clipToSide(COAST,FRONT_LINE.red,false)};
+const ISLAND=boundsOf(COAST);
+const BLUE_LAND=boundsOf(TERRITORY.blue);
+const RED_LAND=boundsOf(TERRITORY.red);
 
 export const GAME_RULES={
   tickMs:50,
   maxMatchMs:20*60_000,
   map:{
     width:1920,height:1080,
-    /** Compatibility bounds for camera/navigation. */
-    island:{x:160,y:180,width:1600,height:720},
-    blueLand:BLUE_LAND,redLand:RED_LAND,bridges:BRIDGES,
-    midlineX:960,neutralZone:0
+    /** Bounding box of the island, for camera/navigation. The coastline itself lives in island.ts. */
+    island:{x:ISLAND.minX,y:ISLAND.minY,width:ISLAND.maxX-ISLAND.minX,height:ISLAND.maxY-ISLAND.minY},
+    blueLand:BLUE_LAND,redLand:RED_LAND,
+    midlineX:960,
+    /** Width of the unbuildable strip between the two kingdoms. */
+    neutralZone:RED_LAND.minX-BLUE_LAND.maxX
   },
   economy:{startingGold:100,castleIncome:4,villageIncome:5,incomeIntervalMs:5000,maxQueuePerBarracks:5},
   limits:{maxUnitsPerSide:40,maxBuildingsPerSide:30},
@@ -52,7 +64,7 @@ export const UNIT_STATS:Record<UnitType,UnitStats>={
 
 export interface Placement{side:Side;type:BuildingType;x:number;y:number}
 
-/** Blue owns the left island. Red is an exact horizontal mirror on the right island. */
+/** Blue owns the left half of the island. Red is an exact horizontal mirror on the right half. */
 const BLUE_START:{buildings:Omit<Placement,'side'>[];units:{x:number;y:number}[]}={
   buildings:[
     {type:'castle',x:285,y:540},
@@ -75,53 +87,16 @@ export function startingLayout(side:Side){
   };
 }
 
+/** A kingdom's buildable land: the island on its side of the front line. */
+export function territoryOutline(side:Side):readonly Vec2[]{return TERRITORY[side]}
+
 /** Horizontal direction from a side's castle towards the enemy. */
 export function forwardDir(side:Side):1|-1{return side==='blue'?1:-1}
 
+/** Bounding box of a kingdom's buildable land, shrunk by the padding. */
 export function territoryBounds(side:Side,padX=0,padY=padX){
   const land=side==='blue'?BLUE_LAND:RED_LAND;
   return {minX:land.minX+padX,maxX:land.maxX-padX,minY:land.minY+padY,maxY:land.maxY-padY};
-}
-
-const inside=(r:Rect,x:number,y:number,p=0)=>x>=r.minX+p&&x<=r.maxX-p&&y>=r.minY+p&&y<=r.maxY-p;
-export function isWalkableLand(x:number,y:number,padding=0){
-  return WALK_AREAS.some(r=>inside(r,x,y,padding));
-}
-
-/** Parameter range [t0,t1] of segment A→B inside the padded rect, or null. Liang–Barsky clipping. */
-function clipSegment(r:Rect,ax:number,ay:number,bx:number,by:number,p:number):[number,number]|null{
-  const dx=bx-ax,dy=by-ay;let t0=0,t1=1;
-  const checks:[number,number][]=[[-dx,ax-(r.minX+p)],[dx,r.maxX-p-ax],[-dy,ay-(r.minY+p)],[dy,r.maxY-p-ay]];
-  for(const[k,q]of checks){
-    if(k===0){if(q<0)return null;continue;}
-    const t=q/k;
-    if(k<0){if(t>t1)return null;if(t>t0)t0=t;}
-    else{if(t<t0)return null;if(t<t1)t1=t;}
-  }
-  return[t0,t1];
-}
-
-/** True when the whole segment A→B stays on islands or bridges, i.e. it never crosses the ocean. */
-export function segmentOnLand(ax:number,ay:number,bx:number,by:number,padding=0){
-  const spans=WALK_AREAS.map(r=>clipSegment(r,ax,ay,bx,by,padding)).filter((s):s is[number,number]=>s!==null).sort((a,b)=>a[0]-b[0]);
-  let reach=0;
-  for(const[t0,t1]of spans){
-    if(t0>reach+1e-6)return false;
-    reach=Math.max(reach,t1);
-  }
-  return spans.length>0&&reach>=1-1e-6;
-}
-
-function clampRect(r:Rect,x:number,y:number,p:number){
-  return {x:Math.min(r.maxX-p,Math.max(r.minX+p,x)),y:Math.min(r.maxY-p,Math.max(r.minY+p,y))};
-}
-
-/** Clamp a destination to the nearest island or bridge surface. */
-export function clampToIsland(x:number,y:number,padding=0){
-  if(isWalkableLand(x,y,padding))return{x,y};
-  let best:{x:number;y:number}|null=null;let bestD=Infinity;
-  for(const r of WALK_AREAS){const p=clampRect(r,x,y,padding);const d=(p.x-x)**2+(p.y-y)**2;if(d<bestD){best=p;bestD=d;}}
-  return best!;
 }
 
 type Located={x:number;y:number;type:BuildingType};
@@ -139,11 +114,20 @@ export function approachPoint(building:Located,x:number,y:number){
 
 export type PlacementCheck={ok:true}|{ok:false;reason:string};
 const BUILDING_GAP=12,EDGE_PADDING=8,FENCE_SNAP_DISTANCE=34;
+/**
+ * A fence only needs this much of its length on land. It may run out over the beach, so a chain
+ * of snapped fences started anywhere can always be carried on until it seals the far shore.
+ */
+const FENCE_LAND_GRIP=8;
 
 export function canPlaceBuilding(buildings:readonly(Located&{side?:Side})[],side:Side,type:BuildableType,x:number,y:number):PlacementCheck{
   if(!Number.isFinite(x)||!Number.isFinite(y))return{ok:false,reason:'Invalid position.'};
-  const stats=BUILDING_STATS[type],bounds=territoryBounds(side,stats.halfWidth+EDGE_PADDING,stats.halfHeight+EDGE_PADDING);
-  if(x<bounds.minX||x>bounds.maxX||y<bounds.minY||y>bounds.maxY)return{ok:false,reason:`You can only build on your own ${side==='blue'?'BLUE':'RED'} island.`};
+  const stats=BUILDING_STATS[type],reach=stats.halfWidth+EDGE_PADDING;
+  const pastFront=side==='blue'?x+reach>FRONT_LINE.blue:x-reach<FRONT_LINE.red;
+  const onLand=type==='fence'
+    ?[-1,0,1].some(k=>isWalkableLand(x,y+k*(stats.halfHeight-FENCE_LAND_GRIP)))
+    :isWalkableLand(x,y,stats.halfWidth+EDGE_PADDING);
+  if(pastFront||!onLand)return{ok:false,reason:`You can only build on your own ${side==='blue'?'BLUE':'RED'} half of the island.`};
   for(const other of buildings){
     const os=BUILDING_STATS[other.type],gap=type==='fence'&&other.type==='fence'?0:BUILDING_GAP;
     if(Math.abs(other.x-x)<stats.halfWidth+os.halfWidth+gap&&Math.abs(other.y-y)<stats.halfHeight+os.halfHeight+gap)return{ok:false,reason:'Too close to another building.'};

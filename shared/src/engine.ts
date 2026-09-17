@@ -1,3 +1,4 @@
+import { clampToIsland } from './island.js';
 import { NavGrid } from './navigation.js';
 import {
   BUILDING_STATS,
@@ -5,7 +6,6 @@ import {
   UNIT_STATS,
   approachPoint,
   canPlaceBuilding,
-  clampToIsland,
   distanceToBuilding,
   forwardDir,
   fractionOf,
@@ -612,7 +612,7 @@ export class MatchEngine {
   }
 
   /**
-   * Moves a unit towards a goal, walking around the ocean (via the bridges) and enemy fences.
+   * Moves a unit towards a goal, staying on the island and walking around enemy fences.
    * Returns false when no acceptable route exists.
    */
   private navigate(u: UnitState, gx: number, gy: number, step: number, tolerance: number, ignoreWallId?: number) {

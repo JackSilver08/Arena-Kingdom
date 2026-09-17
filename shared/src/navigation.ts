@@ -1,4 +1,5 @@
-import { BUILDING_STATS, GAME_RULES, UNIT_STATS, isWalkableLand, segmentOnLand } from './rules.js';
+import { isWalkableLand, segmentOnLand } from './island.js';
+import { BUILDING_STATS, GAME_RULES, UNIT_STATS } from './rules.js';
 import type { BuildingType, Side, Vec2 } from './types.js';
 
 const CELL = 16;
@@ -116,7 +117,7 @@ export class NavGrid {
   version = 0;
   private readonly originX: number;
   private readonly originY: number;
-  /** Ocean cells. Both islands and the two bridges share one grid, so troops cross only on the bridges. */
+  /** Ocean cells around the island. */
   private readonly terrain: Uint8Array;
   /** Terrain plus enemy walls. */
   private readonly blocked: Record<Side, Uint8Array>;
@@ -241,7 +242,7 @@ export class NavGrid {
   /**
    * The enemy wall to break when `to` cannot be reached: the first wall on the cheapest route
    * that may cut through walls at a cost. Unlike the straight line, this finds the wall that
-   * actually seals a bridge.
+   * actually seals the way through.
    */
   wallToBreach(side: Side, from: Vec2, to: Vec2): number | null {
     if (!this.walls[side].length) return null;

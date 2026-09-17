@@ -2614,14 +2614,15 @@ input:not([type='radio']):focus {
 
 .battle {
   --s: clamp(6px, min(1vh, 1.8vw), 14px);
-  --ocean: #1f86f5;
+  /* The paper edge of the battle map, shown if the window is resized to a different shape mid-match. */
+  --map-edge: #cbb68c;
   --hud-gray: #cfd3d8;
   --yellow: #ffe500;
   --ink: #111827;
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background: var(--ocean);
+  background: var(--map-edge);
   color: var(--ink);
   font-family: 'Segoe UI', Arial, system-ui, sans-serif;
   user-select: none;

@@ -20,6 +20,7 @@ import { formatDuration, signed } from '../lib/format';
 import { $, html, setHtml, trusted, type SafeHtml } from '../lib/html';
 import { bannerIcon, buildingArt, castleArt, envelopeIcon, hammerIcon, helmetIcon, houseIcon, moneyBagIcon, troopArt } from './art';
 import { BattleScene } from './BattleScene';
+import { battleView } from './visuals';
 import type { GameSession, SessionSignal } from './session';
 
 export type ControlMode = 'idle' | 'build' | 'troops';
@@ -61,20 +62,21 @@ export class GameController {
   ) {
     this.renderShell();
     const stage = $(root, '[data-canvas]');
-    const resolution = Math.min(2, Math.max(1, (stage.clientWidth * window.devicePixelRatio) / GAME_RULES.map.width));
+    const view = battleView(stage.clientWidth, stage.clientHeight);
+    const resolution = Math.min(2, Math.max(1, (stage.clientWidth * window.devicePixelRatio) / view.width));
     this.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: stage,
-      width: Math.round(GAME_RULES.map.width * resolution),
-      height: Math.round(GAME_RULES.map.height * resolution),
-      backgroundColor: '#1f86f5',
+      width: Math.round(view.width * resolution),
+      height: Math.round(view.height * resolution),
+      backgroundColor: '#cbb68c',
       banner: false,
       disableContextMenu: true,
       input: { keyboard: false },
       scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
       render: { antialias: true, powerPreference: 'high-performance' }
     });
-    this.game.scene.add('battle', BattleScene, true, { controller: this, resolution });
+    this.game.scene.add('battle', BattleScene, true, { controller: this, resolution, view });
 
     const onKey = (event: KeyboardEvent) => this.onKey(event);
     window.addEventListener('keydown', onKey);

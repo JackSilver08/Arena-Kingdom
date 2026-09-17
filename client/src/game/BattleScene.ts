@@ -4,7 +4,7 @@ import {
   GAME_RULES,
   UNIT_STATS,
   distanceToBuilding,
-  territoryBounds,
+  territoryOutline,
   type BuildingType,
   type BuildingView,
   type GameEvent,
@@ -17,14 +17,19 @@ import {
   SPRITE_SIZE
 } from './art';
 import type { GameController } from './GameController';
-import { BATTLE_DEPTH, BattleVisualRenderer } from './visuals';
+import type { MapViewSize } from './mapArt';
+import { BATTLE_DEPTH, BattleVisualRenderer, battleView } from './visuals';
 
 const { width: W, height: H } = GAME_RULES.map;
 const UI_FONT = '"Segoe UI", Arial, system-ui, sans-serif';
 const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 const SIDE_COLOR: Record<Side, number> = { blue: 0x3b82f6, red: 0xef4444 };
+/** Dark ink drawn under yellow highlights so they stay readable on the pale paper map. */
+const INK = 0x2b1d0e;
 const UNIT_RADIUS = UNIT_STATS.soldier.radius;
 const DRAG_THRESHOLD = 6;
+/** Window resizes arrive in bursts; the map is only redrawn once they settle. */
+const RESIZE_SETTLE_MS = 200;
 const MAX_EFFECTS = 90;
 const DEPTH = BATTLE_DEPTH;
 
@@ -60,16 +65,19 @@ export class BattleScene extends Phaser.Scene {
   private dragStart: { x: number; y: number } | null = null;
   private pointerWorld = { x: 0, y: 0 };
   private effects = 0;
+  private view!: MapViewSize;
+  private resizeTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor() {
     super('battle');
   }
 
-  init(data: { controller: GameController; resolution: number }) {
+  init(data: { controller: GameController; resolution: number; view: MapViewSize }) {
     this.controller = data.controller;
     this.res = data.resolution;
     this.smoothing = data.controller.session.mode === 'pvp';
-    this.visuals = new BattleVisualRenderer(this, this.res, W, H);
+    this.view = data.view;
+    this.visuals = new BattleVisualRenderer(this, this.res, data.view);
   }
 
   preload() {
@@ -91,6 +99,11 @@ export class BattleScene extends Phaser.Scene {
       .setDepth(DEPTH.overlay)
       .setVisible(false);
     this.bindInput();
+
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.queueFitView, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.queueFitView, this));
+    // The stage may have changed shape while the textures were loading.
+    this.fitView();
   }
 
   update(_time: number, delta: number) {
@@ -132,6 +145,21 @@ export class BattleScene extends Phaser.Scene {
 
   private drawWorld() {
     this.visuals.drawTerrain();
+  }
+
+  private queueFitView() {
+    this.resizeTimer?.remove();
+    this.resizeTimer = this.time.delayedCall(RESIZE_SETTLE_MS, () => this.fitView());
+  }
+
+  /** Keeps the map filling the stage when it changes shape, e.g. after a window resize or entering full screen. */
+  private fitView() {
+    const view = battleView(this.scale.parentSize.width, this.scale.parentSize.height);
+    if (view.width === this.view.width && view.height === this.view.height) return;
+    this.view = view;
+    this.scale.setGameSize(Math.round(view.width * this.res), Math.round(view.height * this.res));
+    this.cameras.main.centerOn(W / 2, H / 2);
+    this.visuals.resizeTerrain(view);
   }
 
   // ---------------------------------------------------------------- input
@@ -426,11 +454,13 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (c.selection.size) {
-      g.lineStyle(3, 0xffe500, 1);
-      for (const u of view.units) {
-        if (!c.selection.has(u.id)) continue;
-        const sprite = this.units.get(u.id);
-        g.strokeEllipse(sprite?.x ?? u.x, (sprite?.y ?? u.y) + 9, 32, 14);
+      for (const [width, color, alpha] of [[6, INK, 0.6], [3, 0xffe500, 1]]) {
+        g.lineStyle(width, color, alpha);
+        for (const u of view.units) {
+          if (!c.selection.has(u.id)) continue;
+          const sprite = this.units.get(u.id);
+          g.strokeEllipse(sprite?.x ?? u.x, (sprite?.y ?? u.y) + 9, 32, 14);
+        }
       }
     }
 
@@ -439,9 +469,11 @@ export class BattleScene extends Phaser.Scene {
     if (this.input.manager.defaultCursor !== cursor) this.input.setDefaultCursor(cursor);
 
     if (c.mode === 'build' && c.canCommand) {
-      const bounds = territoryBounds(c.mySide);
-      o.fillStyle(0xffffff, 0.12);
-      o.fillRect(bounds.minX, bounds.minY, bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
+      const territory = territoryOutline(c.mySide) as Phaser.Types.Math.Vector2Like[];
+      o.fillStyle(SIDE_COLOR[c.mySide], 0.1);
+      o.fillPoints(territory, true);
+      o.lineStyle(2, SIDE_COLOR[c.mySide], 0.55);
+      o.strokePoints(territory, true);
 
       const type = c.buildType;
       const stats = BUILDING_STATS[type];
@@ -459,7 +491,7 @@ export class BattleScene extends Phaser.Scene {
         o.strokeEllipse(point.x, point.y, stats.halfWidth * 2 + 12, stats.halfWidth * 2 + 12);
       }
       if (stats.attack) {
-        o.lineStyle(2, 0xffffff, 0.6);
+        o.lineStyle(2, INK, 0.5);
         o.strokeCircle(point.x, point.y, stats.halfWidth + UNIT_RADIUS + stats.attack.range);
       }
       this.ghost
@@ -474,21 +506,29 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (c.mode === 'troops' && c.canCommand) {
-      o.lineStyle(3, 0xffe500, 1);
-      o.strokeCircle(x, y, 18);
-      o.lineBetween(x - 28, y, x - 10, y);
-      o.lineBetween(x + 10, y, x + 28, y);
-      o.lineBetween(x, y - 28, x, y - 10);
-      o.lineBetween(x, y + 10, x, y + 28);
+      for (const [width, color, alpha] of [[6, INK, 0.6], [3, 0xffe500, 1]]) {
+        o.lineStyle(width, color, alpha);
+        o.strokeCircle(x, y, 18);
+        o.lineBetween(x - 28, y, x - 10, y);
+        o.lineBetween(x + 10, y, x + 28, y);
+        o.lineBetween(x, y - 28, x, y - 10);
+        o.lineBetween(x, y + 10, x, y + 28);
+      }
     }
 
     if (this.dragStart && this.input.activePointer.isDown) {
       const start = this.dragStart;
       if (Math.abs(x - start.x) > DRAG_THRESHOLD || Math.abs(y - start.y) > DRAG_THRESHOLD) {
-        o.fillStyle(0xffe500, 0.14);
-        o.fillRect(Math.min(start.x, x), Math.min(start.y, y), Math.abs(x - start.x), Math.abs(y - start.y));
+        const left = Math.min(start.x, x);
+        const top = Math.min(start.y, y);
+        const width = Math.abs(x - start.x);
+        const height = Math.abs(y - start.y);
+        o.fillStyle(0xffe500, 0.18);
+        o.fillRect(left, top, width, height);
+        o.lineStyle(5, INK, 0.55);
+        o.strokeRect(left, top, width, height);
         o.lineStyle(2, 0xffe500, 1);
-        o.strokeRect(Math.min(start.x, x), Math.min(start.y, y), Math.abs(x - start.x), Math.abs(y - start.y));
+        o.strokeRect(left, top, width, height);
       }
     }
   }

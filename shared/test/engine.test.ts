@@ -9,9 +9,10 @@ import {
   UNIT_STATS,
   decodeSnapshot,
   encodeSnapshot,
+  isWalkableLand,
+  islandSpanY,
   parseCommand,
-  snapPlacement,
-  territoryBounds
+  snapPlacement
 } from '../src/index.js';
 
 function run(engine: MatchEngine, ms: number) {
@@ -24,9 +25,9 @@ test('starting kingdoms are mirrored', () => {
   assert.equal(engine.armyOf('blue').length, engine.armyOf('red').length);
   const blue = engine.castleOf('blue')!;
   const red = engine.castleOf('red')!;
-  assert.equal(blue.x, red.x);
-  assert.equal(blue.y + red.y, GAME_RULES.map.midlineY * 2);
-  assert.ok(blue.y < red.y, 'blue rules the top half');
+  assert.equal(blue.y, red.y);
+  assert.equal(blue.x + red.x, GAME_RULES.map.midlineX * 2);
+  assert.ok(blue.x < red.x, 'blue rules the left half');
   assert.equal(engine.state.players.blue.gold, GAME_RULES.economy.startingGold);
 });
 
@@ -40,11 +41,18 @@ test('villages generate income on the interval', () => {
 
 test('building costs gold and respects territory', () => {
   const engine = new MatchEngine();
-  assert.equal(engine.command('blue', { type: 'build', building: 'village', x: 700, y: 800 }).ok, false, 'enemy territory');
-  assert.equal(engine.command('blue', { type: 'build', building: 'village', x: 960, y: 240 }).ok, false, 'overlaps castle');
-  assert.equal(engine.command('blue', { type: 'build', building: 'village', x: 1220, y: 440 }).ok, true);
+  assert.equal(engine.command('blue', { type: 'build', building: 'village', x: 1300, y: 540 }).ok, false, 'enemy territory');
+  assert.equal(engine.command('blue', { type: 'build', building: 'village', x: GAME_RULES.map.midlineX, y: 540 }).ok, false, 'neutral strip');
+  assert.equal(engine.command('blue', { type: 'build', building: 'village', x: 300, y: 540 }).ok, false, 'overlaps castle');
+  assert.equal(engine.command('blue', { type: 'build', building: 'village', x: 700, y: 820 }).ok, true);
   assert.equal(engine.state.players.blue.gold, GAME_RULES.economy.startingGold - BUILDING_STATS.village.cost);
   assert.equal(engine.buildingsOf('blue', 'village').length, 4);
+
+  engine.state.players.blue.gold = 1000;
+  const shore = islandSpanY(400, BUILDING_STATS.village.halfWidth + 8)!;
+  assert.ok(shore.minY < 150, 'the island reaches past the old building rectangle');
+  assert.equal(engine.command('blue', { type: 'build', building: 'village', x: 400, y: shore.minY + 2 }).ok, true, 'build near the shore');
+  assert.equal(engine.command('blue', { type: 'build', building: 'village', x: 400, y: shore.minY - 20 }).ok, false, 'not on the beach');
 });
 
 test('barracks train queued soldiers', () => {
@@ -89,14 +97,18 @@ test('fence segments stand vertically, snap together and block only the enemy', 
   assert.ok(path.points.length >= 2, 'the route bends around the fence');
 });
 
-test('troops break through a wall that seals the bridges', () => {
+test('fences reach the shore, seal the front line and troops break through', () => {
   const engine = new MatchEngine();
   engine.state.players.blue.gold = 10_000;
   const { halfWidth, halfHeight } = BUILDING_STATS.fence;
-  const bounds = territoryBounds('blue', halfWidth + 8, halfHeight + 8);
-  for (let y = bounds.minY; y <= bounds.maxY; y += halfHeight * 2) {
-    assert.equal(engine.command('blue', { type: 'build', building: 'fence', x: bounds.maxX, y }).ok, true);
-  }
+  const x = GAME_RULES.map.blueLand.maxX - halfWidth - 8;
+  const shore = islandSpanY(x)!;
+  assert.equal(engine.command('blue', { type: 'build', building: 'fence', x, y: shore.minY - halfHeight - 10 }).ok, false, 'not in the sea');
+  // Chain snapped fences down from the top shore until the next one would be entirely in the sea.
+  const ys: number[] = [];
+  for (let y = shore.minY + 2; engine.command('blue', { type: 'build', building: 'fence', x, y }).ok; y += halfHeight * 2) ys.push(y);
+  assert.ok(!isWalkableLand(x, ys[0] - halfHeight), 'the top fence runs past the shore');
+  assert.ok(ys[ys.length - 1] + halfHeight >= shore.maxY - 8, 'the chain reaches the far shore');
 
   const nav = new NavGrid();
   nav.rebuild(engine.state.buildings);
@@ -109,7 +121,7 @@ test('troops break through a wall that seals the bridges', () => {
   const fencesBefore = engine.buildingsOf('blue', 'fence').length;
   run(engine, 60_000);
   assert.ok(engine.buildingsOf('blue', 'fence').length < fencesBefore, 'a fence was destroyed');
-  assert.ok(engine.armyOf('red').some((u) => u.x < bounds.maxX - halfWidth), 'troops got through the gap');
+  assert.ok(engine.armyOf('red').some((u) => u.x < x - halfWidth), 'troops got through the gap');
 });
 
 test('an explicit attack order focuses the chosen target', () => {

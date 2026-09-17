@@ -63,7 +63,7 @@ function buildingMarkup(type: BuildingType, side: Side) {
   return castleArt(side);
 }
 
-/** The real starting battlefield: both islands with every opening building and troop, drawn at `scale`. */
+/** The real starting battlefield: the island with every opening building and troop, drawn at `scale`. */
 function battlefield(scale: number) {
   const place = (type: BuildingType | 'troop', markup: string, x: number, y: number) => {
     const size = SPRITE_SIZE[type];
@@ -133,9 +133,9 @@ function staticNews(): NewsItem[] {
       ])
     },
     {
-      icon: '🌉',
+      icon: '🏝️',
       tag: 'Map',
-      title: 'Two bridges, one ocean: every attack has to cross',
+      title: 'One island, two kingdoms: no bridges, the whole front is open',
       href: '/guide',
       thumb: scene('map-zoom', battlefield(1.5))
     },
@@ -347,7 +347,7 @@ export function homePage(): Page {
               <div class="ak-news">
                 <a class="ak-feature" href="/guide">
                   <div class="ak-feature-media">${scene('map', battlefield(1.7))}</div>
-                  <h3>Twin Islands: the new battlefield is live</h3>
+                  <h3>One Island: the new battlefield is live</h3>
                   ${newsTag('🏝️', 'Update')}
                 </a>
                 <div class="ak-news-list" data-news>${staticNews().map(newsCard)}</div>
