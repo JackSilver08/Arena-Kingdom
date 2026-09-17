@@ -6,6 +6,8 @@ import {
   GAME_RULES,
   UNIT_STATS,
   approachPoint,
+  armySupplyCapacity,
+  armyUpkeep,
   canPlaceBuilding,
   distanceToBuilding,
   forwardDir,
@@ -422,8 +424,15 @@ export class MatchEngine {
       s.nextIncomeInMs += GAME_RULES.economy.incomeIntervalMs;
       for (const side of SIDES) {
         const p = s.players[side];
-        p.gold += p.income;
-        p.stats.goldEarned += p.income;
+        const grossIncome = p.income;
+        p.gold += grossIncome;
+        p.stats.goldEarned += grossIncome;
+
+        const supply = armySupplyCapacity(this.buildingsOf(side));
+        const upkeep = armyUpkeep(this.armyOf(side).length, supply);
+        const paidUpkeep = Math.min(p.gold, upkeep);
+        p.gold -= paidUpkeep;
+        p.stats.goldSpent += paidUpkeep;
       }
     }
 
