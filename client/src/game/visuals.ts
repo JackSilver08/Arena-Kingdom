@@ -3,6 +3,7 @@ import { GAME_RULES, type BuildingType, type Side, type UnitType } from '@arena-
 import { svgDataUrl } from './art';
 import { arenaMapArtV2, type MapViewSize } from './mapArt';
 import { SYMBOL_SIZE, symbolArt, type SymbolSize } from './symbols';
+import type { MapStyle } from './displaySettings';
 
 /**
  * Rendering-only depth bands. Game rules use world coordinates only; they
@@ -50,16 +51,20 @@ export function unitTextureKey(type: UnitType, side: Side) {
 }
 
 const MAP_TEXTURE = 'arena-map';
-const mapTextureKey = (view: MapViewSize) => `${MAP_TEXTURE}-${view.width}x${view.height}`;
+const mapTextureKey = (view: MapViewSize, style: MapStyle) => `${MAP_TEXTURE}-${style}-${view.width}x${view.height}`;
 
 export class BattleVisualRenderer {
   private terrain: Phaser.GameObjects.Image | null = null;
+  private mapStyle: MapStyle = 'documentary';
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly resolution: number,
-    private view: MapViewSize
-  ) {}
+    private view: MapViewSize,
+    mapStyle: MapStyle = 'documentary'
+  ) {
+    this.mapStyle = mapStyle;
+  }
 
   private load(key: string, markup: string, width: number, height: number) {
     if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
@@ -79,36 +84,57 @@ export class BattleVisualRenderer {
       load(unitTextureKey('soldier', side), symbolArt('troop', side), troop.width, troop.height);
     }
 
-    load(mapTextureKey(this.view), arenaMapArtV2(this.view), this.view.width, this.view.height);
+    load(mapTextureKey(this.view, this.mapStyle), arenaMapArtV2(this.view, this.mapStyle), this.view.width, this.view.height);
   }
 
   drawTerrain() {
     const { width, height } = GAME_RULES.map;
     // The texture is rasterised at the render resolution; display it at world size.
     this.terrain = this.scene.add
-      .image(width / 2, height / 2, mapTextureKey(this.view))
+      .image(width / 2, height / 2, mapTextureKey(this.view, this.mapStyle))
       .setOrigin(0.5)
       .setDisplaySize(this.view.width, this.view.height)
       .setDepth(BATTLE_DEPTH.water);
     return this.terrain;
   }
 
+  /** Apply a presentation-only map style without touching world coordinates, entities or pathfinding. */
+  setMapStyle(style: MapStyle) {
+    if (style === this.mapStyle && this.terrain?.texture.key === mapTextureKey(this.view, style)) return;
+    this.mapStyle = style;
+    const view = this.view;
+    const key = mapTextureKey(view, style);
+    const apply = () => {
+      if (key !== mapTextureKey(this.view, this.mapStyle) || !this.terrain || !this.scene.textures.exists(key)) return;
+      this.terrain.setTexture(key).setDisplaySize(view.width, view.height);
+      this.removeStaleMapTextures(key);
+    };
+    if (this.scene.textures.exists(key)) return apply();
+    this.load(key, arenaMapArtV2(view, style), view.width, view.height);
+    this.scene.load.once(Phaser.Loader.Events.COMPLETE, apply);
+    this.scene.load.start();
+  }
+
   /** Redraws the map for a new view size. The current map stays on screen until the new one is ready. */
   resizeTerrain(view: MapViewSize) {
     this.view = view;
-    const key = mapTextureKey(view);
+    const key = mapTextureKey(view, this.mapStyle);
     const apply = () => {
-      // A later resize may have superseded this one while it was loading.
-      if (key !== mapTextureKey(this.view) || !this.terrain || !this.scene.textures.exists(key)) return;
+      // A later resize or style change may have superseded this one while it was loading.
+      if (key !== mapTextureKey(this.view, this.mapStyle) || !this.terrain || !this.scene.textures.exists(key)) return;
       this.terrain.setTexture(key).setDisplaySize(view.width, view.height);
-      for (const old of this.scene.textures.getTextureKeys()) {
-        if (old.startsWith(MAP_TEXTURE) && old !== key) this.scene.textures.remove(old);
-      }
+      this.removeStaleMapTextures(key);
     };
     if (this.scene.textures.exists(key)) return apply();
-    this.load(key, arenaMapArtV2(view), view.width, view.height);
+    this.load(key, arenaMapArtV2(view, this.mapStyle), view.width, view.height);
     this.scene.load.once(Phaser.Loader.Events.COMPLETE, apply);
     this.scene.load.start();
+  }
+
+  private removeStaleMapTextures(activeKey: string) {
+    for (const old of this.scene.textures.getTextureKeys()) {
+      if (old.startsWith(MAP_TEXTURE) && old !== activeKey) this.scene.textures.remove(old);
+    }
   }
 
   building(type: BuildingType, side: Side): EntityVisual {
