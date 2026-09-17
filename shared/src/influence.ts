@@ -1,17 +1,19 @@
-import { BUILDING_STATS, GAME_RULES } from './rules.js';
+import { GAME_RULES } from './rules.js';
 import { isWalkableLand } from './island.js';
 import type { MatchView, Side, Vec2 } from './types.js';
 
 export const INFLUENCE_CELL_SIZE = 40;
-export const INFLUENCE_UPDATE_MS = 250;
+export const INFLUENCE_UPDATE_MS = 333;
 export const INFLUENCE_SIGMA = 90;
 export const INFLUENCE_TAU_MS = 1500;
 
-const BUILDING_WEIGHT: Record<string, number> = {
-  castle: 6,
+const SOURCE_CUTOFF = 360;
+const WEIGHTS: Record<string, number> = {
+  soldier: 1,
   village: 2,
   tower: 3,
   barracks: 3,
+  castle: 6,
   fence: 0.5
 };
 
@@ -24,6 +26,7 @@ export interface InfluenceField {
   readonly land: Uint8Array;
   readonly previous: Float32Array;
   readonly current: Float32Array;
+  readonly target: Float32Array;
   accumulatorMs: number;
   version: number;
 }
@@ -66,6 +69,7 @@ export function createInfluenceField(cellSize = INFLUENCE_CELL_SIZE): InfluenceF
     land,
     previous: new Float32Array(cols * rows),
     current: new Float32Array(cols * rows),
+    target: new Float32Array(cols * rows),
     accumulatorMs: INFLUENCE_UPDATE_MS,
     version: 0
   };
@@ -73,9 +77,13 @@ export function createInfluenceField(cellSize = INFLUENCE_CELL_SIZE): InfluenceF
 
 export function influenceSources(view: MatchView): InfluenceSource[] {
   const sources: InfluenceSource[] = [];
-  for (const unit of view.units) sources.push({ side: unit.side, x: unit.x, y: unit.y, weight: 1 });
+  for (const unit of view.units) {
+    if (unit.hp <= 0) continue;
+    sources.push({ side: unit.side, x: unit.x, y: unit.y, weight: WEIGHTS[unit.type] ?? 1 });
+  }
   for (const building of view.buildings) {
-    sources.push({ side: building.side, x: building.x, y: building.y, weight: BUILDING_WEIGHT[building.type] ?? 1 });
+    if (building.hp <= 0) continue;
+    sources.push({ side: building.side, x: building.x, y: building.y, weight: WEIGHTS[building.type] ?? 1 });
   }
   return sources;
 }
@@ -96,37 +104,43 @@ function rawScore(x: number, y: number, sources: readonly InfluenceSource[]) {
     const dx = x - source.x;
     const dy = y - source.y;
     const d2 = dx * dx + dy * dy;
-    if (d2 > INFLUENCE_SIGMA * INFLUENCE_SIGMA * 36) continue;
+    if (d2 > SOURCE_CUTOFF * SOURCE_CUTOFF) continue;
     score += sideSign(source.side) * source.weight * Math.exp(-d2 / sigma2);
   }
   return score;
 }
 
+/** Updates presentation-only control values; it never mutates simulation state. */
 export function updateInfluence(field: InfluenceField, view: MatchView, dtMs: number) {
-  field.accumulatorMs += Math.min(Math.max(dtMs, 0), 500);
-  let updated = false;
+  const dt = Math.min(Math.max(dtMs, 0), 500);
+  field.accumulatorMs += dt;
+  let targetUpdated = false;
+
   while (field.accumulatorMs >= INFLUENCE_UPDATE_MS) {
     field.accumulatorMs -= INFLUENCE_UPDATE_MS;
-    const sources = influenceSources(view);
-    const alpha = 1 - Math.exp(-INFLUENCE_UPDATE_MS / INFLUENCE_TAU_MS);
     field.previous.set(field.current);
+    const sources = influenceSources(view);
     for (let row = 0; row < field.rows; row++) {
+      const y = field.originY + row * field.cellSize;
       for (let col = 0; col < field.cols; col++) {
         const i = row * field.cols + col;
         if (!field.land[i]) {
-          field.current[i] = 0;
+          field.target[i] = 0;
           continue;
         }
         const x = field.originX + col * field.cellSize;
-        const y = field.originY + row * field.cellSize;
-        const target = rawScore(x, y, sources);
-        field.current[i] += (target - field.current[i]) * alpha;
+        field.target[i] = rawScore(x, y, sources);
       }
     }
     field.version += 1;
-    updated = true;
+    targetUpdated = true;
   }
-  return updated;
+
+  const alpha = 1 - Math.exp(-dt / INFLUENCE_TAU_MS);
+  for (let i = 0; i < field.current.length; i++) {
+    field.current[i] += (field.target[i] - field.current[i]) * alpha;
+  }
+  return targetUpdated;
 }
 
 export function influenceValueAt(field: InfluenceField, x: number, y: number, values = field.current) {
@@ -156,11 +170,11 @@ const CASES: readonly (readonly number[])[] = [
   [3, 2],
   [2, 3],
   [0, 2],
-  [0, 1, 2, 3],
+  [0, 3, 1, 2],
   [1, 2],
-  [1, 3],
+  [3, 1],
   [0, 1],
-  [0, 3],
+  [3, 0],
   []
 ];
 
@@ -174,7 +188,12 @@ function pointKey(point: Vec2) {
   return `${Math.round(point.x * 10)}:${Math.round(point.y * 10)}`;
 }
 
-function connectSegments(segments: { a: Vec2; b: Vec2 }[]) {
+interface ConnectedPath {
+  points: Vec2[];
+  closed: boolean;
+}
+
+function connectSegments(segments: { a: Vec2; b: Vec2 }[]): ConnectedPath[] {
   const adjacency = new Map<string, number[]>();
   segments.forEach((segment, index) => {
     for (const point of [segment.a, segment.b]) {
@@ -186,63 +205,85 @@ function connectSegments(segments: { a: Vec2; b: Vec2 }[]) {
   });
 
   const used = new Uint8Array(segments.length);
-  const paths: Vec2[][] = [];
-  const extend = (points: Vec2[], forward: boolean) => {
-    for (;;) {
-      const key = pointKey(forward ? points[points.length - 1] : points[0]);
-      const candidates = adjacency.get(key) ?? [];
-      const next = candidates.find((index) => !used[index]);
-      if (next === undefined) return;
-      used[next] = 1;
-      const edge = segments[next];
-      const anchor = forward ? points[points.length - 1] : points[0];
-      const other = pointKey(edge.a) === pointKey(anchor) ? edge.b : edge.a;
-      if (forward) points.push(other);
-      else points.unshift(other);
-    }
-  };
+  const paths: ConnectedPath[] = [];
 
-  segments.forEach((segment, index) => {
-    if (used[index]) return;
-    used[index] = 1;
-    const points = [segment.a, segment.b];
-    extend(points, true);
-    extend(points, false);
-    paths.push(points);
-  });
+  for (let start = 0; start < segments.length; start++) {
+    if (used[start]) continue;
+    used[start] = 1;
+    const first = segments[start];
+    const points = [first.a, first.b];
+    let closed = false;
+
+    const grow = (forward: boolean) => {
+      for (;;) {
+        const anchor = forward ? points[points.length - 1] : points[0];
+        const anchorKey = pointKey(anchor);
+        const startKey = pointKey(forward ? points[0] : points[points.length - 1]);
+        const candidates = adjacency.get(anchorKey) ?? [];
+        const nextIndex = candidates.find((index) => !used[index]);
+        if (nextIndex === undefined) return;
+        const next = segments[nextIndex];
+        used[nextIndex] = 1;
+        const other = pointKey(next.a) === anchorKey ? next.b : next.a;
+        if (forward) points.push(other);
+        else points.unshift(other);
+        if (pointKey(other) === startKey) {
+          closed = true;
+          return;
+        }
+      }
+    };
+
+    grow(true);
+    if (!closed) grow(false);
+    paths.push({ points, closed });
+  }
   return paths;
 }
 
-function smooth(points: Vec2[]) {
-  if (points.length < 3) return points;
-  const out: Vec2[] = [points[0]];
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    out.push({ x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
-    out.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 });
+function chaikinOpen(points: Vec2[], rounds = 2) {
+  let current = points;
+  for (let round = 0; round < rounds; round++) {
+    if (current.length < 3) return current;
+    const next: Vec2[] = [current[0]];
+    for (let i = 0; i < current.length - 1; i++) {
+      const a = current[i];
+      const b = current[i + 1];
+      next.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 });
+      next.push({ x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+    }
+    next.push(current[current.length - 1]);
+    current = next;
   }
-  out.push(points[points.length - 1]);
-  return out;
+  return current;
 }
 
-function chaikin(points: Vec2[], rounds = 2) {
-  let current = points;
-  for (let round = 0; round < rounds; round++) current = smooth(current);
-  return current;
+function chaikinClosed(points: Vec2[], rounds = 2) {
+  let current = points.slice(0, -1);
+  for (let round = 0; round < rounds; round++) {
+    if (current.length < 3) break;
+    const next: Vec2[] = [];
+    for (let i = 0; i < current.length; i++) {
+      const a = current[i];
+      const b = current[(i + 1) % current.length];
+      next.push({ x: a.x * 0.75 + b.x * 0.25, y: a.y * 0.75 + b.y * 0.25 });
+      next.push({ x: a.x * 0.25 + b.x * 0.75, y: a.y * 0.25 + b.y * 0.75 });
+    }
+    current = next;
+  }
+  return [...current, current[0]];
+}
+
+function polygonArea(points: Vec2[]) {
+  let area = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    area += points[i].x * points[i + 1].y - points[i + 1].x * points[i].y;
+  }
+  return area / 2;
 }
 
 export function influenceContours(field: InfluenceField): InfluenceContours {
   const segments: { a: Vec2; b: Vec2 }[] = [];
-  const edgePoint = (edge: number, tl: Vec2, tr: Vec2, br: Vec2, bl: Vec2, vt: number[]) => {
-    switch (edge) {
-      case 0: return interpolate(tl, tr, vt[0], vt[1]);
-      case 1: return interpolate(tr, br, vt[1], vt[2]);
-      case 2: return interpolate(br, bl, vt[2], vt[3]);
-      default: return interpolate(bl, tl, vt[3], vt[0]);
-    }
-  };
-
   for (let row = 0; row < field.rows - 1; row++) {
     for (let col = 0; col < field.cols - 1; col++) {
       const i = row * field.cols + col;
@@ -250,36 +291,41 @@ export function influenceContours(field: InfluenceField): InfluenceContours {
       const ib = i + field.cols;
       const ibr = ib + 1;
       if (!field.land[i] || !field.land[ir] || !field.land[ib] || !field.land[ibr]) continue;
-      const tl = { x: field.originX + col * field.cellSize, y: field.originY + row * field.cellSize };
-      const tr = { x: tl.x + field.cellSize, y: tl.y };
-      const bl = { x: tl.x, y: tl.y + field.cellSize };
-      const br = { x: tr.x, y: bl.y };
-      const vt = [field.current[i], field.current[ir], field.current[ibr], field.current[ib]];
-      const mask = (vt[0] >= 0 ? 1 : 0) | (vt[1] >= 0 ? 2 : 0) | (vt[2] >= 0 ? 4 : 0) | (vt[3] >= 0 ? 8 : 0);
+
+      const x = field.originX + col * field.cellSize;
+      const y = field.originY + row * field.cellSize;
+      const tl = { x, y };
+      const tr = { x: x + field.cellSize, y };
+      const br = { x: x + field.cellSize, y: y + field.cellSize };
+      const bl = { x, y: y + field.cellSize };
+      const values = [field.current[i], field.current[ir], field.current[ibr], field.current[ib]];
+      const mask = (values[0] >= 0 ? 1 : 0) | (values[1] >= 0 ? 2 : 0) | (values[2] >= 0 ? 4 : 0) | (values[3] >= 0 ? 8 : 0);
+      const edge = (index: number) => {
+        switch (index) {
+          case 0: return interpolate(tl, tr, values[0], values[1]);
+          case 1: return interpolate(tr, br, values[1], values[2]);
+          case 2: return interpolate(br, bl, values[2], values[3]);
+          default: return interpolate(bl, tl, values[3], values[0]);
+        }
+      };
       const pairs = CASES[mask];
-      for (let p = 0; p < pairs.length; p += 2) {
-        segments.push({
-          a: edgePoint(pairs[p], tl, tr, br, bl, vt),
-          b: edgePoint(pairs[p + 1], tl, tr, br, bl, vt)
-        });
-      }
+      for (let p = 0; p < pairs.length; p += 2) segments.push({ a: edge(pairs[p]), b: edge(pairs[p + 1]) });
     }
   }
 
-  const raw = connectSegments(segments);
   const frontLines: Vec2[][] = [];
   const polygons: InfluencePolygon[] = [];
-  for (const path of raw) {
-    const closed = path.length > 3 && pointKey(path[0]) === pointKey(path[path.length - 1]);
-    const length = path.reduce((sum, point, i) => (i ? sum + Math.hypot(point.x - path[i - 1].x, point.y - path[i - 1].y) : sum), 0);
+  for (const path of connectSegments(segments)) {
+    if (path.points.length < 4) continue;
+    const length = path.points.reduce((sum, point, i) => (i ? sum + Math.hypot(point.x - path.points[i - 1].x, point.y - path.points[i - 1].y) : sum), 0);
     if (length < field.cellSize * 1.5) continue;
-    const points = chaikin(path, 2);
-    if (closed) {
+    const points = path.closed ? chaikinClosed(path.points, 2) : chaikinOpen(path.points, 2);
+    frontLines.push(points);
+    if (path.closed && Math.abs(polygonArea(points)) >= field.cellSize * field.cellSize * 0.2) {
       const center = points.reduce((acc, point) => ({ x: acc.x + point.x / points.length, y: acc.y + point.y / points.length }), { x: 0, y: 0 });
       polygons.push({ side: influenceValueAt(field, center.x, center.y) >= 0 ? 'blue' : 'red', points });
-    } else {
-      frontLines.push(points);
     }
   }
+
   return { frontLines, polygons };
 }
