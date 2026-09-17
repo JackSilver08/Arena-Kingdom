@@ -11,9 +11,11 @@ const required = [
   'client/src/game/commandArrows.ts',
   'client/src/game/battleRecap.ts',
   'client/src/game/battleRecap.css',
+  'shared/scripts/balance.ts',
   'docs/BATTLE_DOCUMENTARY_PHASE1.md',
   'docs/BATTLE_DOCUMENTARY_PHASE4.md',
-  'docs/BATTLE_DOCUMENTARY_PHASE5.md'
+  'docs/BATTLE_DOCUMENTARY_PHASE5.md',
+  'docs/BATTLE_DOCUMENTARY_PHASE6.md'
 ];
 
 const checks = [
@@ -25,6 +27,8 @@ const checks = [
   ['recap recorder', 'record(view: MatchView, events:', 'client/src/game/battleRecap.ts'],
   ['reduced motion class', 'reduced-motion', 'client/src/game/displaySettingsPanel.ts'],
   ['40px influence grid', 'INFLUENCE_CELL_SIZE = 40', 'shared/src/influence.ts'],
+  ['balance simulation command', 'simulate:balance', 'package.json'],
+  ['balance lab workflow', 'npm run simulate:balance -- 4', '.github/workflows/qa.yml'],
   ['documented QA workflow', 'npm run check:bundle', '.github/workflows/qa.yml']
 ];
 
