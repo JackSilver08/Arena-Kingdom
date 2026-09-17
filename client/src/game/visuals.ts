@@ -158,7 +158,6 @@ export class BattleVisualRenderer {
 
   unit(type: UnitType, side: Side): EntityVisual {
     const glyph = type === 'militia' ? SYMBOL_SIZE.militia : SYMBOL_SIZE.troop;
-    const symbolType = type === 'militia' ? 'militia' : 'troop';
     return { key: unitTextureKey(type, side), ...glyph, anchorY: glyph.anchorY };
   }
 }
