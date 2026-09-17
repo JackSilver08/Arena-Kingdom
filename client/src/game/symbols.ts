@@ -4,8 +4,8 @@ import type { BuildingType, Side } from '@arena-kingdom/shared';
  * Battlefield symbols in the style of military situation maps (loosely NATO APP-6): the frame's
  * shape says what kind of thing it is and the mark inside says its role.
  *
- * - circle: places. Castle = capital star, village = a compact settlement cluster.
- * - tent: military camp. Barracks = a compact field-tent glyph.
+ * - circle: places. Castle = capital star.
+ * - tent: settlement / camp glyph. Village = a standalone teepee; Barracks = a field-camp glyph.
  * - triangle: defensive post. Tower = observation post dot.
  * - line with teeth: obstacle. Fence, teeth facing the enemy.
  *
@@ -78,14 +78,19 @@ export function symbolArt(type: SymbolType, side: Side) {
     case 'village':
       return svg(
         size,
-        `${frame('<circle cx="27" cy="27" r="22"/>', side, 2.6)}
-        <g fill="none" stroke="${ink}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10 34 L17.5 26 L25 34"/>
-          <path d="M29 32 L37 23.5 L45 32"/>
-          <path d="M14.5 38 L27 25 L39.5 38"/>
-          <path d="M14.5 38 H22.5 M31.5 38 H39.5"/>
-          <path d="M12 40.5 H42"/>
-        </g>`
+        `<g fill="none" stroke="${SHADOW}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" opacity=".28" transform="translate(1.5 2.2)">
+          <path d="M11 43 L27 15 L43 43 Z"/>
+          <path d="M23 4 L31 16 M31 4 L23 16"/>
+        </g>
+        <g fill="none" stroke="${HALO}" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 43 L27 15 L43 43 Z"/>
+          <path d="M23 4 L31 16 M31 4 L23 16"/>
+        </g>
+        <g fill="none" stroke="${ink}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 43 L27 15 L43 43 Z"/>
+          <path d="M23 4 L31 16 M31 4 L23 16"/>
+        </g>
+        <path d="M27 26 L20 43 H34 Z" fill="${ink}" stroke="${HALO}" stroke-width="1.1" stroke-linejoin="round"/>`
       );
     case 'barracks':
       return svg(
