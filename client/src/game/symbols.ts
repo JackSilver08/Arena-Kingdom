@@ -30,7 +30,7 @@ export const SYMBOL_SIZE: Record<SymbolType, SymbolSize> = {
   troop: { width: 30, height: 24, anchorY: 11 / 24 }
 };
 
-const COLORS: Record<Side, { fill: string; ink: string }> = {
+export const COLORS: Record<Side, { fill: string; ink: string }> = {
   blue: { fill: '#9db9e2', ink: '#1b3764' },
   red: { fill: '#e7a296', ink: '#6f1f18' }
 };
@@ -66,7 +66,7 @@ const cross = (x: number, y: number, w: number, h: number) => `M${x} ${y}L${x + 
 
 export function symbolArt(type: SymbolType, side: Side) {
   const size = SYMBOL_SIZE[type];
-  const { ink, fill } = COLORS[side];
+  const { ink } = COLORS[side];
   switch (type) {
     case 'castle':
       return svg(
@@ -100,7 +100,7 @@ export function symbolArt(type: SymbolType, side: Side) {
       const body = `<path d="M17 6V134" fill="none" stroke="${HALO}" stroke-width="10" stroke-linecap="round"/>
         <g transform="translate(1.5 2.5)" opacity=".3"><path d="M17 6V134" stroke="${SHADOW}" stroke-width="6"/></g>
         <path d="M17 6V134" stroke="${ink}" stroke-width="6.5" stroke-linecap="round"/>
-        <path d="M17 8V132" stroke="${fill}" stroke-width="2.4"/>
+        <path d="M17 8V132" stroke="${COLORS[side].fill}" stroke-width="2.4"/>
         <path d="${teeth}" fill="${ink}" stroke="${HALO}" stroke-width="1" stroke-linejoin="round"/>`;
       return svg(size, side === 'blue' ? body : `<g transform="matrix(-1 0 0 1 ${size.width} 0)">${body}</g>`);
     }
