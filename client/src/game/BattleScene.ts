@@ -13,6 +13,8 @@ import {
   type UnitView
 } from '@arena-kingdom/shared';
 import type { GameController } from './GameController';
+import { DisplaySettingsPanel } from './displaySettingsPanel';
+import { FrontlineOverlay } from './frontlineOverlay';
 import type { MapViewSize } from './mapArt';
 import { BATTLE_DEPTH, BattleVisualRenderer, battleView } from './visuals';
 
@@ -48,6 +50,10 @@ interface BuildingSprite {
 export class BattleScene extends Phaser.Scene {
   private controller!: GameController;
   private visuals!: BattleVisualRenderer;
+  private frontline!: FrontlineOverlay;
+  private displaySettings: DisplaySettingsPanel | null = null;
+  private overlaysEnabled = true;
+  private reducedMotion = false;
   private res = 1;
   private smoothing = false;
   private units = new Map<number, UnitSprite>();
@@ -87,6 +93,7 @@ export class BattleScene extends Phaser.Scene {
 
     this.makeEffectTextures();
     this.drawWorld();
+    this.frontline = new FrontlineOverlay(this);
     this.ground = this.add.graphics().setDepth(DEPTH.ground);
     this.bars = this.add.graphics().setDepth(DEPTH.bars);
     this.overlay = this.add.graphics().setDepth(DEPTH.overlay);
@@ -94,10 +101,24 @@ export class BattleScene extends Phaser.Scene {
       .image(0, 0, this.visuals.building('village', this.controller.mySide).key)
       .setDepth(DEPTH.overlay)
       .setVisible(false);
+
+    const battleRoot = this.sys.game.canvas.closest('.battle') as HTMLElement | null;
+    if (battleRoot) {
+      this.displaySettings = new DisplaySettingsPanel(battleRoot, (settings) => {
+        this.overlaysEnabled = settings.overlays;
+        this.reducedMotion = settings.reducedMotion;
+      });
+    }
+
     this.bindInput();
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.queueFitView, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, this.queueFitView, this));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.queueFitView, this);
+      this.displaySettings?.destroy();
+      this.displaySettings = null;
+      this.frontline?.destroy();
+    });
     // The stage may have changed shape while the textures were loading.
     this.fitView();
   }
@@ -105,7 +126,10 @@ export class BattleScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     const events = this.controller.tick(delta);
     const view = this.controller.view;
-    if (view) this.sync(view, delta);
+    if (view) {
+      this.sync(view, delta);
+      this.frontline.update(view, delta, this.overlaysEnabled, this.reducedMotion);
+    }
     this.playEvents(events);
     this.drawOverlay(view);
   }
@@ -194,7 +218,7 @@ export class BattleScene extends Phaser.Scene {
     };
     this.input.on('pointerup', finishDrag);
     this.input.on('pointerupoutside', finishDrag);
-    this.game.canvas.addEventListener('pointerleave', () => this.controller.setHover(null));
+    this.sys.game.canvas.addEventListener('pointerleave', () => this.controller.setHover(null));
   }
 
   /** Id of the enemy unit or building under a point, for targeted attacks. */
@@ -506,7 +530,7 @@ export class BattleScene extends Phaser.Scene {
       const start = this.dragStart;
       if (Math.abs(x - start.x) > DRAG_THRESHOLD || Math.abs(y - start.y) > DRAG_THRESHOLD) {
         const left = Math.min(start.x, x);
-        const top = Math.min(start.y, y);
+        const top = Math.min(start.y, x) && Math.min(start.y, y);
         const width = Math.abs(x - start.x);
         const height = Math.abs(y - start.y);
         o.fillStyle(0xffe500, 0.18);
