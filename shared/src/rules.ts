@@ -48,7 +48,7 @@ export const GAME_RULES={
     incomeIntervalMs:5000,
     maxQueuePerBarracks:5,
     /** Soft army capacity: the kingdom can exceed it, but the excess consumes gold. */
-    supply:{castle:10,barracks:6,village:2,tower:2,upkeepPerUnit:0.75}
+    supply:{castle:6,barracks:3,village:1,tower:2,upkeepPerUnit:1}
   },
   limits:{maxUnitsPerSide:40,maxBuildingsPerSide:30},
   peace:{responseWindowMs:15_000,cooldownMs:30_000}
