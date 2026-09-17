@@ -1,6 +1,6 @@
-import type PhaserType from 'phaser';
 import type { GameEvent, MatchView } from '@arena-kingdom/shared';
 import type { BattleScene } from './BattleScene';
+import './battleRecap.css';
 
 export interface BattleReplayFrame {
   view: MatchView;
@@ -40,32 +40,21 @@ function formatTime(timeMs: number) {
 
 function eventLabel(event: GameEvent) {
   switch (event.type) {
-    case 'shot':
-      return 'Fire';
-    case 'hit':
-      return 'Hit';
-    case 'unitDied':
-      return `${event.side === 'blue' ? 'Blue' : 'Red'} troop lost`;
-    case 'unitTrained':
-      return `${event.side === 'blue' ? 'Blue' : 'Red'} troop trained`;
-    case 'buildingPlaced':
-      return `${event.side === 'blue' ? 'Blue' : 'Red'} ${event.building} built`;
-    case 'buildingDestroyed':
-      return `${event.side === 'blue' ? 'Blue' : 'Red'} ${event.building} destroyed`;
-    case 'peaceProposed':
-      return `${event.by === 'blue' ? 'Blue' : 'Red'} proposed peace`;
-    case 'peaceDeclined':
-      return `${event.by === 'blue' ? 'Blue' : 'Red'} declined peace`;
-    case 'peaceExpired':
-      return 'Peace proposal expired';
-    case 'matchEnded':
-      return 'Battle ended';
+    case 'shot': return 'Fire';
+    case 'hit': return 'Hit';
+    case 'unitDied': return `${event.side === 'blue' ? 'Blue' : 'Red'} troop lost`;
+    case 'unitTrained': return `${event.side === 'blue' ? 'Blue' : 'Red'} troop trained`;
+    case 'buildingPlaced': return `${event.side === 'blue' ? 'Blue' : 'Red'} ${event.building} built`;
+    case 'buildingDestroyed': return `${event.side === 'blue' ? 'Blue' : 'Red'} ${event.building} destroyed`;
+    case 'peaceProposed': return `${event.by === 'blue' ? 'Blue' : 'Red'} proposed peace`;
+    case 'peaceDeclined': return `${event.by === 'blue' ? 'Blue' : 'Red'} declined peace`;
+    case 'peaceExpired': return 'Peace proposal expired';
+    case 'matchEnded': return 'Battle ended';
   }
 }
 
 export class BattleRecap implements BattleReplayRecorder {
   private readonly recorded: BattleReplayFrame[] = [];
-  private elapsed = 0;
   private panel: HTMLDivElement | null = null;
   private trigger: HTMLButtonElement | null = null;
   private playing = false;
@@ -78,18 +67,16 @@ export class BattleRecap implements BattleReplayRecorder {
   constructor(
     private readonly scene: BattleScene,
     private readonly battleRoot: HTMLElement,
-    private readonly controller: { session: { status: string; on(listener: (signal: { type: string }) => void): () => void } }
+    private readonly controller: { session: { on(listener: (signal: { type: string }) => void): () => void } }
   ) {
     const dispose = controller.session.on((signal) => {
       if (signal.type === 'end') this.showTrigger();
     });
     scene.events.once('shutdown', () => dispose());
-    this.showTrigger();
   }
 
   record(view: MatchView, events: GameEvent[]) {
     if (this.destroyed || this.playing) return;
-    this.elapsed += 1;
     const last = this.recorded[this.recorded.length - 1];
     const elapsedHint = view.timeMs - (last?.view.timeMs ?? -SAMPLE_MS);
     if (elapsedHint < SAMPLE_MS && !view.result && !events.length) return;
@@ -203,6 +190,7 @@ export class BattleRecap implements BattleReplayRecorder {
       button.addEventListener('click', () => {
         this.speed = Number(button.dataset.recapSpeed);
         this.render();
+        this.renderPlayState();
       });
     });
     this.panel.querySelectorAll<HTMLButtonElement>('[data-recap-index]').forEach((button) => {
@@ -234,6 +222,7 @@ export class BattleRecap implements BattleReplayRecorder {
     this.cursorMs += elapsed * this.speed;
     const nextIndex = this.findIndexAt(this.cursorMs);
     if (nextIndex !== this.index) this.seek(nextIndex, false);
+    this.syncReadout();
     if (this.index >= this.recorded.length - 1) {
       this.playing = false;
       this.renderPlayState();
@@ -246,22 +235,31 @@ export class BattleRecap implements BattleReplayRecorder {
     let lo = 0;
     let hi = this.recorded.length - 1;
     while (lo < hi) {
-      const mid = Math.ceil((lo + hi) / 2);
-      if (this.recorded[mid].view.timeMs >= timeMs) hi = mid - 1;
-      else lo = mid;
+      const mid = Math.floor((lo + hi + 1) / 2);
+      if (this.recorded[mid].view.timeMs <= timeMs) lo = mid;
+      else hi = mid - 1;
     }
-    return Math.max(0, Math.min(this.recorded.length - 1, lo));
+    return lo;
   }
 
   private seek(index: number, rerender = true) {
     this.index = Math.max(0, Math.min(this.recorded.length - 1, index));
     this.cursorMs = this.recorded[this.index]?.view.timeMs ?? 0;
     const frame = this.recorded[this.index];
-    if (frame) this.scene.setReplayView(frame.view);
+    if (frame) this.scene.setReplayView(frame.view, frame.events);
     if (rerender) {
       this.render();
       this.renderPlayState();
     }
+  }
+
+  private syncReadout() {
+    const clock = this.panel?.querySelector<HTMLElement>('[data-recap="clock"]');
+    const scrub = this.panel?.querySelector<HTMLInputElement>('[data-recap="scrub"]');
+    const current = this.recorded[this.index]?.view.timeMs ?? 0;
+    const duration = this.recorded[this.recorded.length - 1]?.view.timeMs ?? 0;
+    if (clock) clock.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+    if (scrub) scrub.value = String(this.index);
   }
 
   private renderPlayState() {
