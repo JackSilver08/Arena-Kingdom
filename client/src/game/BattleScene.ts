@@ -14,6 +14,7 @@ import {
 } from '@arena-kingdom/shared';
 import type { GameController } from './GameController';
 import { DisplaySettingsPanel } from './displaySettingsPanel';
+import { createBattleRecap } from './battleRecap';
 import { FrontlineOverlay } from './frontlineOverlay';
 import type { MapViewSize } from './mapArt';
 import { BATTLE_DEPTH, BattleVisualRenderer, battleView } from './visuals';
@@ -52,6 +53,8 @@ export class BattleScene extends Phaser.Scene {
   private visuals!: BattleVisualRenderer;
   private frontline!: FrontlineOverlay;
   private displaySettings: DisplaySettingsPanel | null = null;
+  private recap!: ReturnType<typeof createBattleRecap>;
+  private replayView: MatchView | null = null;
   private overlaysEnabled = true;
   private reducedMotion = false;
   private res = 1;
@@ -108,6 +111,7 @@ export class BattleScene extends Phaser.Scene {
         this.overlaysEnabled = settings.overlays;
         this.reducedMotion = settings.reducedMotion;
       });
+      this.recap = createBattleRecap(this, battleRoot, this.controller);
     }
 
     this.bindInput();
@@ -117,6 +121,7 @@ export class BattleScene extends Phaser.Scene {
       this.scale.off(Phaser.Scale.Events.RESIZE, this.queueFitView, this);
       this.displaySettings?.destroy();
       this.displaySettings = null;
+      this.recap?.destroy();
       this.frontline?.destroy();
     });
     // The stage may have changed shape while the textures were loading.
@@ -125,13 +130,26 @@ export class BattleScene extends Phaser.Scene {
 
   update(_time: number, delta: number) {
     const events = this.controller.tick(delta);
-    const view = this.controller.view;
+    const liveView = this.controller.view;
+    if (liveView && !this.replayView) {
+      this.recap.record(liveView, events);
+    }
+    const view = this.replayView ?? liveView;
     if (view) {
       this.sync(view, delta);
       this.frontline.update(view, delta, this.overlaysEnabled, this.reducedMotion);
     }
-    this.playEvents(events);
+    if (!this.replayView) this.playEvents(events);
     this.drawOverlay(view);
+  }
+
+  /** Switch the renderer between the live match state and a recorded recap frame. */
+  setReplayView(view: MatchView | null) {
+    this.replayView = view;
+    if (view) {
+      this.sync(view, 1);
+      this.frontline.update(view, 0, this.overlaysEnabled, true);
+    }
   }
 
   // ---------------------------------------------------------------- setup
@@ -438,7 +456,7 @@ export class BattleScene extends Phaser.Scene {
       }
     }
     for (const u of view.units) {
-      const selected = u.side === c.mySide && c.selection.has(u.id);
+      const selected = !this.replayView && u.side === c.mySide && c.selection.has(u.id);
       if (u.hp >= u.maxHp && !selected) continue;
       const sprite = this.units.get(u.id);
       const ux = sprite?.x ?? u.x;
@@ -462,7 +480,7 @@ export class BattleScene extends Phaser.Scene {
     o.clear();
     if (!view) return;
 
-    if (c.selection.size) {
+    if (!this.replayView && c.selection.size) {
       for (const [width, color, alpha] of [[6, INK, 0.6], [3, 0xffe500, 1]]) {
         g.lineStyle(width, color, alpha);
         for (const u of view.units) {
@@ -475,10 +493,10 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const { x, y } = this.pointerWorld;
-    const cursor = c.mode === 'idle' ? 'default' : 'crosshair';
+    const cursor = this.replayView ? 'default' : c.mode === 'idle' ? 'default' : 'crosshair';
     if (this.input.manager.defaultCursor !== cursor) this.input.setDefaultCursor(cursor);
 
-    if (c.mode === 'build' && c.canCommand) {
+    if (!this.replayView && c.mode === 'build' && c.canCommand) {
       const territory = territoryOutline(c.mySide) as Phaser.Types.Math.Vector2Like[];
       o.fillStyle(SIDE_COLOR[c.mySide], 0.1);
       o.fillPoints(territory, true);
@@ -515,7 +533,7 @@ export class BattleScene extends Phaser.Scene {
       this.ghost.setVisible(false);
     }
 
-    if (c.mode === 'troops' && c.canCommand) {
+    if (!this.replayView && c.mode === 'troops' && c.canCommand) {
       for (const [width, color, alpha] of [[6, INK, 0.6], [3, 0xffe500, 1]]) {
         o.lineStyle(width, color, alpha);
         o.strokeCircle(x, y, 18);
@@ -526,11 +544,11 @@ export class BattleScene extends Phaser.Scene {
       }
     }
 
-    if (this.dragStart && this.input.activePointer.isDown) {
+    if (!this.replayView && this.dragStart && this.input.activePointer.isDown) {
       const start = this.dragStart;
       if (Math.abs(x - start.x) > DRAG_THRESHOLD || Math.abs(y - start.y) > DRAG_THRESHOLD) {
         const left = Math.min(start.x, x);
-        const top = Math.min(start.y, x) && Math.min(start.y, y);
+        const top = Math.min(start.y, y);
         const width = Math.abs(x - start.x);
         const height = Math.abs(y - start.y);
         o.fillStyle(0xffe500, 0.18);
