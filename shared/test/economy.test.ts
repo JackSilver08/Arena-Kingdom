@@ -31,7 +31,7 @@ test('villages increase both income and military supply', () => {
   assert.equal(engine.command('blue', { type: 'build', building: 'village', x: 700, y: 820 }).ok, true);
   assert.equal(armySupplyCapacity(engine.buildingsOf('blue')), beforeSupply + GAME_RULES.economy.supply.village);
   assert.equal(engine.state.players.blue.income, beforeIncome + GAME_RULES.economy.villageIncome);
-  assert.equal(BUILDING_STATS.village.cost, 75);
+  assert.equal(BUILDING_STATS.village.cost, 70);
 });
 
 test('army upkeep charges only troops above supply and never creates debt', () => {
