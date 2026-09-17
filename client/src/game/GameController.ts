@@ -8,6 +8,8 @@ import {
   FORMATION_TYPES,
   GAME_RULES,
   UNIT_STATS,
+  armySupplyCapacity,
+  armyUpkeep,
   canPlaceBuilding,
   formationPercent,
   fractionOf,
@@ -553,9 +555,10 @@ export class GameController {
             <span class="yb res-gold"><b data-hud="gold">0</b>$<span class="income-meter"><i data-hud="incomeMeter"></i></span></span>
             <small class="res-sub" data-hud="income"></small>
           </div>
-          <div class="res" title="Troops">
+          <div class="res" title="Troops / supply capacity">
             <span class="res-icon">${trusted(bannerIcon())}</span>
-            <span class="yb" data-hud="army">0</span>
+            <span class="yb" data-hud="army">0 / 0</span>
+            <small class="res-sub" data-hud="armySub"></small>
           </div>
           <div class="res" title="Villages">
             <span class="res-icon">${trusted(houseIcon())}</span>
@@ -631,8 +634,11 @@ export class GameController {
     }
     if (this.mode === 'troops') {
       const army = view?.units.filter((u) => u.side === me).length ?? 0;
+      const supply = view ? armySupplyCapacity(view.buildings.filter((b) => b.side === me)) : 0;
+      const upkeep = armyUpkeep(army, supply);
       const selected = FORMATION_STATS[this.formation];
       return html`<div class="popup-title">Troops <small>1-3 army fraction · Q/W/E/D formation · click a destination</small></div>
+        <div class="popup-note supply-note"><b>Supply ${army}/${supply}</b> · upkeep ${upkeep}$ / ${GAME_RULES.economy.incomeIntervalMs / 1000}s above capacity. Villages and barracks expand your logistics.</div>
         <div class="popup-options">
           ${ARMY_FRACTIONS.map(
             (fraction, i) => html`<button
@@ -692,7 +698,9 @@ export class GameController {
     if (force) this.hudElapsed = 0;
 
     const army = view ? view.units.filter((u) => u.side === me).length : 0;
-    const contextKey = `${me}|${this.mode}|${this.buildType}|${this.fraction}|${this.formation}|${this.mode === 'troops' ? army : ''}`;
+    const supply = view ? armySupplyCapacity(view.buildings.filter((b) => b.side === me)) : 0;
+    const upkeep = armyUpkeep(army, supply);
+    const contextKey = `${me}|${this.mode}|${this.buildType}|${this.fraction}|${this.formation}|${this.mode === 'troops' ? `${army}|${supply}|${upkeep}` : ''}`;
     if (contextKey !== this.contextKey) {
       this.contextKey = contextKey;
       const popup = $(this.root, '[data-context]');
@@ -721,10 +729,12 @@ export class GameController {
     if (view) {
       const player = view.players[me];
       this.set('gold', String(player.gold));
-      this.set('income', `+${player.income}$ / ${GAME_RULES.economy.incomeIntervalMs / 1000}s`);
+      const upkeepLabel = upkeep ? ` · −${upkeep}$ upkeep / ${GAME_RULES.economy.incomeIntervalMs / 1000}s` : ' · no upkeep';
+      this.set('income', `+${player.income}$ / ${GAME_RULES.economy.incomeIntervalMs / 1000}s${upkeepLabel}`);
       const progress = 1 - view.nextIncomeInMs / GAME_RULES.economy.incomeIntervalMs;
       this.set('incomeMeter', `${Math.round(progress * 100)}`, (el, v) => (el.style.width = `${v}%`));
-      this.set('army', String(army));
+      this.set('army', `${army} / ${supply}`);
+      this.set('armySub', upkeep ? `−${upkeep}$ upkeep / ${GAME_RULES.economy.incomeIntervalMs / 1000}s` : 'No upkeep');
       this.set('villages', String(view.buildings.filter((b) => b.side === me && b.type === 'village').length));
       this.set('timer', formatDuration(view.timeMs));
       this.root.querySelectorAll<HTMLElement>('.hud-popup .option[data-cost]').forEach((el) => {
@@ -803,12 +813,16 @@ export class GameController {
     if (this.mode === 'build') return `${BUILDING_STATS[this.buildType].label}: click inside your territory to place it.`;
     if (this.mode === 'troops') {
       const f = FORMATION_STATS[this.formation];
-      return `Send ${FRACTION_LABELS[this.fraction]} in ${FORMATION_LABELS[this.formation]}: ${formationPercent(f.attackMultiplier)} attack · ${formationPercent(f.defenseMultiplier)} defence · ${formationPercent(f.speedMultiplier)} speed.`;
+      const view = this.view;
+      const army = view ? view.units.filter((u) => u.side === this.mySide).length : 0;
+      const supply = view ? armySupplyCapacity(view.buildings.filter((b) => b.side === this.mySide)) : 0;
+      const upkeep = armyUpkeep(army, supply);
+      return `Send ${FRACTION_LABELS[this.fraction]} in ${FORMATION_LABELS[this.formation]}: ${formationPercent(f.attackMultiplier)} attack · ${formationPercent(f.defenseMultiplier)} defence · ${formationPercent(f.speedMultiplier)} speed · supply ${army}/${supply}${upkeep ? ` · upkeep −${upkeep}$/${GAME_RULES.economy.incomeIntervalMs / 1000}s` : ''}.`;
     }
     if (this.selection.size) {
       return `${this.selection.size} troop${this.selection.size > 1 ? 's' : ''} selected · right-click to attack · Shift+right-click to move · S to hold`;
     }
-    return 'Drag to select troops · click your barracks to recruit · destroy the enemy castle!';
+    return 'Drag to select troops · click your barracks to recruit · build villages to strengthen your economy and army supply · destroy the enemy castle!';
   }
 
   private renderEnd() {
