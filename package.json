@@ -21,8 +21,9 @@
     "start": "npm --workspace server run start",
     "test": "npm --workspace shared run test",
     "typecheck": "npm run build:shared && npm --workspace client run typecheck && npm --workspace server run typecheck",
+    "qa:static": "node tools/check-documentary.mjs",
     "check:bundle": "node tools/check-bundle.mjs",
-    "qa": "npm run typecheck && npm test && npm run build && npm run check:bundle",
+    "qa": "npm run qa:static && npm run typecheck && npm test && npm run build && npm run check:bundle",
     "simulate": "npm --workspace shared run simulate --",
     "format": "prettier --write ."
   },
