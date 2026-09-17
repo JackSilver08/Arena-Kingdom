@@ -1,5 +1,4 @@
 export type MapStyle = 'documentary' | 'vintage';
-
 export interface DisplaySettings {
   mapStyle: MapStyle;
   overlays: boolean;
@@ -8,6 +7,7 @@ export interface DisplaySettings {
 }
 
 const STORAGE_KEY = 'arena-kingdom.display-settings';
+export const DISPLAY_SETTINGS_EVENT = 'arena-kingdom:display-settings';
 
 const prefersReducedMotion = () => {
   try {
@@ -56,6 +56,7 @@ export function saveDisplaySettings(settings: DisplaySettings): DisplaySettings 
   } catch {
     // Storage can be unavailable in private browsing or locked-down contexts.
   }
+  window.dispatchEvent(new CustomEvent<DisplaySettings>(DISPLAY_SETTINGS_EVENT, { detail: next }));
   return next;
 }
 
