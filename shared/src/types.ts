@@ -1,7 +1,7 @@
 export type Side = 'blue' | 'red';
 export type BuildingType = 'castle' | 'village' | 'barracks' | 'fence' | 'tower';
 export type BuildableType = Exclude<BuildingType, 'castle'>;
-export type UnitType = 'soldier';
+export type UnitType = 'soldier' | 'militia';
 export type ArmyFraction = 'all' | 'one-third' | 'two-thirds';
 export type FormationType = 'line' | 'column' | 'wedge' | 'square';
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -29,6 +29,8 @@ export interface UnitView {
   type: UnitType;
   /** Present in clients that render formation metadata; live wire snapshots may omit it. */
   formation?: FormationType;
+  /** Village-owned garrison marker. Present only while this unit is an active militia defender. */
+  garrisonVillageId?: number;
   x: number;
   y: number;
   hp: number;
