@@ -1,4 +1,5 @@
 import './styles.css';
+import './game/displaySettings.css';
 import { createLayout } from './components/layout';
 import { restoreSession } from './lib/api';
 import { navigate, startRouter, type Page, type RouteContext } from './lib/router';
