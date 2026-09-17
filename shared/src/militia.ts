@@ -6,7 +6,6 @@ import { opponentOf, type Command, type Side, type Vec2 } from './types.js';
 interface MilitiaRuntime {
   readyVillages: Set<number>;
   activeVillages: Map<number, Set<number>>;
-  expectedBefore: Map<number, number>;
 }
 
 const runtimes = new WeakMap<MatchEngine, MilitiaRuntime>();
@@ -16,8 +15,7 @@ function runtimeOf(engine: MatchEngine): MilitiaRuntime {
   if (!runtime) {
     runtime = {
       readyVillages: new Set<number>(),
-      activeVillages: new Map<number, Set<number>>(),
-      expectedBefore: new Map<number, number>()
+      activeVillages: new Map<number, Set<number>>()
     };
     runtimes.set(engine, runtime);
   }
@@ -39,6 +37,10 @@ function distance(a: Vec2, b: Vec2) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+function distanceToVillage(vx: number, vy: number, ux: number, uy: number) {
+  return Math.max(0, Math.hypot(vx - ux, vy - uy) - BUILDING_STATS.village.halfWidth);
+}
+
 function villageThreats(engine: MatchEngine, villageId: number, side: Side, range: number) {
   const village = engine.state.buildings.find((b) => b.id === villageId && b.type === 'village' && b.hp > 0);
   if (!village) return [];
@@ -46,18 +48,6 @@ function villageThreats(engine: MatchEngine, villageId: number, side: Side, rang
     .filter((u) => u.side === opponentOf(side) && u.hp > 0)
     .filter((u) => distanceToVillage(village.x, village.y, u.x, u.y) <= range)
     .sort((a, b) => distanceToVillage(village.x, village.y, a.x, a.y) - distanceToVillage(village.x, village.y, b.x, b.y));
-}
-
-function distanceToVillage(vx: number, vy: number, ux: number, uy: number) {
-  return Math.max(0, Math.hypot(vx - ux, vy - uy) - BUILDING_STATS.village.halfWidth);
-}
-
-function findNearestEnemy(engine: MatchEngine, side: Side, x: number, y: number, range: number) {
-  return engine.state.units
-    .filter((u) => u.side === opponentOf(side) && u.hp > 0)
-    .map((u) => ({ unit: u, d: Math.hypot(u.x - x, u.y - y) }))
-    .filter(({ d }) => d <= range)
-    .sort((a, b) => a.d - b.d)[0]?.unit;
 }
 
 function createMilitia(engine: MatchEngine, side: Side, villageId: number, x: number, y: number, targetId: number) {
@@ -102,7 +92,6 @@ function deploy(engine: MatchEngine, villageId: number) {
   if (!firstThreat) return;
 
   const angle = Math.atan2(firstThreat.y - village.y, firstThreat.x - village.x);
-  const side = village.side;
   const spawnRadius = GAME_RULES.militia.spawnDistance;
   const positions = [-0.72, 0, 0.72].map((offset) => {
     const theta = angle + offset;
@@ -110,11 +99,10 @@ function deploy(engine: MatchEngine, villageId: number) {
   });
   const ids = new Set<number>();
   for (const point of positions) {
-    const unit = createMilitia(engine, side, villageId, point.x, point.y, firstThreat.id);
+    const unit = createMilitia(engine, village.side, villageId, point.x, point.y, firstThreat.id);
     ids.add(unit.id);
   }
   runtime.activeVillages.set(villageId, ids);
-  runtime.expectedBefore.set(villageId, ids.size);
 }
 
 function prepare(engine: MatchEngine) {
@@ -124,7 +112,6 @@ function prepare(engine: MatchEngine) {
 
   for (const id of [...runtime.readyVillages]) if (!liveVillageIds.has(id)) runtime.readyVillages.delete(id);
   for (const [id] of [...runtime.activeVillages]) if (!liveVillageIds.has(id)) runtime.activeVillages.delete(id);
-  for (const id of [...runtime.expectedBefore.keys()]) if (!liveVillageIds.has(id)) runtime.expectedBefore.delete(id);
 
   for (const village of villages) {
     if (!runtime.readyVillages.has(village.id)) runtime.readyVillages.add(village.id);
@@ -149,14 +136,12 @@ function prepare(engine: MatchEngine) {
         unit.order = { kind: 'move', x: village.x, y: village.y, attack: false };
       }
     }
-    runtime.expectedBefore.set(village.id, [...activeIds].filter((id) => engine.state.units.some((u) => u.id === id && u.hp > 0)).length);
+    const liveIds = [...activeIds].filter((id) => engine.state.units.some((u) => u.id === id && u.hp > 0));
+    runtime.activeVillages.set(village.id, new Set(liveIds));
   }
 }
 
 function promoteSurvivors(engine: MatchEngine, villageId: number) {
-  const survivors = engine.state.units.filter((u) => u.type === 'militia' && u.garrisonVillageId === villageId && u.hp > 0);
-  if (!survivors.length) return;
-
   engine.state.units = engine.state.units.map((unit) => {
     if (unit.type !== 'militia' || unit.garrisonVillageId !== villageId || unit.hp <= 0) return unit;
     const hp = Math.min(unit.hp, UNIT_STATS.soldier.hp);
@@ -190,15 +175,13 @@ function promoteSurvivors(engine: MatchEngine, villageId: number) {
 
 function settle(engine: MatchEngine) {
   const runtime = runtimeOf(engine);
-  const villageIds = new Set(engine.state.buildings.filter((b) => b.type === 'village').map((b) => b.id));
 
-  for (const [villageId, activeIds] of [...runtime.activeVillages]) {
+  for (const [villageId] of [...runtime.activeVillages]) {
     const village = engine.state.buildings.find((b) => b.id === villageId && b.type === 'village' && b.hp > 0);
     if (!village) {
       promoteSurvivors(engine, villageId);
       runtime.activeVillages.delete(villageId);
       runtime.readyVillages.delete(villageId);
-      runtime.expectedBefore.delete(villageId);
       continue;
     }
 
@@ -220,28 +203,24 @@ function settle(engine: MatchEngine) {
       if (returned > 0) runtime.readyVillages.add(villageId);
       else runtime.readyVillages.delete(villageId);
       runtime.activeVillages.delete(villageId);
-      runtime.expectedBefore.delete(villageId);
     } else {
       runtime.activeVillages.set(villageId, new Set(survivors.map((u) => u.id)));
     }
   }
-
-  for (const id of [...runtime.activeVillages.keys()]) if (!villageIds.has(id)) runtime.activeVillages.delete(id);
 }
 
-function shouldRejectCommand(engine: MatchEngine, side: Side, ids: readonly number[]) {
-  const requested = engine.state.units.filter((u) => ids.includes(u.id) && u.side === side);
-  const regular = requested.filter((u) => u.type !== 'militia');
-  return { requested, regular };
+function filterControllable(engine: MatchEngine, side: Side, ids: readonly number[]) {
+  return engine.state.units.filter((u) => ids.includes(u.id) && u.side === side && u.type !== 'militia');
 }
 
-const proto = MatchEngine.prototype as MatchEngine.prototype & {
+const proto = MatchEngine.prototype as MatchEngine & {
   update: (deltaMs: number) => void;
   command: (side: Side, cmd: Command) => ReturnType<MatchEngine['command']>;
   armyOf: (side: Side) => UnitState[];
+  __militiaPatched?: boolean;
 };
 
-if (!(proto as unknown as { __militiaPatched?: boolean }).__militiaPatched) {
+if (!proto.__militiaPatched) {
   const originalUpdate = proto.update;
   const originalCommand = proto.command;
   const originalArmyOf = proto.armyOf;
@@ -252,7 +231,7 @@ if (!(proto as unknown as { __militiaPatched?: boolean }).__militiaPatched) {
 
   proto.command = function patchedCommand(this: MatchEngine, side: Side, cmd: Command) {
     if (cmd.type === 'move' || cmd.type === 'stop') {
-      const { regular } = shouldRejectCommand(this, side, cmd.unitIds);
+      const regular = filterControllable(this, side, cmd.unitIds);
       if (!regular.length) return { ok: false, error: 'Militia defend their village automatically.' };
       if (regular.length !== cmd.unitIds.length) cmd = { ...cmd, unitIds: regular.map((u) => u.id) };
     }
