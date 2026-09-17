@@ -1,13 +1,13 @@
 import type { BuildingType, Side } from '@arena-kingdom/shared';
 
 /**
- * Battlefield symbols in the style of military situation maps (loosely NATO APP-6): the
+ * Battlefield symbols in the style of military situation maps (loosely NATO APP-6): the frame's
  * shape says what kind of thing it is and the mark inside says its role.
  *
  * - circle: places. Castle = capital star.
  * - tent: settlement / camp glyph. Village = a standalone teepee; Barracks = a field-camp glyph.
  * - triangle: defensive post. Tower = observation post dot.
- * - wooden palisade: obstacle. Fence = a row of pointed timber stakes.
+ * - line with teeth: obstacle. Fence, teeth facing the enemy.
  *
  * Each symbol is drawn at world size; `anchorY` is where the footprint centre sits in the image.
  * Keep the markup ASCII: it is Base64-encoded with `btoa`.
@@ -112,45 +112,20 @@ export function symbolArt(type: SymbolType, side: Side) {
         <circle cx="28" cy="32" r="5" fill="${ink}"/>`
       );
     case 'fence': {
-      // A wooden palisade: staggered pointed logs with timber braces behind them.
-      const stakes = [
-        { x: 1, top: 16, lean: -3, fill: '#8d6f4b' },
-        { x: 7, top: 9, lean: 2, fill: '#a48158' },
-        { x: 13, top: 14, lean: -1.5, fill: '#7d6344' },
-        { x: 19, top: 7, lean: 2.5, fill: '#987851' },
-        { x: 25, top: 13, lean: -2, fill: '#846747' }
-      ];
-      const stakePath = (x: number) => `M${x} 136 L${x + 1.1} 28 L${x + 3.3} 10 L${x + 5.6} 28 L${x + 6.1} 136 Z`;
-      const shadowStakes = stakes.map(({ x, lean }) =>
-        `<path d="${stakePath(x)}" transform="rotate(${lean} ${x + 3.1} 136)"/>`
-      ).join('');
-      const haloStakes = stakes.map(({ x, lean }) =>
-        `<path d="${stakePath(x)}" transform="rotate(${lean} ${x + 3.1} 136)"/>`
-      ).join('');
-      const inkStakes = stakes.map(({ x, lean, fill }) =>
-        `<path d="${stakePath(x)}" transform="rotate(${lean} ${x + 3.1} 136)" fill="${fill}"/>`
-      ).join('');
-
-      return svg(
-        size,
-        `<g fill="none" stroke="${HALO}" stroke-width="8" stroke-linejoin="round" opacity=".96">
-          <path d="M0 48 H34 M0 94 H34"/>
-          ${haloStakes}
-        </g>
-        <g fill="none" stroke="${SHADOW}" stroke-width="5" stroke-linecap="round" opacity=".28" transform="translate(1.5 2.5)">
-          <path d="M0 48 H34 M0 94 H34"/>
-          ${shadowStakes}
-        </g>
-        <g fill="none" stroke="#5e4630" stroke-width="4.8" stroke-linecap="round" opacity=".9">
-          <path d="M0 48 H34 M0 94 H34"/>
-        </g>
-        <g stroke="#4f3928" stroke-width="1.35" stroke-linejoin="round">
-          ${inkStakes}
-        </g>
-        <g fill="none" stroke="${ink}" stroke-width="2.1" stroke-linecap="round" opacity=".9">
-          <path d="M2 101 H32"/>
-        </g>`
-      );
+      // Defensive line symbol: one bold continuous line plus short perpendicular field marks.
+      // It reads as a fortification/front line rather than a literal wooden fence.
+      const lineY = 78;
+      const lineX1 = 5;
+      const lineX2 = 29;
+      const markXs = [8, 14.5, 21, 27];
+      const marks = markXs.map((x) => `M${x} 70 V86`).join('');
+      const shadow = `<path d="M${lineX1} ${lineY} H${lineX2}" stroke="${SHADOW}" stroke-width="6.8" stroke-linecap="round"/>
+        <path d="${marks}" stroke="${SHADOW}" stroke-width="3.2" stroke-linecap="round"/>`;
+      const halo = `<path d="M${lineX1} ${lineY} H${lineX2}" stroke="${HALO}" stroke-width="8.5" stroke-linecap="round"/>
+        <path d="${marks}" stroke="${HALO}" stroke-width="5.5" stroke-linecap="round"/>`;
+      const inkLine = `<path d="M${lineX1} ${lineY} H${lineX2}" stroke="${ink}" stroke-width="5.2" stroke-linecap="round"/>
+        <path d="${marks}" stroke="${ink}" stroke-width="2.1" stroke-linecap="round"/>`;
+      return svg(size, `${shadow}${halo}${inkLine}`);
     }
     case 'troop':
       return svg(
