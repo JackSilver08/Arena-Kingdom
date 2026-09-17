@@ -39,3 +39,6 @@ jobs:
 
       - name: Bundle budget
         run: npm run check:bundle
+
+      - name: Economy balance lab
+        run: npm run simulate:balance -- 1
