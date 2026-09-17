@@ -33,7 +33,7 @@ function center(points: Vec2[]) {
 }
 
 export class FrontlineOverlay {
-  private readonly field: InfluenceField;
+  private field: InfluenceField;
   private readonly influence: Phaser.GameObjects.Graphics;
   private readonly frontline: Phaser.GameObjects.Graphics;
   private readonly commandArrows: CommandArrowOverlay;
@@ -65,6 +65,21 @@ export class FrontlineOverlay {
     }
 
     const start = performance.now();
+
+    // A zero-delta update is reserved for Battle Recap seeks. Rebuild the
+    // presentation-only field from the recorded frame so scrubbing never
+    // inherits the final live influence state.
+    if (deltaMs === 0) {
+      this.field = createInfluenceField(GRID_SAMPLE);
+      updateInfluence(this.field, view, 333);
+      this.field.current.set(this.field.target);
+      this.field.previous.set(this.field.target);
+      this.contours = influenceContours(this.field);
+      this.drawInfluenceCells();
+      this.drawFrontLines(true);
+      return;
+    }
+
     const changed = updateInfluence(this.field, view, deltaMs);
     if (changed) {
       this.contours = influenceContours(this.field);
