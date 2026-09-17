@@ -144,10 +144,7 @@ export class CommandArrowOverlay {
     const view = this.controller.view;
     if (!view) return;
     const end = this.worldPoint(pointer);
-    const ids =
-      down.button === 0
-        ? fractionIds(view, this.controller)
-        : [...this.controller.selection];
+    const ids = down.button === 0 ? fractionIds(view, this.controller) : [...this.controller.selection];
     const from = centroid(view, ids);
     if (!from || Math.hypot(end.x - from.x, end.y - from.y) < MIN_LENGTH) return;
 
@@ -180,7 +177,10 @@ export class CommandArrowOverlay {
     const team = teamColor(arrow.side);
     const points: Phaser.Math.Vector2[] = [];
     const segments = 22;
-    for (let i = 0; i <= segments; i++) points.push(new Phaser.Math.Vector2(...Object.values(bezier(arrow.from, arrow.control, arrow.to, i / segments)) as [number, number]));
+    for (let i = 0; i <= segments; i++) {
+      const point = bezier(arrow.from, arrow.control, arrow.to, i / segments);
+      points.push(new Phaser.Math.Vector2(point.x, point.y));
+    }
 
     g.lineStyle(10, PAPER, 0.68 * fade);
     g.strokePoints(points, false);
