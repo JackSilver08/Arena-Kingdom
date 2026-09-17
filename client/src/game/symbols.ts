@@ -5,7 +5,7 @@ import type { BuildingType, Side } from '@arena-kingdom/shared';
  * shape says what kind of thing it is and the mark inside says its role.
  *
  * - circle: places. Castle = capital star, village = a compact settlement cluster.
- * - rectangle: military units. Troop = infantry cross, barracks = infantry cross on an installation.
+ * - tent: military camp. Barracks = a compact field-tent glyph.
  * - triangle: defensive post. Tower = observation post dot.
  * - line with teeth: obstacle. Fence, teeth facing the enemy.
  *
@@ -90,9 +90,15 @@ export function symbolArt(type: SymbolType, side: Side) {
     case 'barracks':
       return svg(
         size,
-        `${frame('<rect x="5" y="12" width="58" height="38"/>', side, 2.8)}
-        <path d="${cross(5, 12, 58, 38)}" stroke="${ink}" stroke-width="2.6"/>
-        <rect x="23" y="4.5" width="22" height="7.5" fill="${ink}"/>`
+        `${frame('<path d="M7 47 L23 15 L34 7 L45 15 L61 47 Z"/>', side, 2.8)}
+        <g fill="none" stroke="${ink}" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 15 Q34 21 45 15" stroke-width="1.7" opacity=".82"/>
+          <path d="M34 8 V45" stroke-width="1.7"/>
+          <path d="M27 47 L34 29 L41 47" stroke-width="2.2"/>
+          <path d="M8 47 Q34 50 60 47" stroke-width="2"/>
+        </g>
+        <path d="M34 8 V3.5" stroke="${ink}" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M34 3.5 H45 L41.5 7 L45 10 H34 Z" fill="${ink}"/>`
       );
     case 'tower':
       return svg(
