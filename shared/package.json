@@ -15,7 +15,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
     "test": "tsx --test test/*.test.ts",
-    "simulate": "tsx scripts/simulate.ts"
+    "simulate": "tsx scripts/simulate.ts",
+    "simulate:balance": "tsx scripts/balance.ts"
   },
   "devDependencies": {
     "tsx": "^4.20.3",
