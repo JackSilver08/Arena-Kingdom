@@ -3,7 +3,12 @@ import { GAME_RULES, type BuildingType, type Side, type UnitType } from '@arena-
 import { svgDataUrl } from './art';
 import { arenaMapArtV2, type MapViewSize } from './mapArt';
 import { SYMBOL_SIZE, symbolArt, type SymbolSize } from './symbols';
-import type { MapStyle } from './displaySettings';
+import {
+  DISPLAY_SETTINGS_EVENT,
+  loadDisplaySettings,
+  type DisplaySettings,
+  type MapStyle
+} from './displaySettings';
 
 /**
  * Rendering-only depth bands. Game rules use world coordinates only; they
@@ -55,15 +60,23 @@ const mapTextureKey = (view: MapViewSize, style: MapStyle) => `${MAP_TEXTURE}-${
 
 export class BattleVisualRenderer {
   private terrain: Phaser.GameObjects.Image | null = null;
-  private mapStyle: MapStyle = 'documentary';
+  private mapStyle: MapStyle;
+  private readonly onDisplaySettings = (event: Event) => {
+    const settings = (event as CustomEvent<DisplaySettings>).detail;
+    if (settings?.mapStyle) this.setMapStyle(settings.mapStyle);
+  };
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly resolution: number,
     private view: MapViewSize,
-    mapStyle: MapStyle = 'documentary'
+    mapStyle: MapStyle = loadDisplaySettings().mapStyle
   ) {
     this.mapStyle = mapStyle;
+    window.addEventListener(DISPLAY_SETTINGS_EVENT, this.onDisplaySettings);
+    this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener(DISPLAY_SETTINGS_EVENT, this.onDisplaySettings);
+    });
   }
 
   private load(key: string, markup: string, width: number, height: number) {
