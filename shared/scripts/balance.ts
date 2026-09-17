@@ -1,0 +1,299 @@
+/**
+ * Scripted strategy lab for the kingdom economy pass.
+ * Usage: npm run simulate:balance -- [repeats]
+ *
+ * Each pair is run in both colours so map-side bias is visible in the output.
+ * The lab reports factual simulation metrics only. It does not change game rules.
+ */
+import {
+  BUILDING_STATS,
+  GAME_RULES,
+  MatchEngine,
+  armySupplyCapacity,
+  armyUpkeep,
+  canPlaceBuilding,
+  forwardDir,
+  type BuildableType,
+  type FormationType,
+  type Side,
+} from '../src/index.js';
+import { BotController } from '../src/index.js';
+
+const STRATEGIES = ['rush', 'economy', 'defensive', 'balanced'] as const;
+type Strategy = (typeof STRATEGIES)[number];
+
+interface StrategyProfile {
+  name: Strategy;
+  attackAtMs: number;
+  attackArmy: number;
+  formation: FormationType;
+  targets: Partial<Record<BuildableType, number>>;
+  buildOrder: BuildableType[];
+  reserveGold: number;
+}
+
+const PROFILES: Record<Strategy, StrategyProfile> = {
+  rush: {
+    name: 'rush',
+    attackAtMs: 45_000,
+    attackArmy: 12,
+    formation: 'wedge',
+    targets: { barracks: 2, village: 1 },
+    buildOrder: ['barracks', 'village'],
+    reserveGold: 0,
+  },
+  economy: {
+    name: 'economy',
+    attackAtMs: 120_000,
+    attackArmy: 12,
+    formation: 'line',
+    targets: { village: 6, barracks: 2, tower: 1 },
+    buildOrder: ['village', 'barracks', 'tower'],
+    reserveGold: 75,
+  },
+  defensive: {
+    name: 'defensive',
+    attackAtMs: 140_000,
+    attackArmy: 12,
+    formation: 'square',
+    targets: { village: 4, barracks: 1, tower: 2, fence: 4 },
+    buildOrder: ['village', 'tower', 'fence', 'barracks'],
+    reserveGold: 60,
+  },
+  balanced: {
+    name: 'balanced',
+    attackAtMs: 95_000,
+    attackArmy: 10,
+    formation: 'line',
+    targets: { village: 5, barracks: 2, tower: 1, fence: 2 },
+    buildOrder: ['village', 'barracks', 'village', 'tower', 'fence'],
+    reserveGold: 40,
+  },
+};
+
+interface MatchMetrics {
+  strategy: Strategy;
+  side: Side;
+  result: Side | 'draw';
+  reason: string;
+  timeMs: number;
+  peakArmy: number;
+  peakSupply: number;
+  peakUpkeep: number;
+  finalGold: number;
+  villages: number;
+  barracks: number;
+  towers: number;
+  fences: number;
+  firstAttackMs: number | null;
+  firstOverSupplyMs: number | null;
+}
+
+function placeBuilding(engine: MatchEngine, side: Side, type: BuildableType): boolean {
+  const castle = engine.castleOf(side);
+  if (!castle) return false;
+  const dir = forwardDir(side);
+  const stats = BUILDING_STATS[type];
+  const bounds = engine.buildingsOf(side).length
+    ? {
+        minX: GAME_RULES.map[side === 'blue' ? 'blueLand' : 'redLand'].minX,
+        maxX: GAME_RULES.map[side === 'blue' ? 'blueLand' : 'redLand'].maxX,
+        minY: GAME_RULES.map[side === 'blue' ? 'blueLand' : 'redLand'].minY,
+        maxY: GAME_RULES.map[side === 'blue' ? 'blueLand' : 'redLand'].maxY,
+      }
+    : GAME_RULES.map[side === 'blue' ? 'blueLand' : 'redLand'];
+
+  const candidates: { x: number; y: number }[] = [];
+  const ys = [-360, -240, -120, 0, 120, 240, 360];
+  const xs = [70, 130, 190, 250, 310, 370];
+  for (const distance of xs) {
+    for (const y of ys) {
+      candidates.push({ x: castle.x + dir * distance, y: castle.y + y });
+    }
+  }
+  if (type === 'tower' || type === 'fence') {
+    const frontX = dir > 0 ? bounds.maxX - stats.halfWidth - 12 : bounds.minX + stats.halfWidth + 12;
+    for (const y of ys) candidates.unshift({ x: frontX, y: castle.y + y });
+  }
+
+  for (const candidate of candidates) {
+    if (!canPlaceBuilding(engine.state.buildings, side, type, candidate.x, candidate.y).ok) continue;
+    if (engine.command(side, { type: 'build', building: type, x: candidate.x, y: candidate.y }).ok) return true;
+  }
+  return false;
+}
+
+class StrategyController {
+  private elapsedMs = 0;
+  private attackTimer = 0;
+  private firstAttackMs: number | null = null;
+  private firstOverSupplyMs: number | null = null;
+  private lastBuildAt = -Infinity;
+  private buildStep = 0;
+
+  constructor(readonly side: Side, readonly profile: StrategyProfile) {}
+
+  update(engine: MatchEngine, deltaMs: number) {
+    if (engine.ended) return;
+    this.elapsedMs += deltaMs;
+    this.attackTimer -= deltaMs;
+
+    if (this.elapsedMs - this.lastBuildAt >= 1000) {
+      this.lastBuildAt = this.elapsedMs;
+      this.buildNext(engine);
+    }
+
+    const army = engine.armyOf(this.side).length;
+    const supply = armySupplyCapacity(engine.buildingsOf(this.side));
+    if (army > supply && this.firstOverSupplyMs === null) this.firstOverSupplyMs = this.elapsedMs;
+
+    const reserve = this.nextProjectCost(engine) > 0 ? Math.max(this.profile.reserveGold, this.nextProjectCost(engine)) : this.profile.reserveGold;
+    if (engine.state.players[this.side].gold >= 20 + reserve) {
+      for (const barracks of engine.buildingsOf(this.side, 'barracks')) {
+        if (barracks.queue >= 2) continue;
+        if (engine.armyOf(this.side).length + barracks.queue >= GAME_RULES.limits.maxUnitsPerSide) break;
+        const result = engine.command(this.side, { type: 'train', barracksId: barracks.id, count: 1 });
+        if (!result.ok) break;
+      }
+    }
+
+    if (this.elapsedMs >= this.profile.attackAtMs && army >= this.profile.attackArmy && this.attackTimer <= 0) {
+      const target = this.attackTarget(engine);
+      if (target) {
+        const ids = engine.armyOf(this.side).map((u) => u.id);
+        const result = engine.command(this.side, {
+          type: 'move',
+          unitIds: ids,
+          x: target.x,
+          y: target.y,
+          attack: true,
+          targetId: target.id,
+          formation: this.profile.formation,
+        });
+        if (result.ok && this.firstAttackMs === null) this.firstAttackMs = this.elapsedMs;
+        this.attackTimer = 15_000;
+      }
+    }
+  }
+
+  get metrics() {
+    return { firstAttackMs: this.firstAttackMs, firstOverSupplyMs: this.firstOverSupplyMs };
+  }
+
+  private nextProjectCost(engine: MatchEngine) {
+    const order = this.profile.buildOrder;
+    for (let guard = 0; guard < order.length + 2; guard++) {
+      const type = order[this.buildStep % order.length];
+      const built = engine.buildingsOf(this.side, type).length;
+      const target = this.profile.targets[type] ?? 0;
+      if (built < target) return BUILDING_STATS[type].cost;
+      this.buildStep += 1;
+      if (this.buildStep >= order.length) return 0;
+    }
+    return 0;
+  }
+
+  private buildNext(engine: MatchEngine) {
+    if (this.profile.name === 'rush' && this.elapsedMs < 18_000) return;
+    const cost = this.nextProjectCost(engine);
+    if (!cost || engine.state.players[this.side].gold < cost) return;
+    const type = this.profile.buildOrder[(this.buildStep + 1) % this.profile.buildOrder.length] ?? 'village';
+    if (type === 'village' && engine.buildingsOf(this.side, 'village').length >= (this.profile.targets.village ?? 0)) {
+      this.buildStep += 1;
+      return;
+    }
+    if (type !== 'village' && engine.buildingsOf(this.side, type).length >= (this.profile.targets[type] ?? 0)) {
+      this.buildStep += 1;
+      return;
+    }
+    if (placeBuilding(engine, this.side, type)) this.buildStep += 1;
+  }
+
+  private attackTarget(engine: MatchEngine) {
+    const enemy = this.side === 'blue' ? 'red' : 'blue';
+    const dir = forwardDir(this.side);
+    const candidates = engine
+      .buildingsOf(enemy)
+      .filter((b) => b.type !== 'fence')
+      .sort((a, b) => Math.abs(a.x - (dir > 0 ? 960 : 960)) - Math.abs(b.x - (dir > 0 ? 960 : 960)));
+    const pick = candidates.find((b) => b.type === 'tower' || b.type === 'barracks') ?? engine.castleOf(enemy) ?? candidates[0];
+    return pick ?? null;
+  }
+}
+
+function runMatch(a: Strategy, b: Strategy, repeats: number): MatchMetrics[] {
+  const metrics: MatchMetrics[] = [];
+  for (let i = 0; i < repeats; i++) {
+    const strategySide: Side = i % 2 === 0 ? 'blue' : 'red';
+    const opponentSide: Side = strategySide === 'blue' ? 'red' : 'blue';
+    const strategy = new StrategyController(strategySide, PROFILES[a]);
+    const opponent = new StrategyController(opponentSide, PROFILES[b]);
+    const engine = new MatchEngine();
+    let peakArmy = 0;
+    let peakSupply = 0;
+    let peakUpkeep = 0;
+
+    while (!engine.ended) {
+      strategy.update(engine, GAME_RULES.tickMs);
+      opponent.update(engine, GAME_RULES.tickMs);
+      engine.update(GAME_RULES.tickMs);
+      const army = engine.armyOf(strategySide).length;
+      const supply = armySupplyCapacity(engine.buildingsOf(strategySide));
+      peakArmy = Math.max(peakArmy, army);
+      peakSupply = Math.max(peakSupply, supply);
+      peakUpkeep = Math.max(peakUpkeep, armyUpkeep(army, supply));
+      if (!Number.isFinite(engine.state.players[strategySide].gold) || engine.state.players[strategySide].gold < 0) {
+        throw new Error(`Economy invariant failed in ${a} vs ${b}`);
+      }
+    }
+
+    const result = engine.state.result!;
+    const buildings = engine.buildingsOf(strategySide);
+    metrics.push({
+      strategy: a,
+      side: strategySide,
+      result: result.winner ?? 'draw',
+      reason: result.reason,
+      timeMs: result.timeMs,
+      peakArmy,
+      peakSupply,
+      peakUpkeep,
+      finalGold: engine.state.players[strategySide].gold,
+      villages: buildings.filter((x) => x.type === 'village').length,
+      barracks: buildings.filter((x) => x.type === 'barracks').length,
+      towers: buildings.filter((x) => x.type === 'tower').length,
+      fences: buildings.filter((x) => x.type === 'fence').length,
+      firstAttackMs: strategy.metrics.firstAttackMs,
+      firstOverSupplyMs: strategy.metrics.firstOverSupplyMs,
+    });
+  }
+  return metrics;
+}
+
+const requested = Number(process.argv[2] ?? '4');
+const repeats = Number.isFinite(requested) && requested > 0 ? Math.min(20, Math.floor(requested)) : 4;
+const pairs: [Strategy, Strategy][] = [];
+for (let i = 0; i < STRATEGIES.length; i++) {
+  for (let j = i + 1; j < STRATEGIES.length; j++) pairs.push([STRATEGIES[i], STRATEGIES[j]]);
+}
+
+const started = Date.now();
+for (const [a, b] of pairs) {
+  const rows = runMatch(a, b, repeats);
+  const wins = rows.filter((row) => row.result === row.side).length;
+  const draws = rows.filter((row) => row.result === 'draw').length;
+  const avg = (selector: (row: MatchMetrics) => number) => rows.reduce((sum, row) => sum + selector(row), 0) / rows.length;
+  const firstAttack = rows.filter((row) => row.firstAttackMs !== null);
+  const overSupply = rows.filter((row) => row.firstOverSupplyMs !== null);
+  console.log(
+    `${a} vs ${b}: strategy=${wins}/${rows.length} wins, draws=${draws}, ` +
+      `avg=${(avg((row) => row.timeMs) / 60000).toFixed(2)}m, ` +
+      `peakArmy=${avg((row) => row.peakArmy).toFixed(1)}, peakSupply=${avg((row) => row.peakSupply).toFixed(1)}, ` +
+      `peakUpkeep=${avg((row) => row.peakUpkeep).toFixed(1)}, finalGold=${avg((row) => row.finalGold).toFixed(1)}, ` +
+      `villages=${avg((row) => row.villages).toFixed(1)}, ` +
+      `firstAttack=${firstAttack.length ? (avg((row) => row.firstAttackMs ?? 0) / 1000).toFixed(0) + 's' : 'n/a'}, ` +
+      `overSupply=${overSupply.length ? (avg((row) => row.firstOverSupplyMs ?? 0) / 1000).toFixed(0) + 's' : 'n/a'}`
+  );
+}
+
+console.log(`Balance lab finished in ${((Date.now() - started) / 1000).toFixed(1)}s with ${pairs.length * repeats} scripted matches.`);
