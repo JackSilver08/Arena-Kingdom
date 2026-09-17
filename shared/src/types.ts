@@ -86,9 +86,6 @@ export function emptyStats(): PlayerStats {
     kills: 0,
     buildingsBuilt: 0,
     buildingsLost: 0,
-    kills: 0,
-    buildingsBuilt: 0,
-    buildingsLost: 0,
     buildingsDestroyed: 0,
     damageDealt: 0,
     peakArmy: 0
