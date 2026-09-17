@@ -4,7 +4,7 @@ import type { BuildingType, Side } from '@arena-kingdom/shared';
  * Battlefield symbols in the style of military situation maps (loosely NATO APP-6): the frame's
  * shape says what kind of thing it is and the mark inside says its role.
  *
- * - circle: places. Castle = capital star, village = gold.
+ * - circle: places. Castle = capital star, village = a compact settlement cluster.
  * - rectangle: military units. Troop = infantry cross, barracks = infantry cross on an installation.
  * - triangle: defensive post. Tower = observation post dot.
  * - line with teeth: obstacle. Fence, teeth facing the enemy.
@@ -79,7 +79,13 @@ export function symbolArt(type: SymbolType, side: Side) {
       return svg(
         size,
         `${frame('<circle cx="27" cy="27" r="22"/>', side, 2.6)}
-        <text x="27" y="36.5" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-weight="bold" font-size="27" fill="${ink}">$</text>`
+        <g fill="none" stroke="${ink}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 34 L17.5 26 L25 34"/>
+          <path d="M29 32 L37 23.5 L45 32"/>
+          <path d="M14.5 38 L27 25 L39.5 38"/>
+          <path d="M14.5 38 H22.5 M31.5 38 H39.5"/>
+          <path d="M12 40.5 H42"/>
+        </g>`
       );
     case 'barracks':
       return svg(
