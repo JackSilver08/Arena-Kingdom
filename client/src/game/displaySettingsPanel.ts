@@ -115,7 +115,7 @@ export class DisplaySettingsPanel {
 
     const mapRow = document.createElement('label');
     mapRow.className = 'display-setting-row';
-    mapRow.innerHTML = '<span><b>Map style</b><small>Used by the battlefield renderer</small></span>';
+    mapRow.innerHTML = '<span><b>Map style</b><small>Switches the battlefield plate immediately</small></span>';
     const select = document.createElement('select');
     select.dataset.setting = 'mapStyle';
     select.innerHTML = '<option value="documentary">Documentary</option><option value="vintage">Vintage</option>';
@@ -130,7 +130,7 @@ export class DisplaySettingsPanel {
 
     const note = document.createElement('p');
     note.className = 'display-settings-note';
-    note.textContent = 'Settings are saved on this device. Map style will be applied by the map renderer in the next visual phase.';
+    note.textContent = 'Settings are saved on this device. Map style changes only presentation; game state and pathfinding stay untouched.';
 
     this.panel.append(heading, mapRow, overlays, formations, motion, note);
     this.syncControls();
