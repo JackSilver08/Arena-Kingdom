@@ -20,9 +20,10 @@ test('all supported formations produce one offset per troop and stay centred', (
   }
 });
 
-test('line is wider than it is deep and column is deep rather than wide', () => {
-  const line = formationOffsets(8, 'line');
-  const column = formationOffsets(8, 'column');
+test('line is wider than it is deep and column is deep when facing north', () => {
+  const facingNorth = Math.PI / 2;
+  const line = formationOffsets(8, 'line', undefined, facingNorth);
+  const column = formationOffsets(8, 'column', undefined, facingNorth);
   const span = (points: { x: number; y: number }[]) => ({
     x: Math.max(...points.map((p) => p.x)) - Math.min(...points.map((p) => p.x)),
     y: Math.max(...points.map((p) => p.y)) - Math.min(...points.map((p) => p.y))
@@ -34,12 +35,12 @@ test('line is wider than it is deep and column is deep rather than wide', () => 
 });
 
 test('wedge exposes a forward point and square forms a compact grid', () => {
-  const wedge = formationOffsets(7, 'wedge');
-  assert.ok(wedge.some((p) => p.x > 0 && p.y > 0));
-  assert.ok(wedge.some((p) => p.x < 0 && p.y > 0));
-  assert.ok(wedge.some((p) => Math.abs(p.x) < 0.01 && p.y < 0));
+  const wedge = formationOffsets(7, 'wedge', undefined, Math.PI / 2);
+  assert.ok(wedge.some((p) => Math.abs(p.x) < 0.01 && p.y > 0), 'wedge should have a forward point');
+  assert.ok(wedge.some((p) => p.x > 0 && p.y < 0), 'wedge should spread to the rear-right');
+  assert.ok(wedge.some((p) => p.x < 0 && p.y < 0), 'wedge should spread to the rear-left');
 
-  const square = formationOffsets(9, 'square');
+  const square = formationOffsets(9, 'square', undefined, Math.PI / 2);
   const xs = new Set(square.map((p) => p.x));
   const ys = new Set(square.map((p) => p.y));
   assert.equal(xs.size, 3);
