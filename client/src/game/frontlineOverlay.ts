@@ -11,6 +11,8 @@ import {
 } from '@arena-kingdom/shared';
 import { COLORS } from './symbols';
 import { BATTLE_DEPTH } from './visuals';
+import { CommandArrowOverlay } from './commandArrows';
+import type { GameController } from './GameController';
 
 const PAPER = 0xf3e8c8;
 const GRID_SAMPLE = 40;
@@ -34,20 +36,28 @@ export class FrontlineOverlay {
   private readonly field: InfluenceField;
   private readonly influence: Phaser.GameObjects.Graphics;
   private readonly frontline: Phaser.GameObjects.Graphics;
+  private readonly commandArrows: CommandArrowOverlay;
   private contours: InfluenceContours = { frontLines: [], polygons: [] };
   private perfTotal = 0;
   private perfSamples = 0;
   private perfElapsed = 0;
   private enabled = true;
 
-  constructor(private readonly scene: Phaser.Scene) {
+  constructor(private readonly scene: Phaser.Scene, controller?: GameController) {
     this.field = createInfluenceField(GRID_SAMPLE);
     this.influence = scene.add.graphics().setDepth(BATTLE_DEPTH.influence);
     this.frontline = scene.add.graphics().setDepth(BATTLE_DEPTH.frontline);
+
+    // BattleScene constructs FrontlineOverlay after its controller is available.
+    // Keep the optional argument for safe reuse in future documentary-only scenes.
+    const activeController = controller ?? (scene as unknown as { controller?: GameController }).controller;
+    if (!activeController) throw new Error('FrontlineOverlay requires a GameController.');
+    this.commandArrows = new CommandArrowOverlay(scene, activeController);
   }
 
   update(view: MatchView, deltaMs: number, enabled: boolean, reducedMotion: boolean) {
     this.enabled = enabled;
+    this.commandArrows.update(enabled, reducedMotion);
     if (!enabled) {
       this.influence.clear();
       this.frontline.clear();
@@ -80,6 +90,7 @@ export class FrontlineOverlay {
   destroy() {
     this.influence.destroy();
     this.frontline.destroy();
+    this.commandArrows.destroy();
   }
 
   private drawInfluenceCells() {
