@@ -29,7 +29,8 @@ const checks = [
   ['40px influence grid', 'INFLUENCE_CELL_SIZE = 40', 'shared/src/influence.ts'],
   ['balance simulation command', 'simulate:balance', 'package.json'],
   ['balance lab workflow', 'npm run simulate:balance -- 4', '.github/workflows/qa.yml'],
-  ['documented QA workflow', 'npm run check:bundle', '.github/workflows/qa.yml']
+  ['documented QA workflow', 'npm run check:bundle', '.github/workflows/qa.yml'],
+  ['phase 6 tightened supply model', 'supply:{castle:6,barracks:3,village:1,tower:2,upkeepPerUnit:1}', 'shared/src/rules.ts']
 ];
 
 const failures = [];
