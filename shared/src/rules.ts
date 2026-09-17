@@ -58,8 +58,8 @@ export const GAME_RULES={
     triggerRange:150,
     /** Once deployed, militia continue responding until the threat leaves this larger bubble. */
     leashRange:205,
-    /** Regular soldiers within the village bubble are its local response force. */
-    localDefenderRange:205,
+    /** Regular soldiers inside this bubble are the village's local response force. */
+    localDefenderRange:150,
     /** Militia deploy when local regular defenders are fewer than the nearby attackers. */
     localDefenderRatio:1,
     /** Collision keeps units outside the Village footprint, so this is the practical return point. */
