@@ -91,6 +91,12 @@ function deploy(engine: MatchEngine, villageId: number) {
   const firstThreat = threats[0];
   if (!firstThreat) return;
 
+  const localDefenders = engine.armyOf(village.side).filter(
+    (u) => distanceToVillage(village.x, village.y, u.x, u.y) <= GAME_RULES.militia.localDefenderRange
+  ).length;
+  const requiredDefenders = Math.ceil(threats.length * GAME_RULES.militia.localDefenderRatio);
+  if (localDefenders >= requiredDefenders) return;
+
   const angle = Math.atan2(firstThreat.y - village.y, firstThreat.x - village.x);
   const spawnRadius = GAME_RULES.militia.spawnDistance;
   const positions = [-0.72, 0, 0.72].map((offset) => {
