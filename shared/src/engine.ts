@@ -1,5 +1,6 @@
 import { clampToIsland } from './island.js';
 import { NavGrid } from './navigation.js';
+import { FORMATION_STATS, FORMATION_TYPES, formationOffsets } from './formations.js';
 import {
   BUILDING_STATS,
   GAME_RULES,
@@ -25,6 +26,7 @@ import {
   type Command,
   type CommandResult,
   type EndReason,
+  type FormationType,
   type GameEvent,
   type MatchView,
   type PeaceView,
@@ -77,7 +79,6 @@ const MAX_UNIT_IDS_PER_COMMAND = 200;
 const ATTACK_ANIMATION_MS = 350;
 const LEASH_MULTIPLIER = 1.6;
 const ARRIVE_DISTANCE = 5;
-const FORMATION_SPACING = 24;
 const PATHS_PER_TICK = 24;
 const PATH_REFRESH_MS = 2000;
 const BLOCKED_RETRY_MS = 1500;
@@ -98,6 +99,7 @@ export function parseCommand(input: unknown): Command | null {
   const ids = (v: unknown) =>
     Array.isArray(v) && v.length <= MAX_UNIT_IDS_PER_COMMAND && v.every((id) => Number.isInteger(id));
   const optionalId = (v: unknown) => v === undefined || Number.isInteger(v);
+  const optionalFormation = (v: unknown) => v === undefined || FORMATION_TYPES.includes(v as FormationType);
   switch (c.type) {
     case 'build':
       return BUILDABLE_TYPES.includes(c.building as BuildableType) && num(c.x) && num(c.y)
@@ -107,19 +109,27 @@ export function parseCommand(input: unknown): Command | null {
       if (!optionalId(c.barracksId) || !optionalId(c.count)) return null;
       return { type: 'train', barracksId: c.barracksId as number | undefined, count: c.count as number | undefined };
     case 'move':
-      return ids(c.unitIds) && num(c.x) && num(c.y) && optionalId(c.targetId)
+      return ids(c.unitIds) && num(c.x) && num(c.y) && optionalId(c.targetId) && optionalFormation(c.formation)
         ? {
             type: 'move',
             unitIds: c.unitIds as number[],
             x: c.x as number,
             y: c.y as number,
             attack: c.attack !== false,
-            targetId: c.targetId as number | undefined
+            targetId: c.targetId as number | undefined,
+            formation: c.formation as FormationType | undefined
           }
         : null;
     case 'army':
-      return ARMY_FRACTIONS.includes(c.fraction as ArmyFraction) && num(c.x) && num(c.y) && optionalId(c.targetId)
-        ? { type: 'army', fraction: c.fraction as ArmyFraction, x: c.x as number, y: c.y as number, targetId: c.targetId as number | undefined }
+      return ARMY_FRACTIONS.includes(c.fraction as ArmyFraction) && num(c.x) && num(c.y) && optionalId(c.targetId) && optionalFormation(c.formation)
+        ? {
+            type: 'army',
+            fraction: c.fraction as ArmyFraction,
+            x: c.x as number,
+            y: c.y as number,
+            targetId: c.targetId as number | undefined,
+            formation: c.formation as FormationType | undefined
+          }
         : null;
     case 'stop':
       return ids(c.unitIds) ? { type: 'stop', unitIds: c.unitIds as number[] } : null;
@@ -132,19 +142,6 @@ export function parseCommand(input: unknown): Command | null {
     default:
       return null;
   }
-}
-
-/** Grid offsets centred on (0,0), roughly square. */
-export function formationOffsets(count: number, spacing = FORMATION_SPACING) {
-  const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
-  const rows = Math.ceil(count / cols);
-  const offsets: { x: number; y: number }[] = [];
-  for (let i = 0; i < count; i++) {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    offsets.push({ x: (col - (cols - 1) / 2) * spacing, y: (row - (rows - 1) / 2) * spacing });
-  }
-  return offsets;
 }
 
 export class MatchEngine {
@@ -205,9 +202,9 @@ export class MatchEngine {
       case 'train':
         return this.train(side, cmd.barracksId, cmd.count ?? 1);
       case 'move':
-        return this.moveUnits(side, cmd.unitIds, cmd.x, cmd.y, cmd.attack, cmd.targetId);
+        return this.moveUnits(side, cmd.unitIds, cmd.x, cmd.y, cmd.attack, cmd.targetId, cmd.formation);
       case 'army':
-        return this.commandArmy(side, cmd.fraction, cmd.x, cmd.y, cmd.targetId);
+        return this.commandArmy(side, cmd.fraction, cmd.x, cmd.y, cmd.targetId, cmd.formation);
       case 'stop':
         return this.stopUnits(side, cmd.unitIds);
       case 'proposePeace':
@@ -299,16 +296,32 @@ export class MatchEngine {
     return { ok: true, message: `${queued} troop${queued > 1 ? 's' : ''} queued.` };
   }
 
-  private moveUnits(side: Side, unitIds: number[], x: number, y: number, attack: boolean, targetId?: number): CommandResult {
+  private moveUnits(
+    side: Side,
+    unitIds: number[],
+    x: number,
+    y: number,
+    attack: boolean,
+    targetId?: number,
+    formation?: FormationType
+  ): CommandResult {
     const wanted = new Set(unitIds);
     const units = this.state.units.filter((u) => u.side === side && wanted.has(u.id));
     if (!units.length) return { ok: false, error: 'No troops selected.' };
-    const targeted = this.assignOrders(side, units, x, y, attack, targetId);
+    const selectedFormation = formation ?? 'line';
+    const targeted = this.assignOrders(side, units, x, y, attack, targetId, selectedFormation);
     const verb = targeted ? 'attacking the target' : attack ? 'attacking' : 'moving';
-    return { ok: true, message: `${units.length} troop${units.length > 1 ? 's' : ''} ${verb}.` };
+    return { ok: true, message: `${units.length} troop${units.length > 1 ? 's' : ''} ${verb} in ${FORMATION_STATS[selectedFormation].label} formation.` };
   }
 
-  private commandArmy(side: Side, fraction: ArmyFraction, x: number, y: number, targetId?: number): CommandResult {
+  private commandArmy(
+    side: Side,
+    fraction: ArmyFraction,
+    x: number,
+    y: number,
+    targetId?: number,
+    formation?: FormationType
+  ): CommandResult {
     const army = this.armyOf(side);
     if (!army.length) return { ok: false, error: 'You have no troops.' };
     const amount = Math.max(1, Math.ceil(army.length * fractionOf(fraction)));
@@ -317,8 +330,9 @@ export class MatchEngine {
       .sort((a, b) => a.idle - b.idle || a.d - b.d)
       .slice(0, amount)
       .map((entry) => entry.u);
-    this.assignOrders(side, chosen, x, y, true, targetId);
-    return { ok: true, message: `${chosen.length} troop${chosen.length > 1 ? 's' : ''} received their orders.` };
+    const selectedFormation = formation ?? 'line';
+    this.assignOrders(side, chosen, x, y, true, targetId, selectedFormation);
+    return { ok: true, message: `${chosen.length} troop${chosen.length > 1 ? 's' : ''} received ${FORMATION_STATS[selectedFormation].label} formation orders.` };
   }
 
   private stopUnits(side: Side, unitIds: number[]): CommandResult {
@@ -359,22 +373,37 @@ export class MatchEngine {
   }
 
   /** Returns true when the units were given a specific enemy to attack. */
-  private assignOrders(side: Side, units: UnitState[], rawX: number, rawY: number, attack: boolean, targetId?: number) {
+  private assignOrders(
+    side: Side,
+    units: UnitState[],
+    rawX: number,
+    rawY: number,
+    attack: boolean,
+    targetId: number | undefined,
+    formation: FormationType
+  ) {
+    const selectedFormation = FORMATION_TYPES.includes(formation) ? formation : 'line';
     const target = targetId === undefined ? undefined : this.findEntity(targetId);
     if (target && target.side !== side && target.hp > 0) {
       for (const u of units) {
+        u.formation = selectedFormation;
         u.order = { kind: 'attack', targetId: target.id };
         this.resetNavigation(u);
       }
       return true;
     }
     this.ensureNav();
-    const offsets = formationOffsets(units.length).sort((a, b) => a.y - b.y || a.x - b.x);
+    const center = units.reduce((sum, u) => ({ x: sum.x + u.x / units.length, y: sum.y + u.y / units.length }), { x: 0, y: 0 });
+    const facing = Math.atan2(rawY - center.y, rawX - center.x);
+    const offsets = formationOffsets(units.length, selectedFormation, FORMATION_STATS[selectedFormation].spacing, facing);
+    const sortedOffsets = [...offsets].sort((a, b) => a.y - b.y || a.x - b.x);
     const sorted = [...units].sort((a, b) => a.y - b.y || a.x - b.x);
     const radius = UNIT_STATS.soldier.radius;
     sorted.forEach((u, i) => {
-      const clamped = clampToIsland(rawX + offsets[i].x, rawY + offsets[i].y, radius + 4);
+      const offset = sortedOffsets[i];
+      const clamped = clampToIsland(rawX + offset.x, rawY + offset.y, radius + 4);
       const goal = this.nav.openPoint(side, clamped.x, clamped.y);
+      u.formation = selectedFormation;
       u.order = { kind: 'move', x: goal.x, y: goal.y, attack };
       this.resetNavigation(u);
     });
@@ -512,8 +541,9 @@ export class MatchEngine {
     for (const u of s.units) {
       if (u.hp <= 0) continue;
       const stats = UNIT_STATS[u.type];
+      const formation = FORMATION_STATS[u.formation ?? 'line'];
       u.cooldownMs = Math.max(0, u.cooldownMs - dt);
-      const step = (stats.speed * dt) / 1000;
+      const step = (stats.speed * formation.speedMultiplier * dt) / 1000;
 
       let target: Entity | null = null;
       if (u.order.kind === 'attack') {
@@ -541,7 +571,7 @@ export class MatchEngine {
           if (u.cooldownMs <= 0) {
             u.cooldownMs = stats.attack.cooldownMs;
             u.lastAttackMs = s.timeMs;
-            this.damage(u.side, aim, stats.attack.damage);
+            this.damage(u.side, aim, stats.attack.damage, u.formation ?? 'line');
             this.events.push({ type: 'hit', x: Math.round(aim.x), y: Math.round(aim.y) });
           }
         } else {
@@ -557,7 +587,7 @@ export class MatchEngine {
         if (d <= ARRIVE_DISTANCE) {
           u.order = { kind: 'idle' };
           this.resetNavigation(u);
-        } else if (!this.navigate(u, u.order.x, u.order.y, Math.min(step, d), FORMATION_SPACING)) {
+        } else if (!this.navigate(u, u.order.x, u.order.y, Math.min(step, d), formation.spacing)) {
           if (u.order.attack) this.markBlocked(u, u.order, -1);
           else u.order = { kind: 'idle' };
         }
@@ -770,9 +800,12 @@ export class MatchEngine {
     }
   }
 
-  private damage(attacker: Side, target: Entity, amount: number) {
-    const dealt = Math.min(target.hp, amount);
-    target.hp -= amount;
+  private damage(attacker: Side, target: Entity, amount: number, attackerFormation?: FormationType) {
+    let effective = amount;
+    if (attackerFormation) effective *= FORMATION_STATS[attackerFormation].attackMultiplier;
+    if (!isBuilding(target)) effective *= FORMATION_STATS[target.formation ?? 'line'].defenseMultiplier;
+    const dealt = Math.min(target.hp, effective);
+    target.hp -= effective;
     this.state.players[attacker].stats.damageDealt += dealt;
   }
 
@@ -852,6 +885,7 @@ export class MatchEngine {
       id: this.state.nextId++,
       side,
       type,
+      formation: 'line',
       x,
       y,
       hp,
