@@ -106,7 +106,7 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       attacking: (flags & 4) !== 0,
       type: UNIT_CODES[(flags >> 3) & 0x3] ?? 'soldier',
       rearguard: snap.v !== undefined && snap.v >= 3 ? (flags & 32) !== 0 : undefined,
-      retreating: snap.v !== undefined && snap.v >= 3 ? (flags & 64) !== 0 : undefined
+      retreating: snap.v !== undefined && snap.v >= 3 ? (flags & 64) !== 0 : undefined,
       x: snap.u[i + 2],
       y: snap.u[i + 3],
       hp: snap.u[i + 4],
