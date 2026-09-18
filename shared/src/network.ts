@@ -13,7 +13,7 @@ import {
 
 /** Compact wire format for match state; flat number arrays keep messages small. */
 export interface EncodedSnapshot {
-  /** Wire format version. Omitted on legacy v1 snapshots. */
+  /** Wire format version. Omitted on legacy snapshots. */
   v?: number;
   t: number;
   n: number;
@@ -68,7 +68,7 @@ export function encodeSnapshot(view: MatchView, events: GameEvent[]): EncodedSna
     );
   }
   return {
-    v: 2,
+    v: 3,
     t: round(view.timeMs),
     n: round(view.nextIncomeInMs),
     p,
@@ -104,9 +104,15 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       side: SIDE_CODES[flags & 1],
       moving: (flags & 2) !== 0,
       attacking: (flags & 4) !== 0,
+<<<<<<< HEAD
       type: UNIT_CODES[(flags >> 3) & 3] ?? 'soldier',
       rearguard: (flags & 32) !== 0,
       retreating: (flags & 64) !== 0,
+=======
+      type: UNIT_CODES[(flags >> 3) & 0x3] ?? 'soldier',
+      rearguard: snap.v !== undefined && snap.v >= 3 ? (flags & 32) !== 0 : undefined,
+      retreating: snap.v !== undefined && snap.v >= 3 ? (flags & 64) !== 0 : undefined,
+>>>>>>> e33f3e2632134d362bf7332c4111399b61dedf74
       x: snap.u[i + 2],
       y: snap.u[i + 3],
       hp: snap.u[i + 4],

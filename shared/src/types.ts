@@ -31,6 +31,10 @@ export interface UnitView {
   formation?: FormationType;
   /** Village-owned garrison marker. Present only while this unit is an active militia defender. */
   garrisonVillageId?: number;
+  /** Unit is currently serving as the Fall Back rearguard. */
+  rearguard?: boolean;
+  /** Unit is currently retreating under the temporary speed boost. */
+  retreating?: boolean;
   x: number;
   y: number;
   hp: number;

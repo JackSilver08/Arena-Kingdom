@@ -60,6 +60,14 @@ export interface UnitState extends UnitView {
   /** What the blocker stands in front of: a target id, or -1 for a move destination. */
   blockedFor: number;
   blockedUntil: number;
+  /** Tactical Fall Back assignment. */
+  fallbackRole?: 'retreat' | 'rearguard';
+  /** End of the temporary retreat speed buff. */
+  fallbackUntilMs?: number;
+  /** Shared group marker used by rolling retreat. */
+  fallbackGroupId?: number;
+  /** Defensive destination selected for this fall back group. */
+  fallbackGoal?: Vec2;
 }
 
 export interface BuildingState extends BuildingView {
@@ -78,6 +86,7 @@ export interface MatchState extends MatchView {
 type Entity = UnitState | BuildingState;
 
 const MAX_UNIT_IDS_PER_COMMAND = 200;
+let nextFallbackGroupId = 1;
 const ATTACK_ANIMATION_MS = 350;
 const LEASH_MULTIPLIER = 1.6;
 const ARRIVE_DISTANCE = 5;
@@ -143,6 +152,10 @@ export function parseCommand(input: unknown): Command | null {
         : null;
     case 'stop':
       return ids(c.unitIds) ? { type: 'stop', unitIds: c.unitIds as number[] } : null;
+    case 'fallback':
+      return c.unitIds === undefined || ids(c.unitIds)
+        ? { type: 'fallback', unitIds: c.unitIds as number[] | undefined }
+        : null;
     case 'proposePeace':
       return { type: 'proposePeace' };
     case 'respondPeace':
@@ -217,6 +230,8 @@ export class MatchEngine {
         return this.commandArmy(side, cmd.fraction, cmd.x, cmd.y, cmd.targetId, cmd.formation);
       case 'stop':
         return this.stopUnits(side, cmd.unitIds);
+      case 'fallback':
+        return this.fallback(side, cmd.unitIds);
       case 'proposePeace':
         return this.proposePeace(side);
       case 'respondPeace':
@@ -355,10 +370,224 @@ export class MatchEngine {
       if (u.side !== side || !wanted.has(u.id)) continue;
       u.order = { kind: 'idle' };
       u.formation = undefined;
+      this.clearFallback(u);
       this.resetNavigation(u);
       stopped += 1;
     }
     return stopped ? { ok: true, message: 'Troops holding position.' } : { ok: false, error: 'No troops selected.' };
+  }
+
+  private fallback(side: Side, unitIds?: number[]): CommandResult {
+    const wanted = unitIds ? new Set(unitIds) : null;
+    const eligible = this.state.units.filter(
+      (u) =>
+        u.side === side &&
+        u.hp > 0 &&
+        u.type !== 'militia' &&
+        u.garrisonVillageId === undefined &&
+        (!wanted || wanted.has(u.id))
+    );
+    if (!eligible.length) return { ok: false, error: 'No regular troops are available to fall back.' };
+
+    const groupId = nextFallbackGroupId++;
+    const center = eligible.reduce(
+      (sum, u) => ({ x: sum.x + u.x / eligible.length, y: sum.y + u.y / eligible.length }),
+      { x: 0, y: 0 }
+    );
+
+    const threats = this.state.units
+      .filter((u) => u.side !== side && u.hp > 0 && u.type !== 'militia')
+      .map((u) => ({ u, d: dist(center.x, center.y, u.x, u.y) }))
+      .filter((entry) => entry.d <= GAME_RULES.fallback.detectionRange)
+      .sort((a, b) => a.d - b.d);
+
+    const nearestThreat = threats[0]?.u ?? null;
+    const safeGoal = this.closestSafePoint(side, center.x, center.y);
+    const rearguardCount =
+      eligible.length >= GAME_RULES.fallback.minimumSplitSize
+        ? Math.max(
+            1,
+            Math.min(
+              Math.ceil(eligible.length * GAME_RULES.fallback.rearguardRatio),
+              Math.floor(eligible.length * 0.35)
+            )
+          )
+        : 0;
+
+    const rearguardPool = eligible.some((u) => u.type !== 'archer')
+      ? eligible.filter((u) => u.type !== 'archer')
+      : eligible;
+    const scored = rearguardPool.map((u) => {
+      const nearestEnemy = this.nearestEnemyOf(u, GAME_RULES.fallback.detectionRange);
+      const d = nearestEnemy ? dist(u.x, u.y, nearestEnemy.x, nearestEnemy.y) : GAME_RULES.fallback.detectionRange;
+      const proximity = Math.max(0.1, 1 / (1 + d / 100));
+      const unitWeight = u.type === 'soldier' ? 1.5 : u.type === 'archer' ? 0.1 : 0.8;
+      return { u, score: (u.hp / Math.max(1, u.maxHp)) * unitWeight * proximity };
+    });
+    scored.sort((a, b) => b.score - a.score);
+
+    const rearguards = new Set(scored.slice(0, Math.min(rearguardCount, scored.length)).map((entry) => entry.u.id));
+    const intercept = nearestThreat
+      ? this.interceptionPoint(nearestThreat, center, safeGoal)
+      : { x: (center.x + safeGoal.x) / 2, y: (center.y + safeGoal.y) / 2 };
+
+    this.ensureNav();
+
+    for (const u of eligible) {
+      u.fallbackGroupId = groupId;
+      u.fallbackGoal = safeGoal;
+      u.fallbackUntilMs = this.state.timeMs + GAME_RULES.fallback.speedBuffMs;
+      u.formation = 'line';
+      u.blockerId = null;
+      u.blockedFor = -1;
+      u.blockedUntil = 0;
+      if (rearguards.has(u.id)) {
+        u.fallbackRole = 'rearguard';
+        u.rearguard = true;
+        u.retreating = false;
+        u.order = { kind: 'move', x: intercept.x, y: intercept.y, attack: true };
+      } else {
+        u.fallbackRole = 'retreat';
+        u.rearguard = false;
+        u.retreating = true;
+        u.order = { kind: 'move', x: safeGoal.x, y: safeGoal.y, attack: false };
+      }
+      this.resetNavigation(u);
+    }
+
+    const retreaters = eligible.length - rearguards.size;
+    return {
+      ok: true,
+      message: 'Tactical Retreat: ' + retreaters + ' troop' + (retreaters === 1 ? '' : 's') + ' falling back, ' + rearguards.size + ' holding the line!'
+    };
+  }
+
+  private nearestEnemyOf(u: UnitState, range: number) {
+    let best: UnitState | null = null;
+    let bestDistance = range;
+    for (const other of this.state.units) {
+      if (other.side === u.side || other.hp <= 0 || other.type === 'militia') continue;
+      const d = dist(u.x, u.y, other.x, other.y);
+      if (d <= bestDistance) {
+        bestDistance = d;
+        best = other;
+      }
+    }
+    return best;
+  }
+
+  private closestSafePoint(side: Side, x: number, y: number): Vec2 {
+    const priorities: { type: BuildingType; weight: number }[] = [
+      { type: 'tower', weight: 4 },
+      { type: 'village', weight: 3 },
+      { type: 'fence', weight: 2 },
+      { type: 'castle', weight: 1 }
+    ];
+
+    for (const priority of priorities) {
+      const candidates = this.state.buildings.filter(
+        (building) => building.side === side && building.hp > 0 && building.type === priority.type
+      );
+      if (!candidates.length) continue;
+
+      let best = candidates[0];
+      let bestDistance = Number.POSITIVE_INFINITY;
+      for (const building of candidates) {
+        const point =
+          building.type === 'fence'
+            ? { x: building.x - forwardDir(side) * (BUILDING_STATS.fence.halfWidth + 36), y: building.y }
+            : { x: building.x - forwardDir(side) * 52, y: building.y };
+        const clamped = clampToIsland(point.x, point.y, UNIT_STATS.soldier.radius + 4);
+        const distance = dist(x, y, clamped.x, clamped.y);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = building;
+        }
+      }
+      const point =
+        best.type === 'fence'
+          ? { x: best.x - forwardDir(side) * (BUILDING_STATS.fence.halfWidth + 36), y: best.y }
+          : { x: best.x - forwardDir(side) * 52, y: best.y };
+      return clampToIsland(point.x, point.y, UNIT_STATS.soldier.radius + 4);
+    }
+
+    return clampToIsland(x - forwardDir(side) * 180, y, UNIT_STATS.soldier.radius + 4);
+  }
+
+  private interceptionPoint(threat: UnitState, center: Vec2, safeGoal: Vec2): Vec2 {
+    const dx = safeGoal.x - threat.x;
+    const dy = safeGoal.y - threat.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const point = {
+      x: threat.x + (dx / length) * 95,
+      y: threat.y + (dy / length) * 95
+    };
+    return clampToIsland(
+      point.x + (center.x - point.x) * 0.08,
+      point.y + (center.y - point.y) * 0.08,
+      UNIT_STATS.soldier.radius + 4
+    );
+  }
+
+  private isFallbackGroupSafe(groupId: number) {
+    const group = this.state.units.filter((u) => u.fallbackGroupId === groupId && u.hp > 0);
+    const retreaters = group.filter((u) => u.fallbackRole === 'retreat');
+    if (!retreaters.length) return true;
+
+    const safeGoal = retreaters.find((u) => u.fallbackGoal)?.fallbackGoal;
+    const allAtBase = Boolean(
+      safeGoal &&
+      retreaters.every((u) => dist(u.x, u.y, safeGoal.x, safeGoal.y) <= 48)
+    );
+
+    const nearestThreatDistance = Math.min(
+      ...retreaters.map((u) => {
+        const enemy = this.nearestEnemyOf(u, GAME_RULES.fallback.safeDistance);
+        return enemy ? dist(u.x, u.y, enemy.x, enemy.y) : GAME_RULES.fallback.safeDistance;
+      })
+    );
+    return allAtBase || nearestThreatDistance >= GAME_RULES.fallback.safeDistance;
+  }
+
+  private updateFallback() {
+    const groups = new Set(
+      this.state.units
+        .filter((u) => u.fallbackRole === 'rearguard' && u.fallbackGroupId !== undefined && u.hp > 0)
+        .map((u) => u.fallbackGroupId as number)
+    );
+
+    for (const groupId of groups) {
+      const rearguards = this.state.units.filter(
+        (u) => u.fallbackGroupId === groupId && u.fallbackRole === 'rearguard' && u.hp > 0
+      );
+      if (!rearguards.length) continue;
+
+      const shouldRoll =
+        this.isFallbackGroupSafe(groupId) ||
+        rearguards.every((u) => u.hp / Math.max(1, u.maxHp) < 0.4);
+      if (!shouldRoll) continue;
+
+      const goal = rearguards.find((u) => u.fallbackGoal)?.fallbackGoal;
+      if (!goal) continue;
+
+      for (const u of rearguards) {
+        u.fallbackRole = 'retreat';
+        u.rearguard = false;
+        u.retreating = true;
+        u.order = { kind: 'move', x: goal.x, y: goal.y, attack: false };
+        u.fallbackUntilMs = this.state.timeMs;
+        this.resetNavigation(u);
+      }
+    }
+  }
+
+  private clearFallback(u: UnitState) {
+    u.fallbackRole = undefined;
+    u.rearguard = undefined;
+    u.retreating = undefined;
+    u.fallbackUntilMs = undefined;
+    u.fallbackGroupId = undefined;
+    u.fallbackGoal = undefined;
   }
 
   private proposePeace(side: Side): CommandResult {
@@ -400,6 +629,7 @@ export class MatchEngine {
     const target = targetId === undefined ? undefined : this.findEntity(targetId);
     if (target && target.side !== side && target.hp > 0) {
       for (const u of units) {
+        this.clearFallback(u);
         u.formation = selectedFormation;
         u.order = { kind: 'attack', targetId: target.id };
         this.resetNavigation(u);
@@ -417,6 +647,7 @@ export class MatchEngine {
       const offset = sortedOffsets[i];
       const clamped = clampToIsland(rawX + offset.x, rawY + offset.y, radius + 4);
       const goal = this.nav.openPoint(side, clamped.x, clamped.y);
+      this.clearFallback(u);
       u.formation = selectedFormation;
       u.order = { kind: 'move', x: goal.x, y: goal.y, attack };
       this.resetNavigation(u);
@@ -558,6 +789,7 @@ export class MatchEngine {
 
   private updateUnits(dt: number) {
     const s = this.state;
+    this.updateFallback();
     for (const u of s.units) {
       u.prevX = u.x;
       u.prevY = u.y;
@@ -568,7 +800,8 @@ export class MatchEngine {
       const stats = UNIT_STATS[u.type];
       const formation = FORMATION_STATS[u.formation ?? 'line'];
       u.cooldownMs = Math.max(0, u.cooldownMs - dt);
-      const step = (stats.speed * formation.speedMultiplier * dt) / 1000;
+      const fallbackSpeed = u.fallbackRole === 'retreat' && (u.fallbackUntilMs ?? 0) > s.timeMs ? GAME_RULES.fallback.speedMultiplier : 1;
+      const step = (stats.speed * formation.speedMultiplier * fallbackSpeed * dt) / 1000;
 
       let target: Entity | null = null;
       if (u.order.kind === 'attack') {
@@ -853,6 +1086,9 @@ export class MatchEngine {
     if (attackerFormation) effective *= FORMATION_STATS[attackerFormation].attackMultiplier;
 
     if (!isBuilding(target)) {
+      if (target.fallbackRole === 'rearguard') {
+        effective *= 1 - GAME_RULES.fallback.rearguardDamageReduction;
+      }
       effective *= FORMATION_STATS[target.formation ?? 'line'].defenseMultiplier;
 
       if (attackerType === 'knight' && this.isKnightCounterFormation(target)) {
@@ -986,7 +1222,13 @@ export class MatchEngine {
       pathAt: 0,
       blockerId: null,
       blockedFor: -1,
-      blockedUntil: 0
+      blockedUntil: 0,
+      fallbackRole: undefined,
+      rearguard: undefined,
+      retreating: undefined,
+      fallbackUntilMs: undefined,
+      fallbackGroupId: undefined,
+      fallbackGoal: undefined
     };
     this.state.units.push(unit);
     return unit;

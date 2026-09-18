@@ -25,7 +25,7 @@ import {
 import { statComparison } from '../components/statComparison';
 import { formatDuration, signed } from '../lib/format';
 import { $, html, setHtml, trusted, type SafeHtml } from '../lib/html';
-import { bannerIcon, buildingArt, castleArt, envelopeIcon, hammerIcon, helmetIcon, houseIcon, moneyBagIcon, troopArt, unitShopArt } from './art';
+import { bannerIcon, buildingArt, castleArt, envelopeIcon, fallbackIcon, hammerIcon, helmetIcon, houseIcon, moneyBagIcon, troopArt, unitShopArt } from './art';
 import { BattleScene } from './BattleScene';
 import { symbolArt } from './symbols';
 import { battleView } from './visuals';
@@ -212,6 +212,14 @@ export class GameController {
     if (!keepBuilding) this.setMode('idle');
   }
 
+  tacticalFallback() {
+    if (!this.canCommand) return;
+    const ids = this.selection.size ? [...this.selection] : undefined;
+    this.session.send({ type: 'fallback', unitIds: ids });
+    this.mode = 'idle';
+    this.refreshHud(true);
+  }
+
   commandArmy(x: number, y: number, targetId?: number) {
     if (!this.canCommand) return;
     this.session.send({ type: 'army', fraction: this.fraction, x, y, targetId, formation: this.formation });
@@ -295,6 +303,9 @@ export class GameController {
         case 'r':
           this.recruit(event.shiftKey ? 5 : 1);
           return true;
+        case 'f':
+          this.tacticalFallback();
+          return true;
         case 'm':
           this.toggleMessenger();
           return true;
@@ -346,6 +357,9 @@ export class GameController {
           break;
         case 'troops':
           this.setMode(this.mode === 'troops' ? 'idle' : 'troops');
+          break;
+        case 'fallback':
+          this.tacticalFallback();
           break;
         case 'recruit':
           this.recruit(1);
@@ -443,8 +457,10 @@ export class GameController {
 
   private onSignal(signal: SessionSignal) {
     if (signal.type === 'notice') {
-      if (signal.ok) this.setHint(signal.text);
-      else this.flash(signal.text, true);
+      if (signal.ok) {
+        if (signal.text.startsWith('Tactical Retreat:')) this.toast(signal.text, 'info');
+        this.setHint(signal.text);
+      } else this.flash(signal.text, true);
     } else if (signal.type === 'end') {
       if (this.endShown) this.renderEnd();
       else if (this.endTimer === null) {
@@ -576,6 +592,9 @@ export class GameController {
           </button>
           <button type="button" class="cmd-btn" data-action="troops" data-cmd="troops" title="Troops (T)">
             <span class="cmd-icon">${trusted(helmetIcon())}</span><span class="yb cmd-key">T</span>
+          </button>
+          <button type="button" class="cmd-btn cmd-btn-fallback" data-action="fallback" data-cmd="fallback" title="Tactical Fall Back (F)">
+            <span class="cmd-icon">${trusted(fallbackIcon(this.mySide))}</span><span class="yb cmd-key">F</span>
           </button>
           <button type="button" class="cmd-btn" data-action="messenger" data-cmd="messenger" title="Messenger (M)">
             <span class="cmd-icon">${trusted(envelopeIcon())}</span><span class="yb cmd-key">M</span>

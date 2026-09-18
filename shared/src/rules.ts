@@ -1,7 +1,7 @@
 import { coastline, isWalkableLand } from './island.js';
 import type { ArmyFraction, BuildableType, BuildingType, Side, UnitType, Vec2 } from './types.js';
 
-export const GAME_VERSION = '0.4.2';
+export const GAME_VERSION = '0.4.3';
 
 type Rect={minX:number;maxX:number;minY:number;maxY:number};
 /** Each kingdom builds on its side of its front line; the strip between them is no man's land. */
@@ -72,11 +72,27 @@ export const GAME_RULES={
   limits:{maxUnitsPerSide:40,maxBuildingsPerSide:30},
   peace:{responseWindowMs:15_000,cooldownMs:30_000},
   fallback:{
+<<<<<<< HEAD
     speedMultiplier:1.2,
     speedBuffMs:4000,
     rearguardDamageReduction:0.35,
     safeDistance:260,
     rearguardRatio:0.3
+=======
+    /** 20% movement boost for the first 4 seconds of a tactical fall back. */
+    speedMultiplier:1.2,
+    speedBuffMs:4_000,
+    /** Rearguard takes 35% less damage while holding the line. */
+    rearguardDamageReduction:0.35,
+    /** Once the chasing enemy is this far away, the rearguard can roll back. */
+    safeDistance:260,
+    /** Tactical scan used to pick the nearest threat for the interception point. */
+    detectionRange:260,
+    /** Rearguard should be roughly 30% of the group, never above 35% when that constraint is possible. */
+    rearguardRatio:0.30,
+    /** Minimum regular troops required before a fall back can split into roles. */
+    minimumSplitSize:2
+>>>>>>> e33f3e2632134d362bf7332c4111399b61dedf74
   }
 } as const;
 

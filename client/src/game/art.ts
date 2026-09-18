@@ -88,6 +88,16 @@ export function unitShopArt(type: ShopUnitType, side: Side) {
   return `<img class="unit-shop-image unit-shop-image-${side}" src="${UNIT_SHOP_ASSETS[type]}" alt="" aria-hidden="true" draggable="false" />`;
 }
 
+export function fallbackIcon(side: Side) {
+  const t = TEAM[side];
+  return svg(
+    '0 0 64 64',
+    `<path d="M32 4 L54 12 V30 C54 44 46 54 32 60 C18 54 10 44 10 30 V12 Z" fill="${t.main}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>
+    <path d="M32 15 V43 M22 29 H42" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+    <path d="M8 33 L17 24 M8 33 L19 36 M56 33 L47 24" fill="none" stroke="${t.dark}" stroke-width="3.2" stroke-linecap="round"/>`
+  );
+}
+
 export function troopArt(side: Side) {
   const t = TEAM[side];
   return svg(
