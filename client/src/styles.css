@@ -3000,7 +3000,7 @@ input:not([type='radio']):focus {
 
 /* --------------------------- compact Troops command deck */
 .hud-popup[data-mode='troops'] {
-  width: min(calc(100vw - var(--s) * 4), calc(var(--s) * 77));
+  width: min(calc(100vw - var(--s) * 4), calc(var(--s) * 65));
   padding: calc(var(--s) * 1.15) calc(var(--s) * 1.35);
 }
 
