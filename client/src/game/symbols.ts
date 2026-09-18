@@ -32,7 +32,7 @@ export const SYMBOL_SIZE: Record<SymbolType, SymbolSize> = {
   troop: { width: 30, height: 24, anchorY: 11 / 24 },
   militia: { width: 22, height: 24, anchorY: 12 / 24 },
   archer: { width: 32, height: 26, anchorY: 13 / 26 },
-  knight: { width: 32, height: 37, anchorY: 30 / 37 }
+  knight: { width: 36, height: 32, anchorY: 16 / 32 }
 };
 
 export const COLORS: Record<Side, { fill: string; ink: string }> = {
