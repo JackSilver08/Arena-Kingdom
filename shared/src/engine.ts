@@ -107,9 +107,17 @@ export function parseCommand(input: unknown): Command | null {
       return BUILDABLE_TYPES.includes(c.building as BuildableType) && num(c.x) && num(c.y)
         ? { type: 'build', building: c.building as BuildableType, x: c.x as number, y: c.y as number }
         : null;
-    case 'train':
+    case 'train': {
       if (!optionalId(c.barracksId) || !optionalId(c.count)) return null;
-      return { type: 'train', barracksId: c.barracksId as number | undefined, count: c.count as number | undefined };
+      const unitType = c.unitType === undefined ? 'soldier' : c.unitType;
+      if (!['soldier', 'archer', 'knight'].includes(unitType as string)) return null;
+      return {
+        type: 'train',
+        barracksId: c.barracksId as number | undefined,
+        count: c.count as number | undefined,
+        unitType: unitType as UnitType
+      };
+    }
     case 'move':
       return ids(c.unitIds) && num(c.x) && num(c.y) && optionalId(c.targetId) && optionalFormation(c.formation)
         ? {
@@ -202,7 +210,7 @@ export class MatchEngine {
       case 'build':
         return this.build(side, cmd.building, cmd.x, cmd.y);
       case 'train':
-        return this.train(side, cmd.barracksId, cmd.count ?? 1);
+        return this.train(side, cmd.barracksId, cmd.count ?? 1, cmd.unitType ?? 'soldier');
       case 'move':
         return this.moveUnits(side, cmd.unitIds, cmd.x, cmd.y, cmd.attack, cmd.targetId, cmd.formation);
       case 'army':
@@ -259,10 +267,11 @@ export class MatchEngine {
     return { ok: true, message: `${stats.label} constructed.` };
   }
 
-  private train(side: Side, barracksId: number | undefined, requested: number): CommandResult {
+  private train(side: Side, barracksId: number | undefined, requested: number, unitType: UnitType): CommandResult {
+    if (!['soldier', 'archer', 'knight'].includes(unitType)) return { ok: false, error: 'That unit cannot be trained here.' };
     const count = Math.min(Math.max(requested, 1), GAME_RULES.economy.maxQueuePerBarracks);
     const player = this.state.players[side];
-    const cost = UNIT_STATS.soldier.cost;
+    const trainStats = UNIT_STATS[unitType];
     const barracks = this.buildingsOf(side, 'barracks');
     if (!barracks.length) return { ok: false, error: 'Build a Barracks first.' };
     let pool = barracks;
@@ -278,24 +287,26 @@ export class MatchEngine {
         error = `Army limit (${GAME_RULES.limits.maxUnitsPerSide}) reached.`;
         break;
       }
-      if (player.gold < cost) {
-        error = `Need ${cost} gold to recruit a troop.`;
+      if (player.gold < trainStats.cost) {
+        error = `Need ${trainStats.cost} gold to recruit a ${trainStats.label}.`;
         break;
       }
       const target = pool
         .filter((b) => b.queue < GAME_RULES.economy.maxQueuePerBarracks)
+        .filter((b) => b.queue === 0 || b.trainType === unitType)
         .sort((a, b) => a.queue - b.queue)[0];
       if (!target) {
-        error = 'Training queue is full.';
+        error = 'All eligible barracks are training a different unit type.';
         break;
       }
       target.queue += 1;
-      player.gold -= cost;
-      player.stats.goldSpent += cost;
+      target.trainType = unitType;
+      player.gold -= trainStats.cost;
+      player.stats.goldSpent += trainStats.cost;
       queued += 1;
     }
     if (!queued) return { ok: false, error };
-    return { ok: true, message: `${queued} troop${queued > 1 ? 's' : ''} queued.` };
+    return { ok: true, message: `${queued} ${trainStats.label.toLowerCase()}${queued > 1 ? 's' : ''} queued.` };
   }
 
   private moveUnits(
@@ -488,24 +499,28 @@ export class MatchEngine {
       const stats = BUILDING_STATS[b.type];
 
       if (b.type === 'barracks') {
+        const trainingType = b.trainType ?? 'soldier';
+        const trainingStats = UNIT_STATS[trainingType];
         if (b.queue > 0 && this.armyOf(b.side).length < GAME_RULES.limits.maxUnitsPerSide) {
           b.trainMs += dt;
-          if (b.trainMs >= soldier.trainMs) {
+          if (b.trainMs >= trainingStats.trainMs) {
             b.trainMs = 0;
             b.queue -= 1;
             const spawn = clampToIsland(
               b.x + (Math.random() - 0.5) * 36,
-              b.y + forwardDir(b.side) * (stats.halfHeight + soldier.radius + 8),
-              soldier.radius
+              b.y + forwardDir(b.side) * (stats.halfHeight + trainingStats.radius + 8),
+              trainingStats.radius
             );
-            this.spawnUnit(b.side, 'soldier', spawn.x, spawn.y);
+            this.spawnUnit(b.side, trainingType, spawn.x, spawn.y);
             s.players[b.side].stats.unitsTrained += 1;
             this.events.push({ type: 'unitTrained', side: b.side, x: spawn.x, y: spawn.y });
+            if (b.queue === 0) b.trainType = null;
           }
         } else if (b.queue === 0) {
           b.trainMs = 0;
+          b.trainType = null;
         }
-        b.trainProgress = b.trainMs / soldier.trainMs;
+        b.trainProgress = b.trainMs / Math.max(1, trainingStats.trainMs);
       }
 
       if (stats.attack) {
@@ -575,12 +590,24 @@ export class MatchEngine {
 
       if (aim) {
         u.targetId = aim.id;
+        const attack = isBuilding(aim) ? stats.buildingAttack ?? stats.attack : stats.attack;
         const reach = this.edgeDistance(u, aim) - stats.radius;
-        if (reach <= stats.attack.range) {
+        if (reach <= attack.range) {
           if (u.cooldownMs <= 0) {
-            u.cooldownMs = stats.attack.cooldownMs;
+            u.cooldownMs = attack.cooldownMs;
             u.lastAttackMs = s.timeMs;
-            this.damage(u.side, aim, stats.attack.damage, u.formation ?? 'line');
+            this.damage(u.side, aim, attack.damage, u.formation ?? 'line');
+            if (u.type === 'archer') {
+              this.events.push({
+                type: 'arrowShot',
+                side: u.side,
+                fromX: Math.round(u.x),
+                fromY: Math.round(u.y - 4),
+                toX: Math.round(aim.x),
+                toY: Math.round(aim.y),
+                targetId: aim.id
+              });
+            }
             this.events.push({ type: 'hit', x: Math.round(aim.x), y: Math.round(aim.y) });
           }
         } else {
@@ -633,7 +660,8 @@ export class MatchEngine {
     if (nearestUnit) return nearestUnit;
 
     let nearestBuilding: BuildingState | null = null;
-    let nearestBuildingGap = aggro;
+    const buildingRange = UNIT_STATS[u.type].buildingAttack?.range ?? aggro;
+    let nearestBuildingGap = buildingRange;
     for (const b of this.state.buildings) {
       if (b.side === u.side || b.hp <= 0 || b.type === 'fence') continue;
       const gap = distanceToBuilding(b, u.x, u.y);
@@ -881,6 +909,7 @@ export class MatchEngine {
       maxHp: hp,
       queue: 0,
       trainProgress: 0,
+      trainType: null,
       cooldownMs: 0,
       trainMs: 0
     };
