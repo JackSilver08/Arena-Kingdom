@@ -89,7 +89,7 @@ export const UNIT_STATS:Record<UnitType,UnitStats>={
   soldier:{label:'Soldier',cost:18,trainMs:2200,hp:100,radius:10,speed:52,aggroRange:120,attack:{damage:12,range:14,cooldownMs:800}},
   militia:{label:'Militia',cost:0,trainMs:0,hp:150,radius:10,speed:52,aggroRange:205,attack:{damage:8,range:14,cooldownMs:800}},
   archer:{label:'Archer',cost:21,trainMs:2600,hp:75,radius:10,speed:45,aggroRange:210,attack:{damage:9,range:190,cooldownMs:1100},buildingAttack:{damage:10,range:125,cooldownMs:1250}},
-  knight:{label:'Knight',cost:24,trainMs:2500,hp:150,radius:11,speed:156,aggroRange:150,attack:{damage:17,range:18,cooldownMs:900}}
+  knight:{label:'Knight',cost:32,trainMs:3200,hp:85,radius:11,speed:150,aggroRange:150,attack:{damage:20,range:18,cooldownMs:1000}}
 };
 
 export interface Placement{side:Side;type:BuildingType;x:number;y:number}
