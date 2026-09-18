@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_RULES, type BuildingType, type Side, type UnitType } from '@arena-kingdom/shared';
 import { svgDataUrl } from './art';
+import { knightIconDataUrl } from './knightIcon';
 import { arenaMapArtV2, type MapViewSize } from './mapArt';
 import { SYMBOL_SIZE, symbolArt, type SymbolSize } from './symbols';
 import {
@@ -84,6 +85,11 @@ export class BattleVisualRenderer {
     this.scene.load.svg(key, svgDataUrl(markup, width * this.resolution, height * this.resolution));
   }
 
+  private loadImageData(key: string, dataUrl: string) {
+    if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
+    this.scene.load.image(key, dataUrl);
+  }
+
   preload() {
     const load = this.load.bind(this);
 
@@ -99,8 +105,8 @@ export class BattleVisualRenderer {
       load(unitTextureKey('militia', side), symbolArt('militia', side), militia.width, militia.height);
       const archer = SYMBOL_SIZE.archer;
       load(unitTextureKey('archer', side), symbolArt('archer', side), archer.width, archer.height);
-      const knight = SYMBOL_SIZE.knight;
-      load(unitTextureKey('knight', side), symbolArt('knight', side), knight.width, knight.height);
+      // Knight uses the exact embedded raster glyph from the supplied reference image.
+      this.loadImageData(unitTextureKey('knight', side), knightIconDataUrl(side));
     }
 
     load(mapTextureKey(this.view, this.mapStyle), arenaMapArtV2(this.view, this.mapStyle), this.view.width, this.view.height);
