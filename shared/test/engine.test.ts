@@ -146,8 +146,8 @@ test('knight damage is reduced by 3% against an active soldier formation', () =>
     FORMATION_STATS.square.attackMultiplier *
     FORMATION_STATS.column.defenseMultiplier *
     0.97;
-  assert.equal(freeDamage, expectedFree);
-  assert.equal(formedDamage, expectedFormed);
+  assert.ok(Math.abs(freeDamage - expectedFree) < 1e-9, 'free-form Knight damage should use the normal formation modifiers');
+  assert.ok(Math.abs(formedDamage - expectedFormed) < 1e-9, 'formed target should take 3% less Knight damage');
   assert.ok(formedDamage < freeDamage, 'formation should reduce Knight damage');
 });
 
@@ -200,7 +200,9 @@ test('fallback gives retreaters 20% speed for the first 4 seconds', () => {
   const y0 = army[0].y;
   engine.update(1000);
   const moved = Math.hypot(army[0].x - x0, army[0].y - y0);
-  assert.ok(moved > UNIT_STATS.soldier.speed * 0.95, 'retreater should receive the 1.2x speed multiplier');
+  const expectedStep = UNIT_STATS.soldier.speed * GAME_RULES.fallback.speedMultiplier * FORMATION_STATS.line.speedMultiplier;
+  assert.equal(army[0].fallbackUntilMs, GAME_RULES.fallback.speedBuffMs);
+  assert.ok(moved >= expectedStep * 0.9, 'retreater should receive the 1.2x speed multiplier');
 });
 
 test('rearguard receives 35% damage reduction', () => {
@@ -239,11 +241,9 @@ test('rearguard receives 35% damage reduction', () => {
     UNIT_STATS.soldier.attack.damage *
     FORMATION_STATS.line.attackMultiplier *
     FORMATION_STATS.line.defenseMultiplier;
-  assert.equal(normalDamage, baseDamage);
-  assert.equal(
-    shieldedDamage,
-    baseDamage * (1 - GAME_RULES.fallback.rearguardDamageReduction)
-  );
+  assert.ok(Math.abs(normalDamage - baseDamage) < 1e-9);
+  const shieldedExpected = baseDamage * (1 - GAME_RULES.fallback.rearguardDamageReduction);
+  assert.ok(Math.abs(shieldedDamage - shieldedExpected) < 1e-9);
 });
 
 test('rearguard rolls back when retreaters reach safety', () => {
