@@ -164,27 +164,52 @@ export function symbolArt(type: SymbolType, side: Side) {
     case 'knight':
       return svg(
         size,
-        `${frame('<rect x="2" y="3" width="28" height="20"/>', side, 1.8)}
-        <!-- Chess knight silhouette: a compact horse-head profile facing right. -->
-        <path d="M10.5 20.5
-          C9.2 18.8 9.1 16.4 10 14
-          C10.7 12.2 11.1 10.8 10.3 9.1
-          L8.6 6.7 L12.1 4.6
-          L16.2 6.1 L18.2 8.4
-          L21.2 8
-          L24.5 9.9
-          L26.2 13.1
-          L25 15.9
-          L23.5 18.5
-          L20.2 20.5 Z"
-          fill="${ink}"/>
-        <!-- Mane ridges and muzzle detail keep the silhouette recognisable at small size. -->
-        <path d="M10.1 8.7 L13.1 10.5 L12.2 12.2 L15.4 12.9 L14.1 15.2"
-          fill="none" stroke="${HALO}" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M19.3 9.5 L22.7 11.1 L24.8 13.1"
-          fill="none" stroke="${HALO}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="21.9" cy="11.1" r="0.9" fill="${COLORS[side].fill}"/>
-        <path d="M24.2 15.2 H26.1" stroke="${COLORS[side].fill}" stroke-width="0.95" stroke-linecap="round"/>`
+        \`\${frame('<rect x="2" y="3" width="28" height="20"/>', side, 1.8)}
+        <!-- Chess-knight profile inspired by the reference: open outline, curved neck, mane and muzzle. -->
+        <path
+          d="M20.8 20.8
+             C20.3 18.7 21 16.8 23.2 15.4
+             L25.8 13.9
+             L24.2 12.2
+             L26.1 10.6
+             L23.3 8.4
+             L20.1 8.1
+             L17.4 6.2
+             L14.8 6.5
+             L12.3 4.1
+             L11 7
+             L9.1 8.2
+             L10.5 11
+             C8.7 13.4 8.1 15.8 9.4 18.2
+             C10.1 19.5 11.4 20.6 12.8 20.8
+             Z"
+          fill="none"
+          stroke="\${ink}"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+        <!-- Mane and facial contours keep the icon hollow and readable at small size. -->
+        <path
+          d="M12.2 4.2
+             L13.8 7.2
+             L16.2 7.1
+             M10.6 9.2
+             L13.1 10.6
+             L12.1 12.8
+             M17.3 8
+             C18.8 9.4 19.2 11.1 18.5 12.7
+             M20.4 8.9
+             L22.8 10.1
+             L24.1 11.5
+             M20 13.5
+             L24 13.2"
+          fill="none"
+          stroke="\${ink}"
+          stroke-width="1.35"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+        <circle cx="21.4" cy="10.7" r="0.8" fill="\${ink}"/>
+        <path d="M24.6 13.9 L26 14.2" stroke="\${ink}" stroke-width="1.1" stroke-linecap="round"/>\`
       );
   }
 }
