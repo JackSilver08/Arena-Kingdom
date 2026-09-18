@@ -25,7 +25,7 @@ import {
 import { statComparison } from '../components/statComparison';
 import { formatDuration, signed } from '../lib/format';
 import { $, html, setHtml, trusted, type SafeHtml } from '../lib/html';
-import { bannerIcon, buildingArt, castleArt, envelopeIcon, hammerIcon, helmetIcon, houseIcon, moneyBagIcon, troopArt } from './art';
+import { bannerIcon, buildingArt, castleArt, envelopeIcon, hammerIcon, helmetIcon, houseIcon, moneyBagIcon, troopArt, unitShopArt } from './art';
 import { BattleScene } from './BattleScene';
 import { symbolArt } from './symbols';
 import { battleView } from './visuals';
@@ -686,7 +686,7 @@ export class GameController {
               title="Recruit a ${UNIT_STATS[unitType].label.toLowerCase()} at your least busy barracks"
             >
               <span class="option-key">${unitType === 'soldier' ? 'R' : ''}</span>
-              <span class="option-art option-art-troops">${unitType === 'soldier' ? trusted(troopArt(me)) : unitType === 'archer' ? '🏹' : '♞'}</span>
+              <span class="option-art option-art-troops">${trusted(unitShopArt(unitType as 'soldier' | 'archer' | 'knight', me))}</span>
               <b>${UNIT_STATS[unitType].label}</b>
               <span class="yb option-cost">${UNIT_STATS[unitType].cost}$</span>
             </button>`
