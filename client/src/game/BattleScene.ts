@@ -467,6 +467,31 @@ export class BattleScene extends Phaser.Scene {
       const troop = this.visuals.unit(u.type, u.side);
       const uy = (sprite?.y ?? u.y) - troop.height * troop.anchorY - 7;
       const share = Phaser.Math.Clamp(u.hp / u.maxHp, 0, 1);
+
+      if (u.rearguard || u.retreating) {
+        const color = SIDE_COLOR[u.side];
+        if (u.rearguard) {
+          // Small shield marker above the HP bar. It stays deliberately abstract and map-like.
+          g.fillStyle(color, 0.95);
+          g.beginPath();
+          g.moveTo(ux - 4, uy - 8);
+          g.lineTo(ux + 4, uy - 8);
+          g.lineTo(ux + 5, uy - 3);
+          g.lineTo(ux, uy + 1);
+          g.lineTo(ux - 5, uy - 3);
+          g.closePath();
+          g.fillPath();
+          g.lineStyle(1.5, 0xffffff, 0.95);
+          g.strokePath();
+        } else {
+          // Three short retreat streaks communicate movement direction without cluttering the unit glyph.
+          g.lineStyle(1.8, color, 0.85);
+          g.lineBetween(ux + 13, uy - 5, ux + 20, uy - 5);
+          g.lineBetween(ux + 13, uy - 1, ux + 18, uy - 1);
+          g.lineBetween(ux + 13, uy + 3, ux + 20, uy + 3);
+        }
+      }
+
       g.fillStyle(0x111111, 0.85);
       g.fillRect(ux - 12, uy, 24, 5);
       g.fillStyle(share < 0.35 ? 0xff9f1c : 0x22c55e, 1);
