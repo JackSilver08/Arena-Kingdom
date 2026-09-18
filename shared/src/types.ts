@@ -41,9 +41,6 @@ export interface UnitView {
   maxHp: number;
   moving: boolean;
   attacking: boolean;
-  /** Tactical fallback status for client rendering and visual badges. */
-  rearguard?: boolean;
-  retreating?: boolean;
 }
 
 export interface BuildingView {
