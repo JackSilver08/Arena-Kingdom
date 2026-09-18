@@ -188,6 +188,10 @@ test('fallback gives retreaters 20% speed for the first 4 seconds', () => {
   const army = engine.armyOf('blue');
   army[0].x = 700;
   army[0].y = 540;
+  army.slice(1).forEach((u, i) => {
+    u.x = 1050 + i * 40;
+    u.y = 740;
+  });
   const enemies = engine.armyOf('red');
   enemies.forEach((u, i) => {
     u.hp = 0;
