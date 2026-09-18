@@ -72,13 +72,6 @@ export const GAME_RULES={
   limits:{maxUnitsPerSide:40,maxBuildingsPerSide:30},
   peace:{responseWindowMs:15_000,cooldownMs:30_000},
   fallback:{
-<<<<<<< HEAD
-    speedMultiplier:1.2,
-    speedBuffMs:4000,
-    rearguardDamageReduction:0.35,
-    safeDistance:260,
-    rearguardRatio:0.3
-=======
     /** 20% movement boost for the first 4 seconds of a tactical fall back. */
     speedMultiplier:1.2,
     speedBuffMs:4_000,
@@ -92,7 +85,6 @@ export const GAME_RULES={
     rearguardRatio:0.30,
     /** Minimum regular troops required before a fall back can split into roles. */
     minimumSplitSize:2
->>>>>>> e33f3e2632134d362bf7332c4111399b61dedf74
   }
 } as const;
 
