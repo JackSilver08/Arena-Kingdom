@@ -3050,10 +3050,23 @@ input:not([type='radio']):focus {
   margin-top: calc(var(--s) * 0.25);
 }
 
-.option-recruit .option-art-unit svg {
+.option-recruit .option-art-unit {
+  width: calc(var(--s) * 10.6);
+  height: calc(var(--s) * 10.4);
+  margin-top: calc(var(--s) * 0.15);
+}
+
+.option-recruit .unit-shop-image {
+  display: block;
   width: 100%;
   height: 100%;
-  overflow: visible;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.option-recruit .unit-shop-image-red {
+  filter: hue-rotate(140deg) saturate(1.08);
 }
 
 .option-recruit .option-cost {
