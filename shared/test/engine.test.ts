@@ -208,7 +208,10 @@ test('fallback gives retreaters 20% speed for the first 4 seconds', () => {
   const moved = Math.hypot(army[0].x - x0, army[0].y - y0);
   const expectedStep = UNIT_STATS.soldier.speed * GAME_RULES.fallback.speedMultiplier * FORMATION_STATS.line.speedMultiplier;
   assert.equal(army[0].fallbackUntilMs, GAME_RULES.fallback.speedBuffMs);
-  assert.ok(moved >= expectedStep * 0.9, 'retreater should receive the 1.2x speed multiplier');
+  assert.ok(
+    moved >= expectedStep * 0.9,
+    `retreater moved ${moved.toFixed(2)}; expected at least ${(expectedStep * 0.9).toFixed(2)}`
+  );
 });
 
 test('rearguard receives 35% damage reduction', () => {
