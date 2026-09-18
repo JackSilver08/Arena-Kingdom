@@ -29,11 +29,21 @@ Buildings can only be placed in your own territory, outside the contested centre
 | Barracks | 120  | 550  | Trains soldiers; queue up to 5; barracks train in parallel |
 | Tower    | 130  | 800  | Shoots enemy soldiers (20 dmg every 0.8s)                |
 
-## Soldiers
+## Units
 
-- Cost 20 gold, 2.5s training time, 100 HP, 12 damage every 0.8s, army limit 60.
-- Soldiers automatically engage enemies within their aggro range. Enemy soldiers take priority over buildings.
-- Attack-move orders fight along the way; plain move orders (Shift + right-click) ignore enemies — use them to retreat.
+| Unit | Cost | Train time | HP | Speed | Attack | Range | Role |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Soldier | 18 | 2.2s | 100 | 52 | 12 / 0.8s | 14 | Basic melee infantry |
+| Archer | 21 | 2.6s | 75 | 45 | 9 / 1.1s | 190 | Long-range harassment; 125 range against buildings |
+| Knight | 24 | 2.5s | 150 | 156 | 17 / 0.9s | 18 | Fast cavalry; 3× base Soldier speed |
+
+Barracks train one unit type per active queue. Multiple barracks can train different unit types in parallel.
+
+Soldiers and Knights automatically engage enemies within their aggro range. Archers prefer enemy troops at long range and can also damage buildings from a shorter dedicated range.
+
+Attack-move orders fight along the way; plain move orders (Shift + right-click) ignore enemies — use them to retreat.
+
+Archer shots use a visible rising-and-falling arrow projectile before the impact effect.
 
 ## Controls
 

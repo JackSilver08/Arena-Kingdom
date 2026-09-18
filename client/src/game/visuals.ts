@@ -97,6 +97,10 @@ export class BattleVisualRenderer {
       load(unitTextureKey('soldier', side), symbolArt('troop', side), troop.width, troop.height);
       const militia = SYMBOL_SIZE.militia;
       load(unitTextureKey('militia', side), symbolArt('militia', side), militia.width, militia.height);
+      const archer = SYMBOL_SIZE.archer;
+      load(unitTextureKey('archer', side), symbolArt('archer', side), archer.width, archer.height);
+      const knight = SYMBOL_SIZE.knight;
+      load(unitTextureKey('knight', side), symbolArt('knight', side), knight.width, knight.height);
     }
 
     load(mapTextureKey(this.view, this.mapStyle), arenaMapArtV2(this.view, this.mapStyle), this.view.width, this.view.height);
@@ -157,7 +161,7 @@ export class BattleVisualRenderer {
   }
 
   unit(type: UnitType, side: Side): EntityVisual {
-    const glyph = type === 'militia' ? SYMBOL_SIZE.militia : SYMBOL_SIZE.troop;
+    const glyph = type === 'soldier' ? SYMBOL_SIZE.troop : SYMBOL_SIZE[type];
     return { key: unitTextureKey(type, side), ...glyph, anchorY: glyph.anchorY };
   }
 }

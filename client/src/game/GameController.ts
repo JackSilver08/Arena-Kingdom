@@ -19,7 +19,8 @@ import {
   type FormationType,
   type GameEvent,
   type MatchView,
-  type Side
+  type Side,
+  type UnitType
 } from '@arena-kingdom/shared';
 import { statComparison } from '../components/statComparison';
 import { formatDuration, signed } from '../lib/format';
@@ -231,9 +232,9 @@ export class GameController {
     this.session.send({ type: 'move', unitIds: [...this.selection], x, y, attack: !shift, targetId: shift ? undefined : targetId, formation: this.formation });
   }
 
-  recruit(count = 1, barracksId?: number) {
+  recruit(count = 1, barracksId?: number, unitType: UnitType = 'soldier') {
     if (!this.canCommand) return;
-    this.session.send({ type: 'train', count, barracksId });
+    this.session.send({ type: 'train', count, barracksId, unitType });
   }
 
   selectUnits(ids: number[], additive: boolean) {
@@ -348,6 +349,9 @@ export class GameController {
           break;
         case 'recruit':
           this.recruit(1);
+          break;
+        case 'recruit-unit':
+          this.recruit(1, undefined, button.dataset.unitType as UnitType);
           break;
         case 'choose-building':
           this.chooseBuilding(button.dataset.type as BuildableType);
@@ -672,18 +676,21 @@ export class GameController {
               <span class="yb option-cost">${formationPercent(FORMATION_STATS[formation].attackMultiplier)}</span>
             </button>`
           )}
-          <button
-            type="button"
-            class="option option-recruit ${gold < UNIT_STATS.soldier.cost ? 'unaffordable' : ''}"
-            data-action="recruit"
-            data-cost="${UNIT_STATS.soldier.cost}"
-            title="Recruit a troop at your least busy barracks"
-          >
-            <span class="option-key">R</span>
-            <span class="option-art option-art-troops">${trusted(troopArt(me))}<em>+</em></span>
-            <b>Recruit</b>
-            <span class="yb option-cost">${UNIT_STATS.soldier.cost}$</span>
-          </button>
+          ${(['soldier', 'archer', 'knight'] as UnitType[]).map(
+            (unitType) => html`<button
+              type="button"
+              class="option option-recruit ${gold < UNIT_STATS[unitType].cost ? 'unaffordable' : ''}"
+              data-action="recruit-unit"
+              data-unit-type="${unitType}"
+              data-cost="${UNIT_STATS[unitType].cost}"
+              title="Recruit a ${UNIT_STATS[unitType].label.toLowerCase()} at your least busy barracks"
+            >
+              <span class="option-key">${unitType === 'soldier' ? 'R' : ''}</span>
+              <span class="option-art option-art-troops">${unitType === 'soldier' ? trusted(troopArt(me)) : unitType === 'archer' ? '🏹' : '♞'}</span>
+              <b>${UNIT_STATS[unitType].label}</b>
+              <span class="yb option-cost">${UNIT_STATS[unitType].cost}$</span>
+            </button>`
+          )}
         </div>
         <p class="popup-note">${selected.description}</p>`;
     }

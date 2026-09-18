@@ -1,7 +1,7 @@
 export type Side = 'blue' | 'red';
 export type BuildingType = 'castle' | 'village' | 'barracks' | 'fence' | 'tower';
 export type BuildableType = Exclude<BuildingType, 'castle'>;
-export type UnitType = 'soldier' | 'militia';
+export type UnitType = 'soldier' | 'militia' | 'archer' | 'knight';
 export type ArmyFraction = 'all' | 'one-third' | 'two-thirds';
 export type FormationType = 'line' | 'column' | 'wedge' | 'square';
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -47,10 +47,12 @@ export interface BuildingView {
   y: number;
   hp: number;
   maxHp: number;
-  /** Soldiers waiting in the training queue (barracks only). */
+  /** Units waiting in the training queue (barracks only). */
   queue: number;
-  /** Progress of the soldier currently in training, 0..1. */
+  /** Progress of the current training job, 0..1. */
   trainProgress: number;
+  /** Unit type currently being trained, or null when the queue is empty. */
+  trainType: UnitType | null;
 }
 
 export interface PlayerStats {
@@ -127,7 +129,7 @@ export interface MatchView {
 
 export type Command =
   | { type: 'build'; building: BuildableType; x: number; y: number }
-  | { type: 'train'; barracksId?: number; count?: number }
+  | { type: 'train'; barracksId?: number; count?: number; unitType?: UnitType }
   /** With `targetId` the troops attack that enemy unit or building until it falls. */
   | { type: 'move'; unitIds: number[]; x: number; y: number; attack: boolean; targetId?: number; formation?: FormationType }
   | { type: 'army'; fraction: ArmyFraction; x: number; y: number; targetId?: number; formation?: FormationType }
@@ -140,6 +142,7 @@ export type CommandResult = { ok: true; message?: string } | { ok: false; error:
 
 export type GameEvent =
   | { type: 'shot'; side: Side; fromX: number; fromY: number; toX: number; toY: number }
+  | { type: 'arrowShot'; side: Side; fromX: number; fromY: number; toX: number; toY: number; targetId: number }
   | { type: 'hit'; x: number; y: number }
   | { type: 'unitDied'; side: Side; x: number; y: number }
   | { type: 'unitTrained'; side: Side; x: number; y: number }

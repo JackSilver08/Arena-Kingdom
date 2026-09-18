@@ -65,6 +65,52 @@ test('barracks train queued soldiers', () => {
   assert.equal(engine.state.players.blue.stats.unitsTrained, 2);
 });
 
+test('unit roster keeps the intended 18 / 21 / 24 gold balance', () => {
+  assert.equal(UNIT_STATS.soldier.cost, 18);
+  assert.equal(UNIT_STATS.archer.cost, 21);
+  assert.equal(UNIT_STATS.knight.cost, 24);
+  assert.equal(UNIT_STATS.knight.speed, UNIT_STATS.soldier.speed * 3);
+  assert.ok(UNIT_STATS.archer.attack.range > UNIT_STATS.soldier.attack.range);
+  assert.equal(UNIT_STATS.archer.buildingAttack?.range, 125);
+});
+
+test('barracks train archers and knights with typed queues', () => {
+  const engine = new MatchEngine();
+  engine.state.players.blue.gold = 1000;
+
+  assert.equal(engine.command('blue', { type: 'train', count: 2, unitType: 'archer' }).ok, true);
+  assert.equal(engine.state.players.blue.gold, 1000 - 2 * UNIT_STATS.archer.cost);
+  const barracks = engine.buildingsOf('blue', 'barracks')[0];
+  assert.equal(barracks.trainType, 'archer');
+  run(engine, UNIT_STATS.archer.trainMs * 2 + 100);
+  assert.equal(engine.armyOf('blue').filter((u) => u.type === 'archer').length, 2);
+  assert.equal(barracks.queue, 0);
+  assert.equal(barracks.trainType, null);
+
+  assert.equal(engine.command('blue', { type: 'train', count: 1, unitType: 'knight' }).ok, true);
+  assert.equal(engine.state.players.blue.gold, 1000 - 2 * UNIT_STATS.archer.cost - UNIT_STATS.knight.cost);
+  assert.equal(barracks.trainType, 'knight');
+  run(engine, UNIT_STATS.knight.trainMs + 100);
+  assert.equal(engine.armyOf('blue').filter((u) => u.type === 'knight').length, 1);
+});
+
+test('archers can hit buildings from their dedicated shorter building range', () => {
+  const engine = new MatchEngine();
+  const archer = engine.armyOf('blue')[0];
+  archer.type = 'archer';
+  archer.hp = UNIT_STATS.archer.hp;
+  archer.maxHp = UNIT_STATS.archer.hp;
+  const village = engine.buildingsOf('red', 'village')[0];
+  for (const unit of engine.armyOf('red')) unit.hp = 0;
+  archer.x = village.x - 155;
+  archer.y = village.y;
+  archer.order = { kind: 'idle' };
+  const before = village.hp;
+  engine.command('blue', { type: 'move', unitIds: [archer.id], x: village.x, y: village.y, attack: true, targetId: village.id });
+  run(engine, UNIT_STATS.archer.attack.cooldownMs + 250);
+  assert.ok(village.hp < before, 'archer should damage a building inside building range');
+});
+ 
 test('soldiers fight and destroying the castle ends the match', () => {
   const engine = new MatchEngine();
   const castle = engine.castleOf('red')!;
