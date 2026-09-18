@@ -164,7 +164,7 @@ export function symbolArt(type: SymbolType, side: Side) {
     case 'knight':
       return svg(
         size,
-        \`\${frame('<rect x="2" y="3" width="28" height="20"/>', side, 1.8)}
+        `${frame('<rect x="2" y="3" width="28" height="20"/>', side, 1.8)}
         <!-- Chess-knight profile inspired by the reference: open outline, curved neck, mane and muzzle. -->
         <path
           d="M20.8 20.8
@@ -184,7 +184,7 @@ export function symbolArt(type: SymbolType, side: Side) {
              C10.1 19.5 11.4 20.6 12.8 20.8
              Z"
           fill="none"
-          stroke="\${ink}"
+          stroke="${ink}"
           stroke-width="2.2"
           stroke-linecap="round"
           stroke-linejoin="round"/>
@@ -204,12 +204,12 @@ export function symbolArt(type: SymbolType, side: Side) {
              M20 13.5
              L24 13.2"
           fill="none"
-          stroke="\${ink}"
+          stroke="${ink}"
           stroke-width="1.35"
           stroke-linecap="round"
           stroke-linejoin="round"/>
-        <circle cx="21.4" cy="10.7" r="0.8" fill="\${ink}"/>
-        <path d="M24.6 13.9 L26 14.2" stroke="\${ink}" stroke-width="1.1" stroke-linecap="round"/>\`
+        <circle cx="21.4" cy="10.7" r="0.8" fill="${ink}"/>
+        <path d="M24.6 13.9 L26 14.2" stroke="${ink}" stroke-width="1.1" stroke-linecap="round"/>`
       );
   }
 }
