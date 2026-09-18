@@ -693,7 +693,7 @@ export class GameController {
           <button type="button" class="context-close" data-action="close-context" aria-label="Close">×</button>
         </div>
         <div class="barracks-units">
-          ${(['soldier', 'archer', 'knight'] as UnitType[]).map(
+          ${(['soldier', 'archer', 'knight'] as const).map(
             (unitType) => html`<button
               type="button"
               class="barracks-unit-option ${gold < UNIT_STATS[unitType].cost ? 'unaffordable' : ''}"
