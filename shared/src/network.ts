@@ -116,7 +116,7 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       maxHp: snap.b[i + 5],
       queue: snap.b[i + 6],
       trainProgress: snap.b[i + 7] / 100,
-      trainType: snap.b[i + 8] === undefined ? null : UNIT_CODES[snap.b[i + 8]] ?? 'soldier'
+      trainType: snap.b[i + 8] === undefined || snap.b[i + 8] < 0 ? null : UNIT_CODES[snap.b[i + 8]] ?? 'soldier'
     });
   }
 
