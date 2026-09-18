@@ -62,6 +62,11 @@ function formationGlyph(type: FormationType) {
     .join('')}</svg>`;
 }
 
+function typeCountsLabel(type: UnitType, count: number) {
+  const symbols: Record<UnitType, string> = { soldier: '⚔', militia: '🛡', archer: '🏹', knight: '♞' };
+  return `${symbols[type]} ${count}`;
+}
+
 export class GameController {
   mode: ControlMode = 'idle';
   buildType: BuildableType = 'village';
@@ -73,6 +78,7 @@ export class GameController {
   private hudElapsed = HUD_INTERVAL_MS;
   private hudCache = new Map<string, string>();
   private contextKey = '';
+  private contextBarracksId: number | null = null;
   private hoverText: string | null = null;
   private hint = '';
   private hintUntil = 0;
@@ -156,6 +162,7 @@ export class GameController {
 
   setMode(mode: ControlMode) {
     if (mode !== 'idle' && !this.canCommand) return;
+    this.contextBarracksId = null;
     this.mode = mode;
     if (mode === 'build') this.setHint('Click inside your territory to build. Shift-click to keep building. Right-click or Esc to cancel.');
     else if (mode === 'troops') this.setHint(`Choose a formation, then click a destination. ${FORMATION_LABELS[this.formation]}: ${formationPercent(FORMATION_STATS[this.formation].attackMultiplier)} attack, ${formationPercent(FORMATION_STATS[this.formation].defenseMultiplier)} defence, ${formationPercent(FORMATION_STATS[this.formation].speedMultiplier)} speed.`);
@@ -212,6 +219,25 @@ export class GameController {
     if (!keepBuilding) this.setMode('idle');
   }
 
+  openBarracks(barracksId: number) {
+    if (!this.canCommand) return;
+    const barracks = this.view?.buildings.find(
+      (b) => b.id === barracksId && b.side === this.mySide && b.type === 'barracks'
+    );
+    if (!barracks) return;
+    this.mode = 'idle';
+    this.contextBarracksId = barracksId;
+    this.contextKey = '';
+    this.refreshHud(true);
+  }
+
+  closeContext() {
+    if (this.contextBarracksId === null) return;
+    this.contextBarracksId = null;
+    this.contextKey = '';
+    this.refreshHud(true);
+  }
+
   tacticalFallback() {
     if (!this.canCommand) return;
     const ids = this.selection.size ? [...this.selection] : undefined;
@@ -246,6 +272,7 @@ export class GameController {
   }
 
   selectUnits(ids: number[], additive: boolean) {
+    this.contextBarracksId = null;
     if (!additive) this.selection.clear();
     for (const id of ids) this.selection.add(id);
     this.refreshHud(true);
@@ -258,6 +285,7 @@ export class GameController {
   }
 
   clearSelection() {
+    this.contextBarracksId = null;
     if (!this.selection.size) return;
     this.selection.clear();
     this.refreshHud(true);
@@ -365,7 +393,14 @@ export class GameController {
           this.recruit(1);
           break;
         case 'recruit-unit':
-          this.recruit(1, undefined, button.dataset.unitType as UnitType);
+          this.recruit(
+            1,
+            button.dataset.barracksId ? Number(button.dataset.barracksId) : undefined,
+            button.dataset.unitType as UnitType
+          );
+          break;
+        case 'close-context':
+          this.closeContext();
           break;
         case 'choose-building':
           this.chooseBuilding(button.dataset.type as BuildableType);
@@ -632,6 +667,40 @@ export class GameController {
   private contextMarkup(view: MatchView | null): SafeHtml | null {
     const me = this.mySide;
     const gold = view?.players[me].gold ?? 0;
+
+    if (this.contextBarracksId !== null) {
+      const barracks = view?.buildings.find(
+        (b) => b.id === this.contextBarracksId && b.side === me && b.type === 'barracks'
+      );
+      if (!barracks) return null;
+      const queueLabel = barracks.queue
+        ? `${barracks.queue} queued${barracks.trainType ? ` · ${UNIT_STATS[barracks.trainType].label} training` : ''}`
+        : 'Queue empty';
+      return html`<section class="barracks-context">
+        <div class="barracks-context-head">
+          <div><strong>Barracks</strong><span>${queueLabel}</span></div>
+          <button type="button" class="context-close" data-action="close-context" aria-label="Close">×</button>
+        </div>
+        <div class="barracks-units">
+          ${(['soldier', 'archer', 'knight'] as UnitType[]).map(
+            (unitType) => html`<button
+              type="button"
+              class="barracks-unit-option ${gold < UNIT_STATS[unitType].cost ? 'unaffordable' : ''}"
+              data-action="recruit-unit"
+              data-unit-type="${unitType}"
+              data-barracks-id="${barracks.id}"
+              data-cost="${UNIT_STATS[unitType].cost}"
+              title="Recruit ${UNIT_STATS[unitType].label}"
+            >
+              <span class="barracks-unit-art">${trusted(unitShopArt(unitType, me))}</span>
+              <span class="barracks-unit-copy"><b>${UNIT_STATS[unitType].label}</b><small>${UNIT_STATS[unitType].trainMs / 1000}s</small></span>
+              <span class="yb option-cost">${UNIT_STATS[unitType].cost}$</span>
+            </button>`
+          )}
+        </div>
+      </section>`;
+    }
+
     if (this.mode === 'build') {
       return html`<div class="popup-title">Build <small>keys 1-4 · Shift-click keeps building</small></div>
         <div class="popup-options">
@@ -655,63 +724,48 @@ export class GameController {
         </div>
         <p class="popup-note">${BUILDING_STATS[this.buildType].description}</p>`;
     }
+
     if (this.mode === 'troops') {
-      const army = view?.units.filter((u) => u.side === me).length ?? 0;
+      const army = view?.units.filter((u) => u.side === me && u.type !== 'militia') ?? [];
       const supply = view ? armySupplyCapacity(view.buildings.filter((b) => b.side === me)) : 0;
-      const upkeep = armyUpkeep(army, supply);
+      const upkeep = armyUpkeep(army.length, supply);
       const selected = FORMATION_STATS[this.formation];
-      return html`<div class="popup-title">Troops <small>1-3 army fraction · Q/W/E/D formation · click a destination</small></div>
-        <div class="popup-note supply-note"><b>Supply ${army}/${supply}</b> · upkeep ${upkeep}$ / ${GAME_RULES.economy.incomeIntervalMs / 1000}s above capacity. Villages and barracks expand your logistics.</div>
-        <div class="popup-options">
-          ${ARMY_FRACTIONS.map(
-            (fraction, i) => html`<button
-              type="button"
-              class="option ${this.fraction === fraction ? 'active' : ''}"
-              data-action="choose-fraction"
-              data-fraction="${fraction}"
-            >
-              <span class="option-key">${i + 1}</span>
-              <span class="option-art option-art-troops">
-                ${Array.from({ length: fraction === 'all' ? 3 : fraction === 'two-thirds' ? 2 : 1 }, () => trusted(troopArt(me)))}
-              </span>
-              <b>${FRACTION_LABELS[fraction]}</b>
-              <span class="yb option-cost">${army ? Math.max(1, Math.ceil(army * fractionOf(fraction))) : 0}</span>
-            </button>`
-          )}
+      const selectedCount = this.selection.size;
+      const composition = (['soldier', 'archer', 'knight'] as UnitType[])
+        .map((type) => {
+          const count = army.filter((u) => u.type === type).length;
+          return count ? typeCountsLabel(type, count) : '';
+        })
+        .filter(Boolean)
+        .join('  ');
+
+      return html`<section class="troops-deck">
+        <div class="troops-deck-head">
+          <div><strong>Troops</strong><span class="troops-selected">${selectedCount ? `${selectedCount} selected` : 'Select troops on the map'}</span></div>
+          <div class="troops-status">Supply ${army.length}/${supply}${upkeep ? ` · −${upkeep}$/5s` : ''}</div>
         </div>
-        <div class="popup-title"><span>Formation</span><small>${formationPercent(selected.attackMultiplier)} attack · ${formationPercent(selected.defenseMultiplier)} defence · ${formationPercent(selected.speedMultiplier)} speed</small></div>
-        <div class="popup-options">
-          ${FORMATION_TYPES.map(
-            (formation) => html`<button
-              type="button"
-              class="option ${this.formation === formation ? 'active' : ''}"
-              data-action="choose-formation"
-              data-formation="${formation}"
-              title="${FORMATION_STATS[formation].description}"
-            >
-              <span class="option-key">${FORMATION_KEYS[formation]}</span>
-              <span class="option-art formation-glyph">${trusted(formationGlyph(formation))}</span>
-              <b>${FORMATION_LABELS[formation]}</b>
-              <span class="yb option-cost">${formationPercent(FORMATION_STATS[formation].attackMultiplier)}</span>
-            </button>`
-          )}
-          ${(['soldier', 'archer', 'knight'] as UnitType[]).map(
-            (unitType) => html`<button
-              type="button"
-              class="option option-recruit ${gold < UNIT_STATS[unitType].cost ? 'unaffordable' : ''}"
-              data-action="recruit-unit"
-              data-unit-type="${unitType}"
-              data-cost="${UNIT_STATS[unitType].cost}"
-              title="Recruit a ${UNIT_STATS[unitType].label.toLowerCase()} at your least busy barracks"
-            >
-              <span class="option-key">${unitType === 'soldier' ? 'R' : ''}</span>
-              <span class="option-art option-art-unit">${trusted(unitShopArt(unitType as 'soldier' | 'archer' | 'knight', me))}</span>
-              <b>${UNIT_STATS[unitType].label}</b>
-              <span class="yb option-cost">${UNIT_STATS[unitType].cost}$</span>
-            </button>`
-          )}
+        <div class="troops-row">
+          <span class="troops-label">ARMY</span>
+          <div class="troops-fraction-group">
+            ${ARMY_FRACTIONS.map((fraction, i) => html`<button type="button"
+              class="troops-chip ${this.fraction === fraction ? 'active' : ''}" data-action="choose-fraction" data-fraction="${fraction}" title="Send ${FRACTION_LABELS[fraction]} of your army">
+              <kbd>${i + 1}</kbd><b>${FRACTION_LABELS[fraction]}</b><span>${army.length ? Math.max(1, Math.ceil(army.length * fractionOf(fraction))) : 0}</span>
+            </button>`)}
+          </div>
+          <span class="troops-composition">${composition || 'No regular troops'}</span>
         </div>
-        <p class="popup-note">${selected.description}</p>`;
+        <div class="troops-row formation-row">
+          <span class="troops-label">FORMATION</span>
+          <div class="formation-group">
+            ${FORMATION_TYPES.map((formation) => html`<button type="button"
+              class="formation-chip ${this.formation === formation ? 'active' : ''}" data-action="choose-formation" data-formation="${formation}" title="${FORMATION_STATS[formation].description}">
+              <kbd>${FORMATION_KEYS[formation]}</kbd><span class="formation-glyph-compact">${trusted(formationGlyph(formation))}</span><b>${FORMATION_LABELS[formation]}</b>
+            </button>`)}
+          </div>
+          <span class="formation-mods">${formationPercent(selected.attackMultiplier)} atk · ${formationPercent(selected.defenseMultiplier)} def · ${formationPercent(selected.speedMultiplier)} spd</span>
+        </div>
+        <div class="troops-footer">${selected.description}</div>
+      </section>`;
     }
     return null;
   }
@@ -726,13 +780,13 @@ export class GameController {
     const army = view ? view.units.filter((u) => u.side === me).length : 0;
     const supply = view ? armySupplyCapacity(view.buildings.filter((b) => b.side === me)) : 0;
     const upkeep = armyUpkeep(army, supply);
-    const contextKey = `${me}|${this.mode}|${this.buildType}|${this.fraction}|${this.formation}|${this.mode === 'troops' ? `${army}|${supply}|${upkeep}` : ''}`;
+    const contextKey = `${me}|${this.mode}|${this.buildType}|${this.fraction}|${this.formation}|${this.contextBarracksId ?? '-'}|${this.mode === 'troops' ? `${army}|${supply}|${upkeep}|${this.selection.size}` : ''}`;
     if (contextKey !== this.contextKey) {
       this.contextKey = contextKey;
       const popup = $(this.root, '[data-context]');
       const markup = this.contextMarkup(view);
       popup.hidden = !markup;
-      popup.dataset.mode = this.mode;
+      popup.dataset.mode = this.contextBarracksId !== null ? 'recruit' : this.mode;
       if (markup) setHtml(popup, markup);
     }
     const messengerOpen = !$(this.root, '[data-messenger]').hidden;
