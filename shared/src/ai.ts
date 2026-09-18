@@ -1,6 +1,6 @@
 import type { MatchEngine, UnitState } from './engine.js';
 import { BUILDING_STATS, GAME_RULES, UNIT_STATS, canPlaceBuilding, distanceToBuilding, forwardDir, territoryBounds } from './rules.js';
-import { opponentOf, type BuildableType, type Difficulty, type Side } from './types.js';
+import { opponentOf, type BuildableType, type Difficulty, type Side, type UnitType } from './types.js';
 
 interface BotProfile {
   thinkMs: number;
@@ -182,7 +182,8 @@ export class BotController {
     if (Math.random() < profile.recruitChance || intruders.length) {
       for (const b of engine.buildingsOf(side, 'barracks')) {
         while (b.queue < 2 && gold() >= soldierCost + reserve && engine.armyOf(side).length < profile.armyCap) {
-          if (!engine.command(side, { type: 'train', barracksId: b.id }).ok) break;
+          const unitType = b.trainType ?? this.recruitType();
+          if (!engine.command(side, { type: 'train', barracksId: b.id, unitType }).ok) break;
         }
       }
     }
@@ -231,6 +232,21 @@ export class BotController {
         engine.command(side, { type: 'move', unitIds: extra.map((u) => u.id), x: target.x, y: target.y, attack: true });
       }
     }
+  }
+
+  private recruitType(): UnitType {
+    const roll = Math.random();
+    if (this.difficulty === 'hard') {
+      if (roll < 0.24) return 'knight';
+      if (roll < 0.58) return 'archer';
+      return 'soldier';
+    }
+    if (this.difficulty === 'normal') {
+      if (roll < 0.18) return 'knight';
+      if (roll < 0.5) return 'archer';
+      return 'soldier';
+    }
+    return roll < 0.2 ? 'archer' : 'soldier';
   }
 
   private shouldRetreat(wave: UnitState[], enemyArmy: UnitState[]) {
