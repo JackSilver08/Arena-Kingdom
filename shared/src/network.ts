@@ -13,6 +13,8 @@ import {
 
 /** Compact wire format for match state; flat number arrays keep messages small. */
 export interface EncodedSnapshot {
+  /** Wire format version. Omitted on legacy v1 snapshots. */
+  v?: number;
   t: number;
   n: number;
   p: number[];
@@ -60,6 +62,7 @@ export function encodeSnapshot(view: MatchView, events: GameEvent[]): EncodedSna
     );
   }
   return {
+    v: 2,
     t: round(view.timeMs),
     n: round(view.nextIncomeInMs),
     p,
@@ -104,7 +107,8 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
   }
 
   const buildings: MatchView['buildings'] = [];
-  for (let i = 0; i + BUILDING_FIELDS <= snap.b.length; i += BUILDING_FIELDS) {
+  const buildingFields = snap.v === 2 ? BUILDING_FIELDS : 8;
+  for (let i = 0; i + buildingFields <= snap.b.length; i += buildingFields) {
     const flags = snap.b[i + 1];
     buildings.push({
       id: snap.b[i],
@@ -116,7 +120,7 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       maxHp: snap.b[i + 5],
       queue: snap.b[i + 6],
       trainProgress: snap.b[i + 7] / 100,
-      trainType: snap.b[i + 8] === undefined || snap.b[i + 8] < 0 ? null : UNIT_CODES[snap.b[i + 8]] ?? 'soldier'
+      trainType: snap.v === 2 && snap.b[i + 8] >= 0 ? UNIT_CODES[snap.b[i + 8]] ?? 'soldier' : null
     });
   }
 
