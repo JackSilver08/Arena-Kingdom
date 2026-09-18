@@ -24,12 +24,12 @@ export interface EncodedSnapshot {
 }
 
 const SIDE_CODES: Side[] = ['blue', 'red'];
-const UNIT_CODES: UnitType[] = ['soldier'];
+const UNIT_CODES: UnitType[] = ['soldier', 'militia', 'archer', 'knight'];
 // Append new types at the end so existing codes stay stable.
 const BUILDING_CODES: BuildingType[] = ['castle', 'village', 'barracks', 'tower', 'fence'];
 const REASON_CODES: EndReason[] = ['castle', 'surrender', 'peace', 'timeout', 'disconnect'];
 const UNIT_FIELDS = 6;
-const BUILDING_FIELDS = 8;
+const BUILDING_FIELDS = 9;
 
 const round = (n: number) => Math.round(n);
 
@@ -55,7 +55,8 @@ export function encodeSnapshot(view: MatchView, events: GameEvent[]): EncodedSna
       Math.max(0, round(building.hp)),
       building.maxHp,
       building.queue,
-      round(building.trainProgress * 100)
+      round(building.trainProgress * 100),
+      building.trainType === null ? -1 : UNIT_CODES.indexOf(building.trainType)
     );
   }
   return {
@@ -114,7 +115,8 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       hp: snap.b[i + 4],
       maxHp: snap.b[i + 5],
       queue: snap.b[i + 6],
-      trainProgress: snap.b[i + 7] / 100
+      trainProgress: snap.b[i + 7] / 100,
+      trainType: snap.b[i + 8] === undefined ? null : UNIT_CODES[snap.b[i + 8]] ?? 'soldier'
     });
   }
 
