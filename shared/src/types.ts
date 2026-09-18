@@ -31,6 +31,10 @@ export interface UnitView {
   formation?: FormationType;
   /** Village-owned garrison marker. Present only while this unit is an active militia defender. */
   garrisonVillageId?: number;
+  /** Unit is currently serving as the Fall Back rearguard. */
+  rearguard?: boolean;
+  /** Unit is currently retreating under the temporary speed boost. */
+  retreating?: boolean;
   x: number;
   y: number;
   hp: number;
@@ -134,6 +138,7 @@ export type Command =
   | { type: 'move'; unitIds: number[]; x: number; y: number; attack: boolean; targetId?: number; formation?: FormationType }
   | { type: 'army'; fraction: ArmyFraction; x: number; y: number; targetId?: number; formation?: FormationType }
   | { type: 'stop'; unitIds: number[] }
+  | { type: 'fallback'; unitIds?: number[] }
   | { type: 'proposePeace' }
   | { type: 'respondPeace'; accept: boolean }
   | { type: 'surrender' };
