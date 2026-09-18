@@ -113,13 +113,15 @@ export class GameController {
     this.game.scene.add('battle', BattleScene, true, { controller: this, resolution, view });
 
     const onKey = (event: KeyboardEvent) => this.onKey(event);
-    window.addEventListener('keydown', onKey);
+    // Capture global command keys before focused controls (including hidden scanner inputs)
+    // can consume the event.
+    window.addEventListener('keydown', onKey, true);
     const beforeUnload = (event: BeforeUnloadEvent) => {
       if (this.session.status === 'playing') event.preventDefault();
     };
     window.addEventListener('beforeunload', beforeUnload);
     this.disposers.push(
-      () => window.removeEventListener('keydown', onKey),
+      () => window.removeEventListener('keydown', onKey, true),
       () => window.removeEventListener('beforeunload', beforeUnload),
       this.session.on((signal) => this.onSignal(signal))
     );
@@ -307,6 +309,15 @@ export class GameController {
   // ------------------------------------------------------------ input
 
   private onKey(event: KeyboardEvent) {
+    // Messenger is deliberately global. Check the physical key code first so the
+    // command still works while another focusable element owns keyboard focus.
+    if (!event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && event.code === 'KeyM') {
+      this.toggleMessenger();
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     const target = event.target as HTMLElement | null;
     if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -316,15 +327,6 @@ export class GameController {
       if (this.closeModals()) return;
       if (this.mode !== 'idle') this.setMode('idle');
       else this.clearSelection();
-      event.preventDefault();
-      return;
-    }
-
-    // Messenger is a global command, so it must remain reachable even when another
-    // overlay/context panel is open. Use event.code as a layout-independent fallback
-    // for keyboards/IME configurations where event.key can be inconsistent.
-    if (!event.repeat && (key === 'm' || event.code === 'KeyM')) {
-      this.toggleMessenger();
       event.preventDefault();
       return;
     }
