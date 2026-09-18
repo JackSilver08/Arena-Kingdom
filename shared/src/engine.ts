@@ -629,6 +629,7 @@ export class MatchEngine {
     const target = targetId === undefined ? undefined : this.findEntity(targetId);
     if (target && target.side !== side && target.hp > 0) {
       for (const u of units) {
+        this.clearFallback(u);
         u.formation = selectedFormation;
         u.order = { kind: 'attack', targetId: target.id };
         this.resetNavigation(u);
@@ -646,6 +647,7 @@ export class MatchEngine {
       const offset = sortedOffsets[i];
       const clamped = clampToIsland(rawX + offset.x, rawY + offset.y, radius + 4);
       const goal = this.nav.openPoint(side, clamped.x, clamped.y);
+      this.clearFallback(u);
       u.formation = selectedFormation;
       u.order = { kind: 'move', x: goal.x, y: goal.y, attack };
       this.resetNavigation(u);
