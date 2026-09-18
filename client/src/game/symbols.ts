@@ -165,9 +165,26 @@ export function symbolArt(type: SymbolType, side: Side) {
       return svg(
         size,
         `${frame('<rect x="2" y="3" width="28" height="20"/>', side, 1.8)}
-        <path d="M10 19 Q8 15 10 11 L10 7 L14 5 L18 8 L20 7 L25 9 L27 15 L24 19 Z" fill="${ink}" opacity=".94"/>
-        <path d="M14 9 L16.5 11 L14.5 13" fill="none" stroke="${HALO}" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="23" cy="11" r="1" fill="${COLORS[side].fill}"/>`
+        <!-- Chess knight silhouette: a compact horse-head profile facing right. -->
+        <path d="M10.5 20.5
+          C9.2 18.8 9.1 16.4 10 14
+          C10.7 12.2 11.1 10.8 10.3 9.1
+          L8.6 6.7 L12.1 4.6
+          L16.2 6.1 L18.2 8.4
+          L21.2 8
+          L24.5 9.9
+          L26.2 13.1
+          L25 15.9
+          L23.5 18.5
+          L20.2 20.5 Z"
+          fill="${ink}"/>
+        <!-- Mane ridges and muzzle detail keep the silhouette recognisable at small size. -->
+        <path d="M10.1 8.7 L13.1 10.5 L12.2 12.2 L15.4 12.9 L14.1 15.2"
+          fill="none" stroke="${HALO}" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M19.3 9.5 L22.7 11.1 L24.8 13.1"
+          fill="none" stroke="${HALO}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="21.9" cy="11.1" r="0.9" fill="${COLORS[side].fill}"/>
+        <path d="M24.2 15.2 H26.1" stroke="${COLORS[side].fill}" stroke-width="0.95" stroke-linecap="round"/>`
       );
   }
 }
