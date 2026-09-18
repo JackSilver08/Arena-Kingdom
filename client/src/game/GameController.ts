@@ -25,7 +25,7 @@ import {
 import { statComparison } from '../components/statComparison';
 import { formatDuration, signed } from '../lib/format';
 import { $, html, setHtml, trusted, type SafeHtml } from '../lib/html';
-import { bannerIcon, buildingArt, castleArt, envelopeIcon, fallbackIcon, hammerIcon, helmetIcon, houseIcon, moneyBagIcon, troopArt, unitShopArt } from './art';
+import { bannerIcon, buildingArt, castleArt, envelopeIcon, fallbackIcon, hammerIcon, helmetIcon, houseIcon, moneyBagIcon, unitShopArt } from './art';
 import { BattleScene } from './BattleScene';
 import { symbolArt } from './symbols';
 import { battleView } from './visuals';
