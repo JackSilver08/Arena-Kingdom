@@ -443,9 +443,13 @@ export class MatchEngine {
       u.blockedUntil = 0;
       if (rearguards.has(u.id)) {
         u.fallbackRole = 'rearguard';
+        u.rearguard = true;
+        u.retreating = false;
         u.order = { kind: 'move', x: intercept.x, y: intercept.y, attack: true };
       } else {
         u.fallbackRole = 'retreat';
+        u.rearguard = false;
+        u.retreating = true;
         u.order = { kind: 'move', x: safeGoal.x, y: safeGoal.y, attack: false };
       }
       this.resetNavigation(u);
@@ -568,6 +572,8 @@ export class MatchEngine {
 
       for (const u of rearguards) {
         u.fallbackRole = 'retreat';
+        u.rearguard = false;
+        u.retreating = true;
         u.order = { kind: 'move', x: goal.x, y: goal.y, attack: false };
         u.fallbackUntilMs = this.state.timeMs;
         this.resetNavigation(u);
@@ -577,6 +583,8 @@ export class MatchEngine {
 
   private clearFallback(u: UnitState) {
     u.fallbackRole = undefined;
+    u.rearguard = undefined;
+    u.retreating = undefined;
     u.fallbackUntilMs = undefined;
     u.fallbackGroupId = undefined;
     u.fallbackGoal = undefined;
@@ -1214,6 +1222,8 @@ export class MatchEngine {
       blockedFor: -1,
       blockedUntil: 0,
       fallbackRole: undefined,
+      rearguard: undefined,
+      retreating: undefined,
       fallbackUntilMs: undefined,
       fallbackGroupId: undefined,
       fallbackGoal: undefined
