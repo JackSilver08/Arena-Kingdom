@@ -461,7 +461,7 @@ export class BattleScene extends Phaser.Scene {
     }
     for (const u of view.units) {
       const selected = !this.replayView && u.side === c.mySide && c.selection.has(u.id);
-      if (u.hp >= u.maxHp && !selected) continue;
+      if (u.hp >= u.maxHp && !selected && !u.rearguard && !u.retreating) continue;
       const sprite = this.units.get(u.id);
       const ux = sprite?.x ?? u.x;
       const troop = this.visuals.unit(u.type, u.side);
