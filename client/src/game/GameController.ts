@@ -309,19 +309,30 @@ export class GameController {
   // ------------------------------------------------------------ input
 
   private onKey(event: KeyboardEvent) {
-    // Messenger is deliberately global. Check the physical key code first so the
-    // command still works while another focusable element owns keyboard focus.
-    if (!event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && event.code === 'KeyM') {
+    const target = event.target as HTMLElement | null;
+    const isTextInput = Boolean(
+      target &&
+        (target.isContentEditable ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          (target.tagName === 'INPUT' &&
+            !['button', 'checkbox', 'radio', 'range', 'submit', 'reset'].includes(
+              (target as HTMLInputElement).type
+            )))
+    );
+    if (isTextInput) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const key = event.key ? event.key.toLowerCase() : '';
+
+    // Messenger is a global command, so it must remain reachable even when another
+    // overlay/context panel is open. Support physical KeyM and layout-dependent 'm'
+    // for all keyboards/IME configurations.
+    if (!event.repeat && (key === 'm' || event.code === 'KeyM')) {
       this.toggleMessenger();
       event.preventDefault();
       event.stopPropagation();
       return;
     }
-
-    const target = event.target as HTMLElement | null;
-    if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
-    const key = event.key.toLowerCase();
 
     if (key === 'escape') {
       if (this.closeModals()) return;
