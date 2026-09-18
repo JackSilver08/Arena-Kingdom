@@ -14,7 +14,7 @@ import type { BuildingType, Side } from '@arena-kingdom/shared';
  * Keep the markup ASCII: it is Base64-encoded with `btoa`.
  */
 
-export type SymbolType = BuildingType | 'troop' | 'militia';
+export type SymbolType = BuildingType | 'troop' | 'militia' | 'archer' | 'knight';
 
 export interface SymbolSize {
   width: number;
@@ -29,7 +29,9 @@ export const SYMBOL_SIZE: Record<SymbolType, SymbolSize> = {
   tower: { width: 56, height: 54, anchorY: 32 / 54 },
   fence: { width: 34, height: 140, anchorY: 0.5 },
   troop: { width: 30, height: 24, anchorY: 11 / 24 },
-  militia: { width: 22, height: 24, anchorY: 12 / 24 }
+  militia: { width: 22, height: 24, anchorY: 12 / 24 },
+  archer: { width: 32, height: 26, anchorY: 13 / 26 },
+  knight: { width: 32, height: 26, anchorY: 13 / 26 }
 };
 
 export const COLORS: Record<Side, { fill: string; ink: string }> = {
@@ -150,6 +152,22 @@ export function symbolArt(type: SymbolType, side: Side) {
           <path d="M4 5 L11 2 L18 5 V11 C18 17 15 20 11 22 C7 20 4 17 4 11 Z"/>
           <path d="M11 7 V16 M8 10 H14" fill="none"/>
         </g>`
+      );
+    case 'archer':
+      return svg(
+        size,
+        `${frame('<rect x="2" y="3" width="28" height="20"/>', side, 1.8)}
+        <path d="M9 7 Q22 13 9 19" fill="none" stroke="${ink}" stroke-width="1.8"/>
+        <path d="M9 13 H24" stroke="${ink}" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M24 13 L20.5 10.8 M24 13 L20.5 15.2" stroke="${ink}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`
+      );
+    case 'knight':
+      return svg(
+        size,
+        `${frame('<rect x="2" y="3" width="28" height="20"/>', side, 1.8)}
+        <path d="M10 19 Q8 15 10 11 L10 7 L14 5 L18 8 L20 7 L25 9 L27 15 L24 19 Z" fill="${ink}" opacity=".94"/>
+        <path d="M14 9 L16.5 11 L14.5 13" fill="none" stroke="${HALO}" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="23" cy="11" r="1" fill="${COLORS[side].fill}"/>`
       );
   }
 }
