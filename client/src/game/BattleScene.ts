@@ -604,10 +604,13 @@ export class BattleScene extends Phaser.Scene {
 
   private playEvents(events: GameEvent[]) {
     for (const event of events) {
-      if (this.effects > MAX_EFFECTS && (event.type === 'hit' || event.type === 'shot')) continue;
+      if (this.effects > MAX_EFFECTS && (event.type === 'hit' || event.type === 'shot' || event.type === 'arrowShot')) continue;
       switch (event.type) {
         case 'shot':
-          this.arrow(event.fromX, event.fromY, event.toX, event.toY);
+          this.arrow(event.fromX, event.fromY, event.toX, event.toY, 0.2);
+          break;
+        case 'arrowShot':
+          this.arrow(event.fromX, event.fromY, event.toX, event.toY, 0.85);
           break;
         case 'hit':
           this.spark(event.x + Phaser.Math.Between(-5, 5), event.y - 8 + Phaser.Math.Between(-5, 5), 0.55);
@@ -635,20 +638,33 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  private arrow(fromX: number, fromY: number, toX: number, toY: number) {
+  private arrow(fromX: number, fromY: number, toX: number, toY: number, arcFactor = 0.65) {
     const image = this.add
       .image(fromX, fromY, 'arrow')
       .setScale(1 / this.res)
-      .setDepth(DEPTH.effects)
+      .setDepth(DEPTH.arrows)
       .setRotation(Math.atan2(toY - fromY, toX - fromX));
     this.track(image);
+    const motion = { t: 0 };
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const distance = Math.hypot(dx, dy);
+    const arc = Math.min(95, Math.max(24, distance * arcFactor));
     this.tweens.add({
-      targets: image,
-      x: toX,
-      y: toY - 8,
-      duration: Math.min(260, 80 + Math.hypot(toX - fromX, toY - fromY)),
+      targets: motion,
+      t: 1,
+      duration: Math.min(520, 180 + distance * 1.15),
+      ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        const t = motion.t;
+        const x = fromX + dx * t;
+        const y = fromY + dy * t - Math.sin(Math.PI * t) * arc;
+        const tangentX = dx;
+        const tangentY = dy - Math.cos(Math.PI * t) * Math.PI * arc;
+        image.setPosition(x, y).setRotation(Math.atan2(tangentY, tangentX));
+      },
       onComplete: () => {
-        this.spark(toX, toY - 8, 0.45);
+        this.spark(toX, toY - 2, 0.45);
         image.destroy();
       }
     });
