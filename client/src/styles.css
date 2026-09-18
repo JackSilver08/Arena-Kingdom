@@ -2838,7 +2838,7 @@ input:not([type='radio']):focus {
   align-items: flex-end;
   gap: calc(var(--s) * 2.2);
   padding: 0 calc(var(--s) * 8) 0 calc(var(--s) * 3);
-  z-index: 5;
+  z-index: 8;
 }
 
 .hud-commands::before {
