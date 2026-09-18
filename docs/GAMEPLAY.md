@@ -15,8 +15,8 @@ A match also ends when:
 
 ## Economy
 
-- Start with 150 gold, a castle, 2 villages, a barracks and 4 soldiers.
-- Every 5 seconds the castle pays +4 gold and each village +5 gold.
+- Start with 110 gold and the current mirrored starting layout.
+- Every 5 seconds the castle pays +5 gold and each village +6 gold.
 
 ## Buildings
 
@@ -35,9 +35,11 @@ Buildings can only be placed in your own territory, outside the contested centre
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | Soldier | 18 | 2.2s | 100 | 52 | 12 / 0.8s | 14 | Basic melee infantry |
 | Archer | 21 | 2.6s | 75 | 45 | 9 / 1.1s | 190 | Long-range harassment; 125 range against buildings |
-| Knight | 24 | 2.5s | 150 | 156 | 17 / 0.9s | 18 | Fast cavalry; 3× base Soldier speed |
+| Knight | 32 | 3.2s | 85 | 150 | 20 / 1.0s | 18 | Fast cavalry; fragile, high-burst strike unit |
 
 Barracks train one unit type per active queue. Multiple barracks can train different unit types in parallel.
+
+Knights deal 3% less damage to Soldiers or Archers that are actively backed by at least one nearby matching regular unit in formation. The reduction applies only to the Knight's damage, so Knights remain effective against isolated or freestyle troops.
 
 Soldiers and Knights automatically engage enemies within their aggro range. Archers prefer enemy troops at long range and can also damage buildings from a shorter dedicated range.
 
