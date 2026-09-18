@@ -43,7 +43,13 @@ export function encodeSnapshot(view: MatchView, events: GameEvent[]): EncodedSna
   }
   const u: number[] = [];
   for (const unit of view.units) {
-    const flags = SIDE_CODES.indexOf(unit.side) | (unit.moving ? 2 : 0) | (unit.attacking ? 4 : 0) | (UNIT_CODES.indexOf(unit.type) << 3);
+    const flags =
+      SIDE_CODES.indexOf(unit.side) |
+      (unit.moving ? 2 : 0) |
+      (unit.attacking ? 4 : 0) |
+      (UNIT_CODES.indexOf(unit.type) << 3) |
+      (unit.rearguard ? 32 : 0) |
+      (unit.retreating ? 64 : 0);
     u.push(unit.id, flags, round(unit.x), round(unit.y), Math.max(0, round(unit.hp)), unit.maxHp);
   }
   const b: number[] = [];
@@ -98,7 +104,9 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       side: SIDE_CODES[flags & 1],
       moving: (flags & 2) !== 0,
       attacking: (flags & 4) !== 0,
-      type: UNIT_CODES[flags >> 3] ?? 'soldier',
+      type: UNIT_CODES[(flags >> 3) & 3] ?? 'soldier',
+      rearguard: (flags & 32) !== 0,
+      retreating: (flags & 64) !== 0,
       x: snap.u[i + 2],
       y: snap.u[i + 3],
       hp: snap.u[i + 4],

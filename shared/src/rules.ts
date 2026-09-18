@@ -70,7 +70,14 @@ export const GAME_RULES={
     damageMultiplier:2/3
   },
   limits:{maxUnitsPerSide:40,maxBuildingsPerSide:30},
-  peace:{responseWindowMs:15_000,cooldownMs:30_000}
+  peace:{responseWindowMs:15_000,cooldownMs:30_000},
+  fallback:{
+    speedMultiplier:1.2,
+    speedBuffMs:4000,
+    rearguardDamageReduction:0.35,
+    safeDistance:260,
+    rearguardRatio:0.3
+  }
 } as const;
 
 export interface AttackStats{damage:number;range:number;cooldownMs:number}

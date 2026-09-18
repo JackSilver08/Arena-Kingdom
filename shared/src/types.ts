@@ -37,6 +37,9 @@ export interface UnitView {
   maxHp: number;
   moving: boolean;
   attacking: boolean;
+  /** Tactical fallback status for client rendering and visual badges. */
+  rearguard?: boolean;
+  retreating?: boolean;
 }
 
 export interface BuildingView {
@@ -134,6 +137,7 @@ export type Command =
   | { type: 'move'; unitIds: number[]; x: number; y: number; attack: boolean; targetId?: number; formation?: FormationType }
   | { type: 'army'; fraction: ArmyFraction; x: number; y: number; targetId?: number; formation?: FormationType }
   | { type: 'stop'; unitIds: number[] }
+  | { type: 'fallback'; unitIds?: number[] }
   | { type: 'proposePeace' }
   | { type: 'respondPeace'; accept: boolean }
   | { type: 'surrender' };
