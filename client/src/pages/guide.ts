@@ -13,6 +13,7 @@ const CONTROLS: [string, string][] = [
   ['R', 'Recruit a soldier at the least busy barracks (Shift + R queues 5)'],
   ['Click your Barracks', 'Recruit a soldier at that barracks'],
   ['T', 'Troop command — then 1 All · 2 ⅓ · 3 ⅔, click a destination'],
+  ['F', 'Tactical Fall Back: selected troops split into retreaters and a rearguard; with no selection, the whole regular army falls back.'],
   ['M', 'Messenger: propose peace or surrender'],
   ['Esc', 'Cancel the current order or clear the selection']
 ];
