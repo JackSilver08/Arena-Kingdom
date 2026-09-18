@@ -78,6 +78,75 @@ export function barracksArt(side: Side) {
   );
 }
 
+
+/**
+ * Large recruitment-card icons. Unlike battlefield symbols, these are illustration-oriented UI art.
+ * Each icon uses the kingdom palette so the same recruit card clearly belongs to Blue or Red.
+ */
+export function unitShopArt(type: 'soldier' | 'archer' | 'knight', side: Side) {
+  const t = TEAM[side];
+  switch (type) {
+    case 'soldier':
+      return svg(
+        '0 0 128 128',
+        `<g stroke="${INK}" stroke-linejoin="round">
+          <path d="M64 18 L96 31 V89 L64 110 L32 89 V31 Z" fill="${t.main}" stroke-width="5"/>
+          <path d="M64 18 V104" stroke="${t.light}" stroke-width="3" opacity=".9"/>
+          <path d="M64 25 L73 31 H55 Z" fill="${t.light}" stroke="none"/>
+          <path d="M64 13 V78" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+          <path d="M64 24 V78" stroke="${t.dark}" stroke-width="3" stroke-linecap="round"/>
+          <path d="M48 73 H80" stroke="#ffffff" stroke-width="12" stroke-linecap="round"/>
+          <path d="M48 73 H80" stroke="${t.dark}" stroke-width="5" stroke-linecap="round"/>
+          <path d="M64 73 V94" stroke="${t.dark}" stroke-width="5" stroke-linecap="round"/>
+          <circle cx="64" cy="96" r="8" fill="#ffffff"/>
+          <path d="M64 103 L50 114 L64 105 L78 114 Z" fill="${t.dark}" stroke-width="0"/>
+        </g>`
+      );
+    case 'archer':
+      return svg(
+        '0 0 128 128',
+        `<g fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M39 18 C79 32 79 96 39 110" stroke="${t.dark}" stroke-width="8"/>
+          <path d="M39 18 C55 36 55 92 39 110" stroke="${t.main}" stroke-width="3.5"/>
+          <path d="M38 18 L88 64 L38 110" stroke="${t.dark}" stroke-width="5"/>
+          <path d="M28 64 H103" stroke="${t.dark}" stroke-width="8"/>
+          <path d="M103 64 L87 52 L92 64 L87 76 Z" fill="${t.main}" stroke="${t.dark}" stroke-width="4"/>
+          <path d="M28 64 L41 54 M28 64 L41 74" stroke="${t.main}" stroke-width="4"/>
+        </g>`
+      );
+    case 'knight':
+      return svg(
+        '0 0 128 128',
+        `<path d="M82 111
+          C77 102 79 91 88 82
+          L101 71
+          L95 61
+          L104 53
+          L91 40
+          L77 37
+          L66 27
+          L53 31
+          L43 17
+          L41 36
+          L31 45
+          L37 58
+          C23 69 22 88 32 101
+          C40 111 51 115 63 114
+          Z"
+          fill="${t.dark}" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/>
+        <path d="M48 27 L55 39 L64 37 L57 49
+          M39 49 L51 57
+          M69 42 C78 50 80 61 75 71
+          M81 46 L92 54 L97 61"
+          fill="none" stroke="${t.light}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M61 64 C72 68 78 77 79 88 C79 100 70 108 60 111"
+          fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+        <path d="M84 52 L91 58" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="82" cy="53" r="3.2" fill="#ffffff"/>`
+      );
+  }
+}
+
 export function troopArt(side: Side) {
   const t = TEAM[side];
   return svg(
