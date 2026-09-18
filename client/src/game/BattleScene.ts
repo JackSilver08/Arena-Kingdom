@@ -280,7 +280,7 @@ export class BattleScene extends Phaser.Scene {
     }
     const building = this.buildingAt(view.buildings, end.x, end.y);
     if (building && building.side === c.mySide && building.type === 'barracks') {
-      c.recruit(1, building.id);
+      c.openBarracks(building.id);
       return;
     }
     if (!additive) c.clearSelection();
