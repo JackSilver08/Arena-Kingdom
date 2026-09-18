@@ -686,7 +686,7 @@ export class GameController {
               title="Recruit a ${UNIT_STATS[unitType].label.toLowerCase()} at your least busy barracks"
             >
               <span class="option-key">${unitType === 'soldier' ? 'R' : ''}</span>
-              <span class="option-art option-art-troops">${trusted(unitShopArt(unitType as 'soldier' | 'archer' | 'knight', me))}</span>
+              <span class="option-art option-art-unit">${trusted(unitShopArt(unitType, me))}</span>
               <b>${UNIT_STATS[unitType].label}</b>
               <span class="yb option-cost">${UNIT_STATS[unitType].cost}$</span>
             </button>`
