@@ -59,6 +59,7 @@ Archer shots use a visible rising-and-falling arrow projectile before the impact
 | `R` / Shift + `R`        | Recruit 1 / 5 soldiers at the least busy barracks         |
 | Click your barracks      | Recruit a soldier there                                   |
 | `T`, then `1` `2` `3`    | Send All / ⅓ / ⅔ of the army to a clicked point           |
+| `F`                      | Tactical Fall Back. Selected troops fall back; with no selection, the whole regular army falls back |
 | `M`                      | Messenger: propose peace, surrender                       |
 | `Esc`                    | Cancel the current order or clear the selection           |
 
@@ -87,3 +88,14 @@ A peace proposal gives the opponent 15 seconds to answer. Proposals have a 30-se
 1. The visual layer is replaceable. Emoji and generated shapes are presentation, not game data.
 2. The server is the authority for online matches; the same engine runs offline matches in the browser.
 3. Keep the playable build small before adding more unit types or resources.
+
+
+## Tactical Fall Back
+
+Press `F` with selected troops to trigger a tactical fall back for only that group. Press `F` with no selection to fall back with the whole regular army. Militia are excluded from the command.
+
+The engine automatically assigns roles. Low-health troops and Archers prioritize the retreat group, while durable frontline Soldiers preferentially form the rearguard. The rearguard takes 35% less damage while holding the line. Retreaters receive 20% extra movement speed for the first 4 seconds.
+
+When the retreaters reach their defensive destination, or the pursuing enemy moves at least 260 world units away, surviving rearguards automatically begin the rolling retreat to the same defensive point. The defensive destination prefers a Tower, then Village, then Fence, then Castle.
+
+For groups of 2-5 regular troops, the minimum one-unit rearguard rule takes precedence over the 35% maximum because an integer split cannot satisfy both constraints.
