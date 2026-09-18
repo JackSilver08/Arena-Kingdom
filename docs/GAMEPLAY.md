@@ -1,4 +1,4 @@
-# Arena Kingdom v0.2 Gameplay
+# Arena Kingdom v0.4.3 Gameplay
 
 All numbers live in [`shared/src/rules.ts`](../shared/src/rules.ts); the in-game guide (`/guide`) is generated from the same file.
 
