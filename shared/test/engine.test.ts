@@ -204,7 +204,7 @@ test('fallback gives retreaters 20% speed for the first 4 seconds', () => {
   assert.equal(army[0].fallbackRole, 'retreat');
   const x0 = army[0].x;
   const y0 = army[0].y;
-  engine.update(1000);
+  run(engine, 1000);
   const moved = Math.hypot(army[0].x - x0, army[0].y - y0);
   const expectedStep = UNIT_STATS.soldier.speed * GAME_RULES.fallback.speedMultiplier * FORMATION_STATS.line.speedMultiplier;
   assert.equal(army[0].fallbackUntilMs, GAME_RULES.fallback.speedBuffMs);
