@@ -144,6 +144,119 @@ test('knight damage is reduced by 3% against an active soldier formation', () =>
   assert.ok(formedDamage < freeDamage, 'formation should reduce Knight damage');
 });
 
+test('fallback splits mixed troops with archers retreating and a soldier rearguard', () => {
+  const engine = new MatchEngine();
+  const army = engine.armyOf('blue');
+  army[0].type = 'soldier';
+  army[0].hp = 100;
+  army[0].maxHp = 100;
+  army[1].type = 'archer';
+  army[1].hp = 75;
+  army[1].maxHp = 75;
+  army[2].type = 'soldier';
+  army[2].hp = 90;
+  army[2].maxHp = 100;
+
+  const enemies = engine.armyOf('red');
+  enemies.forEach((u, i) => {
+    u.x = 860 + i * 24;
+    u.y = 540 + i * 18;
+  });
+
+  const result = engine.command('blue', { type: 'fallback' });
+  assert.equal(result.ok, true);
+
+  const rearguard = army.filter((u) => u.fallbackRole === 'rearguard');
+  const retreaters = army.filter((u) => u.fallbackRole === 'retreat');
+  assert.equal(rearguard.length, 1);
+  assert.equal(retreaters.length, 2);
+  assert.ok(rearguard.every((u) => u.type === 'soldier'), 'archers should not be selected as rearguard when a regular frontline unit exists');
+  assert.ok(army[1].fallbackRole === 'retreat');
+  assert.ok(rearguard[0].hp / rearguard[0].maxHp >= army[2].hp / army[2].maxHp);
+});
+
+test('fallback gives retreaters 20% speed for the first 4 seconds', () => {
+  const engine = new MatchEngine();
+  const army = engine.armyOf('blue');
+  const enemies = engine.armyOf('red');
+  enemies.forEach((u, i) => {
+    u.hp = 0;
+    u.x = 1400 + i * 20;
+    u.y = 540;
+  });
+
+  const result = engine.command('blue', { type: 'fallback', unitIds: [army[0].id] });
+  assert.equal(result.ok, true);
+  assert.equal(army[0].fallbackRole, 'retreat');
+  const x0 = army[0].x;
+  engine.update(1000);
+  const moved = Math.abs(army[0].x - x0) + Math.abs(army[0].y - army[0].prevY);
+  assert.ok(moved > UNIT_STATS.soldier.speed * 0.95, 'retreater should receive the 1.2x speed multiplier');
+});
+
+test('rearguard receives 35% damage reduction', () => {
+  const runCase = (rearguard: boolean) => {
+    const engine = new MatchEngine();
+    const blue = engine.armyOf('blue');
+    const red = engine.armyOf('red');
+    for (const u of blue.slice(1)) u.hp = 0;
+    for (const u of red.slice(1)) u.hp = 0;
+
+    const target = blue[0];
+    const attacker = red[0];
+    target.type = 'soldier';
+    target.hp = 100;
+    target.maxHp = 100;
+    target.x = 500;
+    target.y = 500;
+    attacker.type = 'soldier';
+    attacker.x = 511;
+    attacker.y = 500;
+    attacker.order = { kind: 'attack', targetId: target.id };
+    attacker.formation = 'line';
+    if (rearguard) target.fallbackRole = 'rearguard';
+    return { engine, target };
+  };
+
+  const normal = runCase(false);
+  normal.engine.update(GAME_RULES.tickMs);
+  const normalDamage = 100 - normal.target.hp;
+
+  const shielded = runCase(true);
+  shielded.engine.update(GAME_RULES.tickMs);
+  const shieldedDamage = 100 - shielded.target.hp;
+
+  assert.equal(normalDamage, UNIT_STATS.soldier.attack.damage);
+  assert.equal(shieldedDamage, UNIT_STATS.soldier.attack.damage * (1 - GAME_RULES.fallback.rearguardDamageReduction));
+});
+
+test('rearguard rolls back when retreaters reach safety', () => {
+  const engine = new MatchEngine();
+  const army = engine.armyOf('blue');
+  const red = engine.armyOf('red');
+  red.forEach((u) => {
+    u.hp = 0;
+    u.x = 1500;
+    u.y = 500;
+  });
+
+  assert.equal(engine.command('blue', { type: 'fallback' }).ok, true);
+  const rearguard = army.find((u) => u.fallbackRole === 'rearguard');
+  const retreaters = army.filter((u) => u.fallbackRole === 'retreat');
+  assert.ok(rearguard);
+  assert.ok(retreaters.length > 0);
+  const goal = retreaters[0].fallbackGoal!;
+  retreaters.forEach((u) => {
+    u.x = goal.x;
+    u.y = goal.y;
+  });
+
+  engine.update(GAME_RULES.tickMs);
+  assert.equal(rearguard!.fallbackRole, 'retreat');
+  assert.equal(rearguard!.order.kind, 'move');
+  assert.equal((rearguard!.order as { kind: 'move'; attack: boolean }).attack, false);
+});
+
 test('barracks train archers and knights with typed queues', () => {
   const engine = new MatchEngine();
   engine.state.players.blue.gold = 1000;
@@ -285,6 +398,14 @@ test('snapshots round-trip through the wire format', () => {
   assert.equal(view.players.blue.gold, engine.state.players.blue.gold);
   assert.equal(view.buildings[0].type, engine.state.buildings[0].type);
   assert.equal(view.units.at(-1)!.side, engine.state.units.at(-1)!.side);
+  const snapshotUnit = engine.armyOf('blue')[0];
+  snapshotUnit.fallbackRole = 'rearguard';
+  const retreatUnit = engine.armyOf('blue')[1];
+  retreatUnit.fallbackRole = 'retreat';
+  const encoded = encodeSnapshot(engine.state, []);
+  const decoded = decodeSnapshot(JSON.parse(JSON.stringify(encoded))).view;
+  assert.equal(decoded.units.find((u) => u.id === snapshotUnit.id)?.rearguard, true);
+  assert.equal(decoded.units.find((u) => u.id === retreatUnit.id)?.retreating, true);
 });
 
 test('parseCommand rejects malformed input', () => {
@@ -293,6 +414,9 @@ test('parseCommand rejects malformed input', () => {
   assert.equal(parseCommand({ type: 'build', building: 'tower', x: Infinity, y: 1 }), null);
   assert.equal(parseCommand('surrender'), null);
   assert.equal(parseCommand({ type: 'move', unitIds: [1], x: 1, y: 1, targetId: 'x' }), null);
+  assert.deepEqual(parseCommand({ type: 'fallback' }), { type: 'fallback' });
+  assert.deepEqual(parseCommand({ type: 'fallback', unitIds: [1, 2] }), { type: 'fallback', unitIds: [1, 2] });
+  assert.equal(parseCommand({ type: 'fallback', unitIds: ['1'] }), null);
   assert.deepEqual(parseCommand({ type: 'surrender' }), { type: 'surrender' });
 });
 
