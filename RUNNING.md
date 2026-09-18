@@ -89,6 +89,8 @@ Chạy tại thư mục gốc:
 | `npm test`               | Chạy test engine & AI                                             |
 | `npm run typecheck`      | Kiểm tra kiểu TypeScript cho cả 3 workspace                       |
 | `npm run simulate`       | Bot đấu bot, ví dụ `npm run simulate -- hard normal 20`           |
+| `npm run tunnel`         | Mở cổng ngrok cho môi trường dev (cổng 5173)                      |
+| `npm run tunnel:prod`    | Mở cổng ngrok cho môi trường production (cổng 2567)               |
 
 ### Chạy bản production
 
@@ -183,6 +185,22 @@ npm run build:shared
 ### Không vào được trận online từ máy khác trong mạng LAN
 
 Truy cập bằng địa chỉ `Network` mà Vite in ra (ví dụ `http://192.168.x.x:5173`) và cho phép Node.js qua Windows Firewall. Hai tài khoản khác nhau mới ghép trận được với nhau.
+
+### Mở mạng qua Internet bằng ngrok (chơi từ xa với bạn bè)
+
+- **Khi chạy chế độ dev (`npm run dev`):**
+  ```bash
+  npm run tunnel
+  # hoặc: ngrok http 5173
+  ```
+  Vite đã được cấu hình proxy WebSocket (`/colyseus`) và REST API (`/api`) về server cổng 2567, đồng thời cho phép truy cập qua host ngrok.
+
+- **Khi chạy bản production (`npm run build && npm start`):**
+  ```bash
+  npm run tunnel:prod
+  # hoặc: ngrok http 2567
+  ```
+  Cổng 2567 phục vụ trực tiếp toàn bộ Web, API và Colyseus WebSocket trên cùng một domain.
 
 ### Cổng 5173 hoặc 2567 đã bị chiếm
 

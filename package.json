@@ -26,6 +26,8 @@
     "qa": "npm run qa:static && npm run typecheck && npm test && npm run build && npm run check:bundle",
     "simulate": "npm --workspace shared run simulate --",
     "simulate:balance": "npm --workspace shared run simulate:balance --",
+    "tunnel": "ngrok http 5173",
+    "tunnel:prod": "ngrok http 2567",
     "format": "prettier --write ."
   },
   "devDependencies": {
