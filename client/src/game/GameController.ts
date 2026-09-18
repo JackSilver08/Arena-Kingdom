@@ -316,8 +316,19 @@ export class GameController {
       if (this.closeModals()) return;
       if (this.mode !== 'idle') this.setMode('idle');
       else this.clearSelection();
+      event.preventDefault();
       return;
     }
+
+    // Messenger is a global command, so it must remain reachable even when another
+    // overlay/context panel is open. Use event.code as a layout-independent fallback
+    // for keyboards/IME configurations where event.key can be inconsistent.
+    if (!event.repeat && (key === 'm' || event.code === 'KeyM')) {
+      this.toggleMessenger();
+      event.preventDefault();
+      return;
+    }
+
     if (this.anyModalOpen() || event.repeat) return;
 
     const handled = (() => {
