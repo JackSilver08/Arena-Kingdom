@@ -414,7 +414,10 @@ export class MatchEngine {
           )
         : 0;
 
-    const scored = eligible.map((u) => {
+    const rearguardPool = eligible.some((u) => u.type !== 'archer')
+      ? eligible.filter((u) => u.type !== 'archer')
+      : eligible;
+    const scored = rearguardPool.map((u) => {
       const nearestEnemy = this.nearestEnemyOf(u, GAME_RULES.fallback.detectionRange);
       const d = nearestEnemy ? dist(u.x, u.y, nearestEnemy.x, nearestEnemy.y) : GAME_RULES.fallback.detectionRange;
       const proximity = Math.max(0.1, 1 / (1 + d / 100));
@@ -423,7 +426,7 @@ export class MatchEngine {
     });
     scored.sort((a, b) => b.score - a.score);
 
-    const rearguards = new Set(scored.slice(0, rearguardCount).map((entry) => entry.u.id));
+    const rearguards = new Set(scored.slice(0, Math.min(rearguardCount, scored.length)).map((entry) => entry.u.id));
     const intercept = nearestThreat
       ? this.interceptionPoint(nearestThreat, center, safeGoal)
       : { x: (center.x + safeGoal.x) / 2, y: (center.y + safeGoal.y) / 2 };
