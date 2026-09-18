@@ -142,6 +142,7 @@ export type CommandResult = { ok: true; message?: string } | { ok: false; error:
 
 export type GameEvent =
   | { type: 'shot'; side: Side; fromX: number; fromY: number; toX: number; toY: number }
+  | { type: 'arrowShot'; side: Side; fromX: number; fromY: number; toX: number; toY: number; targetId: number }
   | { type: 'hit'; x: number; y: number }
   | { type: 'unitDied'; side: Side; x: number; y: number }
   | { type: 'unitTrained'; side: Side; x: number; y: number }
