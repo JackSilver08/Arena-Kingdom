@@ -104,15 +104,9 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       side: SIDE_CODES[flags & 1],
       moving: (flags & 2) !== 0,
       attacking: (flags & 4) !== 0,
-<<<<<<< HEAD
-      type: UNIT_CODES[(flags >> 3) & 3] ?? 'soldier',
-      rearguard: (flags & 32) !== 0,
-      retreating: (flags & 64) !== 0,
-=======
       type: UNIT_CODES[(flags >> 3) & 0x3] ?? 'soldier',
       rearguard: snap.v !== undefined && snap.v >= 3 ? (flags & 32) !== 0 : undefined,
-      retreating: snap.v !== undefined && snap.v >= 3 ? (flags & 64) !== 0 : undefined,
->>>>>>> e33f3e2632134d362bf7332c4111399b61dedf74
+      retreating: snap.v !== undefined && snap.v >= 3 ? (flags & 64) !== 0 : undefined
       x: snap.u[i + 2],
       y: snap.u[i + 3],
       hp: snap.u[i + 4],
@@ -121,7 +115,7 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
   }
 
   const buildings: MatchView['buildings'] = [];
-  const buildingFields = snap.v === 2 ? BUILDING_FIELDS : 8;
+  const buildingFields = snap.v !== undefined && snap.v >= 2 ? BUILDING_FIELDS : 8;
   for (let i = 0; i + buildingFields <= snap.b.length; i += buildingFields) {
     const flags = snap.b[i + 1];
     buildings.push({
@@ -134,7 +128,7 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       maxHp: snap.b[i + 5],
       queue: snap.b[i + 6],
       trainProgress: snap.b[i + 7] / 100,
-      trainType: snap.v === 2 && snap.b[i + 8] >= 0 ? UNIT_CODES[snap.b[i + 8]] ?? 'soldier' : null
+      trainType: snap.v !== undefined && snap.v >= 2 && snap.b[i + 8] >= 0 ? UNIT_CODES[snap.b[i + 8]] ?? 'soldier' : null
     });
   }
 
