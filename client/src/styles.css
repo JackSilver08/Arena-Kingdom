@@ -3041,6 +3041,25 @@ input:not([type='radio']):focus {
 .option-recruit {
   margin-left: calc(var(--s) * 1);
   background: #fffbe0;
+  min-height: calc(var(--s) * 16);
+}
+
+.option-recruit .option-art-unit {
+  width: calc(var(--s) * 9.6);
+  height: calc(var(--s) * 9.4);
+  margin-top: calc(var(--s) * 0.25);
+}
+
+.option-recruit .option-art-unit svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.option-recruit .option-cost {
+  font-size: calc(var(--s) * 1.6);
+  min-width: calc(var(--s) * 5.8);
+  padding-inline: calc(var(--s) * 0.7);
 }
 
 .popup-note {
