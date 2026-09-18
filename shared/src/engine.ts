@@ -354,6 +354,7 @@ export class MatchEngine {
     for (const u of this.state.units) {
       if (u.side !== side || !wanted.has(u.id)) continue;
       u.order = { kind: 'idle' };
+      u.formation = undefined;
       this.resetNavigation(u);
       stopped += 1;
     }
@@ -596,7 +597,7 @@ export class MatchEngine {
           if (u.cooldownMs <= 0) {
             u.cooldownMs = attack.cooldownMs;
             u.lastAttackMs = s.timeMs;
-            this.damage(u.side, aim, attack.damage, u.formation ?? 'line');
+            this.damage(u.side, aim, attack.damage, u.formation ?? 'line', u.type);
             if (u.type === 'archer') {
               this.events.push({
                 type: 'arrowShot',
@@ -837,13 +838,56 @@ export class MatchEngine {
     }
   }
 
-  private damage(attacker: Side, target: Entity, amount: number, attackerFormation?: FormationType) {
+  /**
+   * Knights punish unprepared, free-form troops. When a Knight hits a Soldier or Archer that is
+   * actively participating in a nearby 2+ unit formation, its damage is reduced by exactly 3%.
+   */
+  private damage(
+    attacker: Side,
+    target: Entity,
+    amount: number,
+    attackerFormation?: FormationType,
+    attackerType?: UnitType
+  ) {
     let effective = amount;
     if (attackerFormation) effective *= FORMATION_STATS[attackerFormation].attackMultiplier;
-    if (!isBuilding(target)) effective *= FORMATION_STATS[target.formation ?? 'line'].defenseMultiplier;
+
+    if (!isBuilding(target)) {
+      effective *= FORMATION_STATS[target.formation ?? 'line'].defenseMultiplier;
+
+      if (attackerType === 'knight' && this.isKnightCounterFormation(target)) {
+        effective *= 0.97;
+      }
+    }
+
     const dealt = Math.min(target.hp, effective);
     target.hp -= effective;
     this.state.players[attacker].stats.damageDealt += dealt;
+  }
+
+  /**
+   * A formation penalty only applies when the Soldier/Archer is actually backed by another
+   * matching Soldier/Archer nearby. This prevents a single unit's stored formation value from
+   * accidentally granting the Knight counter bonus.
+   */
+  private isKnightCounterFormation(target: UnitState) {
+    if (target.type !== 'soldier' && target.type !== 'archer') return false;
+
+    const formation = target.formation ?? null;
+    if (!formation || target.order.kind === 'idle') return false;
+
+    const formationRadius = 110;
+    let members = 0;
+    for (const unit of this.state.units) {
+      if (unit.side !== target.side || unit.hp <= 0) continue;
+      if (unit.type !== 'soldier' && unit.type !== 'archer') continue;
+      if (unit.formation !== formation || unit.order.kind === 'idle') continue;
+      if (dist(unit.x, unit.y, target.x, target.y) <= formationRadius) {
+        members += 1;
+        if (members >= 2) return true;
+      }
+    }
+    return false;
   }
 
   private removeDead() {
