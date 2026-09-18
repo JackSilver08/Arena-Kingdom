@@ -137,8 +137,15 @@ test('knight damage is reduced by 3% against an active soldier formation', () =>
   formed.engine.update(GAME_RULES.tickMs);
   const formedDamage = formedBefore - formed.target.hp;
 
-  const expectedFree = UNIT_STATS.knight.attack.damage * FORMATION_STATS.square.attackMultiplier;
-  const expectedFormed = expectedFree * FORMATION_STATS.column.defenseMultiplier * 0.97;
+  const expectedFree =
+    UNIT_STATS.knight.attack.damage *
+    FORMATION_STATS.square.attackMultiplier *
+    FORMATION_STATS.line.defenseMultiplier;
+  const expectedFormed =
+    UNIT_STATS.knight.attack.damage *
+    FORMATION_STATS.square.attackMultiplier *
+    FORMATION_STATS.column.defenseMultiplier *
+    0.97;
   assert.equal(freeDamage, expectedFree);
   assert.equal(formedDamage, expectedFormed);
   assert.ok(formedDamage < freeDamage, 'formation should reduce Knight damage');
@@ -177,6 +184,7 @@ test('fallback splits mixed troops with archers retreating and a soldier reargua
 
 test('fallback gives retreaters 20% speed for the first 4 seconds', () => {
   const engine = new MatchEngine();
+  engine.state.buildings = [];
   const army = engine.armyOf('blue');
   const enemies = engine.armyOf('red');
   enemies.forEach((u, i) => {
@@ -227,8 +235,15 @@ test('rearguard receives 35% damage reduction', () => {
   shielded.engine.update(GAME_RULES.tickMs);
   const shieldedDamage = 100 - shielded.target.hp;
 
-  assert.equal(normalDamage, UNIT_STATS.soldier.attack.damage);
-  assert.equal(shieldedDamage, UNIT_STATS.soldier.attack.damage * (1 - GAME_RULES.fallback.rearguardDamageReduction));
+  const baseDamage =
+    UNIT_STATS.soldier.attack.damage *
+    FORMATION_STATS.line.attackMultiplier *
+    FORMATION_STATS.line.defenseMultiplier;
+  assert.equal(normalDamage, baseDamage);
+  assert.equal(
+    shieldedDamage,
+    baseDamage * (1 - GAME_RULES.fallback.rearguardDamageReduction)
+  );
 });
 
 test('rearguard rolls back when retreaters reach safety', () => {
@@ -272,7 +287,11 @@ test('barracks train archers and knights with typed queues', () => {
   assert.equal(barracks.trainType, null);
 
   assert.equal(engine.command('blue', { type: 'train', count: 1, unitType: 'knight' }).ok, true);
-  assert.equal(engine.state.players.blue.gold, 1000 - 2 * UNIT_STATS.archer.cost - UNIT_STATS.knight.cost);
+  const income = GAME_RULES.economy.castleIncome + 3 * GAME_RULES.economy.villageIncome;
+  assert.equal(
+    engine.state.players.blue.gold,
+    1000 - 2 * UNIT_STATS.archer.cost + income - UNIT_STATS.knight.cost
+  );
   assert.equal(barracks.trainType, 'knight');
   run(engine, UNIT_STATS.knight.trainMs + 100);
   assert.equal(engine.armyOf('blue').filter((u) => u.type === 'knight').length, 1);
@@ -401,8 +420,10 @@ test('snapshots round-trip through the wire format', () => {
   assert.equal(view.units.at(-1)!.side, engine.state.units.at(-1)!.side);
   const snapshotUnit = engine.armyOf('blue')[0];
   snapshotUnit.fallbackRole = 'rearguard';
+  snapshotUnit.rearguard = true;
   const retreatUnit = engine.armyOf('blue')[1];
   retreatUnit.fallbackRole = 'retreat';
+  retreatUnit.retreating = true;
   const encoded = encodeSnapshot(engine.state, []);
   const decoded = decodeSnapshot(JSON.parse(JSON.stringify(encoded))).view;
   assert.equal(decoded.units.find((u) => u.id === snapshotUnit.id)?.rearguard, true);
@@ -415,7 +436,7 @@ test('parseCommand rejects malformed input', () => {
   assert.equal(parseCommand({ type: 'build', building: 'tower', x: Infinity, y: 1 }), null);
   assert.equal(parseCommand('surrender'), null);
   assert.equal(parseCommand({ type: 'move', unitIds: [1], x: 1, y: 1, targetId: 'x' }), null);
-  assert.deepEqual(parseCommand({ type: 'fallback' }), { type: 'fallback' });
+  assert.deepEqual(parseCommand({ type: 'fallback' }), { type: 'fallback', unitIds: undefined });
   assert.deepEqual(parseCommand({ type: 'fallback', unitIds: [1, 2] }), { type: 'fallback', unitIds: [1, 2] });
   assert.equal(parseCommand({ type: 'fallback', unitIds: ['1'] }), null);
   assert.deepEqual(parseCommand({ type: 'surrender' }), { type: 'surrender' });
