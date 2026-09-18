@@ -70,7 +70,22 @@ export const GAME_RULES={
     damageMultiplier:2/3
   },
   limits:{maxUnitsPerSide:40,maxBuildingsPerSide:30},
-  peace:{responseWindowMs:15_000,cooldownMs:30_000}
+  peace:{responseWindowMs:15_000,cooldownMs:30_000},
+  fallback:{
+    /** 20% movement boost for the first 4 seconds of a tactical fall back. */
+    speedMultiplier:1.2,
+    speedBuffMs:4_000,
+    /** Rearguard takes 35% less damage while holding the line. */
+    rearguardDamageReduction:0.35,
+    /** Once the chasing enemy is this far away, the rearguard can roll back. */
+    safeDistance:260,
+    /** Tactical scan used to pick the nearest threat for the interception point. */
+    detectionRange:260,
+    /** Rearguard should be roughly 30% of the group, never above 35% when that constraint is possible. */
+    rearguardRatio:0.30,
+    /** Minimum regular troops required before a fall back can split into roles. */
+    minimumSplitSize:2
+  }
 } as const;
 
 export interface AttackStats{damage:number;range:number;cooldownMs:number}
