@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   BUILDING_STATS,
   BotController,
+  FORMATION_STATS,
   GAME_RULES,
   MatchEngine,
   NavGrid,
@@ -65,13 +66,82 @@ test('barracks train queued soldiers', () => {
   assert.equal(engine.state.players.blue.stats.unitsTrained, 2);
 });
 
-test('unit roster keeps the intended 18 / 21 / 24 gold balance', () => {
+test('unit roster uses the current balance', () => {
   assert.equal(UNIT_STATS.soldier.cost, 18);
   assert.equal(UNIT_STATS.archer.cost, 21);
-  assert.equal(UNIT_STATS.knight.cost, 24);
-  assert.equal(UNIT_STATS.knight.speed, UNIT_STATS.soldier.speed * 3);
+  assert.equal(UNIT_STATS.knight.cost, 32);
+  assert.equal(UNIT_STATS.soldier.hp, 100);
+  assert.equal(UNIT_STATS.archer.hp, 75);
+  assert.equal(UNIT_STATS.knight.hp, 85);
+  assert.equal(UNIT_STATS.militia.hp, 150);
+  assert.equal(UNIT_STATS.soldier.attack.damage, 12);
+  assert.equal(UNIT_STATS.archer.attack.damage, 9);
+  assert.equal(UNIT_STATS.knight.attack.damage, 20);
+  assert.equal(UNIT_STATS.militia.attack.damage, 8);
+  assert.equal(UNIT_STATS.knight.speed, 150);
+  assert.equal(UNIT_STATS.knight.trainMs, 3200);
   assert.ok(UNIT_STATS.archer.attack.range > UNIT_STATS.soldier.attack.range);
   assert.equal(UNIT_STATS.archer.buildingAttack?.range, 125);
+});
+
+test('knight damage is reduced by 3% against an active soldier formation', () => {
+  const setup = (formed: boolean) => {
+    const engine = new MatchEngine();
+    engine.state.buildings = [];
+
+    const knight = engine.armyOf('blue')[0];
+    knight.type = 'knight';
+    knight.hp = UNIT_STATS.knight.hp;
+    knight.maxHp = UNIT_STATS.knight.hp;
+    knight.formation = 'square';
+    knight.x = 1000;
+    knight.y = 540;
+
+    const defenders = engine.armyOf('red').slice(0, 2);
+    const target = defenders[0];
+    const support = defenders[1];
+    target.type = 'soldier';
+    target.hp = UNIT_STATS.soldier.hp;
+    target.maxHp = UNIT_STATS.soldier.hp;
+    target.x = 1020;
+    target.y = 540;
+    support.type = 'soldier';
+    support.hp = UNIT_STATS.soldier.hp;
+    support.maxHp = UNIT_STATS.soldier.hp;
+    support.x = 1040;
+    support.y = 540;
+
+    if (formed) {
+      target.formation = 'column';
+      support.formation = 'column';
+      target.order = { kind: 'move', x: target.x, y: target.y, attack: false };
+      support.order = { kind: 'move', x: support.x, y: support.y, attack: false };
+    } else {
+      target.formation = undefined;
+      support.formation = undefined;
+      target.order = { kind: 'idle' };
+      support.order = { kind: 'idle' };
+    }
+
+    knight.order = { kind: 'attack', targetId: target.id };
+    return { engine, target };
+  };
+
+  const free = setup(false);
+  const freeBefore = free.target.hp;
+  free.engine.update(GAME_RULES.tickMs);
+  const freeDamage = freeBefore - free.target.hp;
+
+  const formed = setup(true);
+  const formedBefore = formed.target.hp;
+  formed.engine.update(GAME_RULES.tickMs);
+  const formedDamage = formedBefore - formed.target.hp;
+
+  const expectedFree = UNIT_STATS.knight.attack.damage * FORMATION_STATS.square.attackMultiplier;
+  const expectedFormed = expectedFree * FORMATION_STATS.column.defenseMultiplier * 0.97;
+  assert.equal(freeDamage, expectedFree);
+  assert.equal(formedDamage, expectedFormed);
+  assert.ok(formedDamage < freeDamage, 'formation should reduce Knight damage');
 });
 
 test('barracks train archers and knights with typed queues', () => {
