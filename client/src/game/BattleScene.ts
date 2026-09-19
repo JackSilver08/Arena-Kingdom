@@ -5,6 +5,7 @@ import {
   GAME_RULES,
   UNIT_STATS,
   distanceToBuilding,
+  fenceAngle,
   formationOffsets,
   territoryOutline,
   type BuildingType,
@@ -264,6 +265,13 @@ export class BattleScene extends Phaser.Scene {
       this.updateHover();
     });
 
+    this.input.on('wheel', (pointer: Phaser.Input.Pointer, _over: Phaser.GameObjects.GameObject[], _deltaX: number, deltaY: number) => {
+      const c = this.controller;
+      if (!c.canCommand || c.mode !== 'build' || c.buildType !== 'fence') return;
+      c.rotateFence(deltaY < 0 ? -1 : 1);
+      (pointer.event as WheelEvent).preventDefault?.();
+    });
+
     const finishDrag = (pointer: Phaser.Input.Pointer) => {
       const start = this.dragStart;
       this.dragStart = null;
@@ -430,6 +438,7 @@ export class BattleScene extends Phaser.Scene {
         this.buildings.set(b.id, sprite);
       }
       sprite.seen = frame;
+      sprite.image.setRotation(b.type === 'fence' ? fenceAngle(b.rotation) : 0);
       if (b.hp < sprite.lastHp) sprite.hurtUntil = this.time.now + 140;
       sprite.lastHp = b.hp;
       if (this.time.now < sprite.hurtUntil) sprite.image.setTint(0xffb4b4);
@@ -454,6 +463,7 @@ export class BattleScene extends Phaser.Scene {
       .image(b.x, b.y, visual.key)
       .setOrigin(0.5, visual.anchorY)
       .setDisplaySize(visual.width, visual.height)
+      .setRotation(b.type === 'fence' ? fenceAngle(b.rotation) : 0)
       .setDepth(DEPTH.entities + (b.y + BUILDING_STATS[b.type].halfHeight) / 10);
     const queue =
       b.type === 'barracks'
@@ -717,8 +727,24 @@ export class BattleScene extends Phaser.Scene {
       o.fillStyle(color, 0.28);
       o.lineStyle(3, color, 0.95);
       if (stats.shape === 'rect') {
-        o.fillRect(point.x - stats.halfWidth, point.y - stats.halfHeight, stats.halfWidth * 2, stats.halfHeight * 2);
-        o.strokeRect(point.x - stats.halfWidth, point.y - stats.halfHeight, stats.halfWidth * 2, stats.halfHeight * 2);
+        if (type === 'fence') {
+          const angle = fenceAngle(c.buildFenceRotation);
+          const cos = Math.cos(angle), sin = Math.sin(angle);
+          const corners = [
+            { x: -stats.halfWidth, y: -stats.halfHeight },
+            { x: stats.halfWidth, y: -stats.halfHeight },
+            { x: stats.halfWidth, y: stats.halfHeight },
+            { x: -stats.halfWidth, y: stats.halfHeight }
+          ].map(({ x:lx, y:ly }) => ({
+            x:point.x+lx*cos-ly*sin,
+            y:point.y+lx*sin+ly*cos
+          }));
+          o.fillPoints(corners, true);
+          o.strokePoints(corners, true);
+        } else {
+          o.fillRect(point.x - stats.halfWidth, point.y - stats.halfHeight, stats.halfWidth * 2, stats.halfHeight * 2);
+          o.strokeRect(point.x - stats.halfWidth, point.y - stats.halfHeight, stats.halfWidth * 2, stats.halfHeight * 2);
+        }
       } else {
         o.fillEllipse(point.x, point.y, stats.halfWidth * 2 + 12, stats.halfWidth * 2 + 12);
         o.strokeEllipse(point.x, point.y, stats.halfWidth * 2 + 12, stats.halfWidth * 2 + 12);
@@ -732,6 +758,7 @@ export class BattleScene extends Phaser.Scene {
         .setOrigin(0.5, visual.anchorY)
         .setDisplaySize(visual.width, visual.height)
         .setPosition(point.x, point.y)
+        .setRotation(type === 'fence' ? fenceAngle(c.buildFenceRotation) : 0)
         .setAlpha(valid ? 0.8 : 0.4)
         .setVisible(true);
     } else {
