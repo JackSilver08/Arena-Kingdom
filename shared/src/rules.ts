@@ -85,7 +85,7 @@ export const GAME_RULES={
     emergencyThreat:42,
     emergencyHoldMs:10_000,
     returnDistance:70,
-    threatWeight:{soldier:10,archer:9,knight:16,militia:7,scout:3,royal_guard:18}
+    threatWeight:{soldier:10,archer:9,knight:16,militia:7,scout:3,royal_guard:18,cannon:22}
   },
   limits:{maxUnitsPerSide:40,maxBuildingsPerSide:30},
   peace:{responseWindowMs:15_000,cooldownMs:30_000},
