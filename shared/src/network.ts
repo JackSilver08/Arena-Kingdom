@@ -26,7 +26,7 @@ export interface EncodedSnapshot {
 }
 
 const SIDE_CODES: Side[] = ['blue', 'red'];
-const UNIT_CODES: UnitType[] = ['soldier', 'militia', 'archer', 'knight'];
+const UNIT_CODES: UnitType[] = ['soldier', 'militia', 'archer', 'knight', 'scout'];
 // Append new types at the end so existing codes stay stable.
 const BUILDING_CODES: BuildingType[] = ['castle', 'village', 'barracks', 'tower', 'fence'];
 const REASON_CODES: EndReason[] = ['castle', 'surrender', 'peace', 'timeout', 'disconnect'];
@@ -68,7 +68,7 @@ export function encodeSnapshot(view: MatchView, events: GameEvent[]): EncodedSna
     );
   }
   return {
-    v: 3,
+    v: 4,
     t: round(view.timeMs),
     n: round(view.nextIncomeInMs),
     p,
@@ -104,7 +104,7 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       side: SIDE_CODES[flags & 1],
       moving: (flags & 2) !== 0,
       attacking: (flags & 4) !== 0,
-      type: UNIT_CODES[(flags >> 3) & 0x3] ?? 'soldier',
+      type: UNIT_CODES[(flags >> 3) & 0x7] ?? 'soldier',
       rearguard: snap.v !== undefined && snap.v >= 3 ? (flags & 32) !== 0 : undefined,
       retreating: snap.v !== undefined && snap.v >= 3 ? (flags & 64) !== 0 : undefined,
       x: snap.u[i + 2],
