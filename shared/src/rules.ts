@@ -231,9 +231,16 @@ export function canPlaceBuilding(buildings:readonly(Located&{side?:Side})[],side
   for(const other of buildings){
     const os=BUILDING_STATS[other.type];
     if(type==='fence'&&other.type==='fence'){if(fencesMayJoin(candidate,other))continue;if(polygonsOverlapSAT(fenceCorners(candidate),fenceCorners(other)))return{ok:false,reason:'Too close to another building.'};continue;}
-    if(type==='fence'&&os.shape==='circle'&&circleVsFenceOverlap({x:other.x,y:other.y,radius:os.halfWidth+BUILDING_GAP},candidate))return{ok:false,reason:'Too close to another building.'};
-    if(stats.shape==='circle'&&other.type==='fence'&&circleVsFenceOverlap({x,y,radius:stats.halfWidth+BUILDING_GAP},other))return{ok:false,reason:'Too close to another building.'};
-    if(stats.shape==='circle'&&other.type!=='fence'&&Math.abs(other.x-x)<stats.halfWidth+os.halfWidth+BUILDING_GAP&&Math.abs(other.y-y)<stats.halfHeight+os.halfHeight+BUILDING_GAP)return{ok:false,reason:'Too close to another building.'};
+    if(type==='fence'&&os.shape==='circle'){
+      if(circleVsFenceOverlap({x:other.x,y:other.y,radius:os.halfWidth+BUILDING_GAP},candidate))return{ok:false,reason:'Too close to another building.'};
+      continue;
+    }
+    if(stats.shape==='circle'&&other.type==='fence'){
+      if(circleVsFenceOverlap({x,y,radius:stats.halfWidth+BUILDING_GAP},other))return{ok:false,reason:'Too close to another building.'};
+      continue;
+    }
+    if(Math.abs(other.x-x)<stats.halfWidth+os.halfWidth+BUILDING_GAP&&Math.abs(other.y-y)<stats.halfHeight+os.halfHeight+BUILDING_GAP)
+      return{ok:false,reason:'Too close to another building.'};
   } return{ok:true};
 }
 export function snapPlacement(buildings:readonly(Located&{side:Side})[],side:Side,type:BuildableType,x:number,y:number,rawRotation?:number){
