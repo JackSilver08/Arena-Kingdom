@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-  MatchEngine,
-  UNIT_STATS,
-  decodeSnapshot,
-  encodeSnapshot
-} from '../src/index.js';
+import { MatchEngine, UNIT_STATS, decodeSnapshot, encodeSnapshot } from '../src/index.js';
 
 function run(engine: MatchEngine, ms: number) {
   engine.update(ms);
