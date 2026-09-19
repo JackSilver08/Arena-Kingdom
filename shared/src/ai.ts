@@ -176,7 +176,6 @@ export class BotController {
     }
 
     // Recruitment: keep the barracks busy, unless saving for the next project.
-    const soldierCost = UNIT_STATS.soldier.cost;
     const saving = project !== null && !underPressure && !intruders.length && army.length >= 6;
     const reserve = profile.reserve + (saving && project ? BUILDING_STATS[project].cost : 0);
     if (Math.random() < profile.recruitChance || intruders.length) {
