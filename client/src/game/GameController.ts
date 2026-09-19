@@ -64,7 +64,7 @@ function formationGlyph(type: FormationType) {
 }
 
 function typeCountsLabel(type: UnitType, count: number) {
-  const symbols: Record<UnitType, string> = { soldier: '⚔', militia: '🛡', archer: '🏹', knight: '♞', scout: '◉', royal_guard: '♛' };
+  const symbols: Record<UnitType, string> = { soldier: '⚔', militia: '🛡', archer: '🏹', knight: '♞', scout: '◉', royal_guard: '♛', cannon: '◈' };
   return `${symbols[type]} ${count}`;
 }
 
@@ -779,7 +779,7 @@ export class GameController {
           <button type="button" class="context-close" data-action="close-context" aria-label="Close">×</button>
         </div>
         <div class="barracks-units">
-          ${(['soldier', 'archer', 'knight'] as const).map(
+          ${(['soldier', 'archer', 'knight', 'cannon'] as const).map(
             (unitType) => html`<button
               type="button"
               class="barracks-unit-option ${gold < UNIT_STATS[unitType].cost ? 'unaffordable' : ''}"
@@ -845,7 +845,7 @@ export class GameController {
       const upkeep = armyUpkeep(army.length, supply);
       const selected = FORMATION_STATS[this.formation];
       const selectedCount = this.selection.size;
-      const composition = (['soldier', 'archer', 'knight'] as UnitType[])
+      const composition = (['soldier', 'archer', 'knight', 'cannon'] as UnitType[])
         .map((type) => {
           const count = army.filter((u) => u.type === type).length;
           return count ? typeCountsLabel(type, count) : '';
