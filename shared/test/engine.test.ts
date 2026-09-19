@@ -86,6 +86,7 @@ test('unit roster uses the current balance', () => {
   assert.equal(UNIT_STATS.scout.hp, 40);
   assert.equal(UNIT_STATS.scout.speed, 100);
   assert.equal(UNIT_STATS.scout.vision, 300);
+  assert.equal(UNIT_STATS.archer.buildingAttack?.range, 125);
 });
  
 test('castle trains scouts and barracks reject scout queues', () => {
@@ -160,7 +161,6 @@ test('fog filters hidden enemy events', () => {
   assert.equal(engine.eventsForSide('blue', [hidden]).length, 1);
 });
 
-  assert.equal(UNIT_STATS.archer.buildingAttack?.range, 125);
 });
 
 test('knight damage is reduced by 3% against an active soldier formation', () => {
