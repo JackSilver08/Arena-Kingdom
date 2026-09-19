@@ -1,7 +1,7 @@
 import { coastline, isWalkableLand } from './island.js';
 import type { ArmyFraction, BuildableType, BuildingType, Side, UnitType, Vec2 } from './types.js';
 
-export const GAME_VERSION = '0.6.0';
+export const GAME_VERSION = '0.7.0';
 
 type Rect={minX:number;maxX:number;minY:number;maxY:number};
 /** Each kingdom builds on its side of its front line; the strip between them is no man's land. */
@@ -117,14 +117,27 @@ export const BUILDING_STATS:Record<BuildingType,BuildingStats>={
   tower:{label:'Tower',icon:'🗼',cost:120,hp:700,shape:'circle',halfWidth:20,halfHeight:20,attack:{damage:18,range:100,cooldownMs:850},vision:320,description:`Shoots enemy troops in range. Cannot move. Adds ${GAME_RULES.economy.supply.tower} army supply.`}
 };
 
-export interface UnitStats{label:string;cost:number;trainMs:number;hp:number;radius:number;speed:number;aggroRange:number;attack:AttackStats;buildingAttack?:AttackStats;vision:number}
+export interface UnitStats{
+  label:string;
+  cost:number;
+  trainMs:number;
+  hp:number;
+  radius:number;
+  speed:number;
+  aggroRange:number;
+  attack:AttackStats;
+  buildingAttack?:AttackStats;
+  vision:number;
+  splashRadius?:number;
+}
 export const UNIT_STATS:Record<UnitType,UnitStats>={
   soldier:{label:'Soldier',cost:18,trainMs:2200,hp:100,radius:10,speed:52,aggroRange:120,attack:{damage:12,range:14,cooldownMs:800},vision:150},
   militia:{label:'Militia',cost:0,trainMs:0,hp:150,radius:10,speed:52,aggroRange:205,attack:{damage:8,range:14,cooldownMs:800},vision:180},
   archer:{label:'Archer',cost:21,trainMs:2600,hp:75,radius:10,speed:45,aggroRange:210,attack:{damage:9,range:190,cooldownMs:1100},buildingAttack:{damage:10,range:125,cooldownMs:1250},vision:190},
   knight:{label:'Knight',cost:32,trainMs:3200,hp:85,radius:11,speed:150,aggroRange:150,attack:{damage:20,range:18,cooldownMs:1000},vision:170},
   scout:{label:'Scout',cost:10,trainMs:1800,hp:40,radius:9,speed:100,aggroRange:0,attack:{damage:0,range:0,cooldownMs:999999},vision:300},
-  royal_guard:{label:'Royal Guard',cost:0,trainMs:0,hp:GAME_RULES.royalGuard.hp,radius:GAME_RULES.royalGuard.radius,speed:GAME_RULES.royalGuard.speed,aggroRange:520,attack:{damage:GAME_RULES.royalGuard.damage,range:GAME_RULES.royalGuard.attackRange,cooldownMs:GAME_RULES.royalGuard.attackCooldownMs},vision:GAME_RULES.royalGuard.vision}
+  royal_guard:{label:'Royal Guard',cost:0,trainMs:0,hp:GAME_RULES.royalGuard.hp,radius:GAME_RULES.royalGuard.radius,speed:GAME_RULES.royalGuard.speed,aggroRange:520,attack:{damage:GAME_RULES.royalGuard.damage,range:GAME_RULES.royalGuard.attackRange,cooldownMs:GAME_RULES.royalGuard.attackCooldownMs},vision:GAME_RULES.royalGuard.vision},
+  cannon:{label:'Cannon',cost:100,trainMs:8000,hp:180,radius:15,speed:25,aggroRange:360,attack:{damage:80,range:360,cooldownMs:3500},buildingAttack:{damage:120,range:360,cooldownMs:3500},vision:220,splashRadius:42}
 };
 
 export interface Placement{side:Side;type:BuildingType;x:number;y:number}
