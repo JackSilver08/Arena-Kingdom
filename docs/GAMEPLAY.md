@@ -121,7 +121,7 @@ For groups of 2-5 regular troops, the minimum one-unit rearguard rule takes prec
 
 Each Castle has a hidden roster of **7 Royal Guards**. They cost no gold, do not use army supply, do not appear in the regular Troops command deck, and cannot be selected or ordered manually.
 
-The Castle evaluates hostile units that have crossed into its own territory and are inside a 520-unit threat bubble. Normal responses are adaptive: 1 guard for a light threat, 2 for a medium threat, and 3 for a high threat. A critical threat can deploy all surviving guards and holds Emergency Defense for at least 10 seconds.
+The Castle evaluates hostile units that have crossed into its own territory and are inside a 180-unit Castle threat bubble. Normal responses are adaptive: 1 guard for a light threat, 2 for a medium threat, and 3 for a high threat. A critical threat can deploy all surviving guards and holds Emergency Defense for at least 10 seconds.
 
 Royal Guard stats: 250 HP, 24 damage, 150 speed, 18 melee range. A deployed guard can only chase targets while those targets remain inside its own kingdom. When an enemy escapes across the border, the guard disengages and returns to the Castle.
 
