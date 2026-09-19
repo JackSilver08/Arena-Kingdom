@@ -3718,3 +3718,15 @@ input:not([type='radio']):focus {
 .fence-rot-btn:hover { border-color:var(--yellow); background:#fffdf0; }
 .fence-rotation-panel .popup-note { margin-top:calc(var(--s)*.7); margin-bottom:0; line-height:1.35; }
 @media(max-width:820px){.fence-rotation-panel{padding:calc(var(--s)*.8);}}
+
+
+/* Cannon recruitment art keeps the approved battlefield silhouette and adapts to the Red side. */
+.unit-shop-image-red {
+  filter: hue-rotate(135deg) saturate(1.15);
+}
+.barracks-unit-art img {
+  image-rendering: auto;
+}
+.barracks-unit-option:has(.unit-shop-image-red) .barracks-unit-art {
+  filter: none;
+}
