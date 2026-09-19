@@ -33,7 +33,7 @@ export const SYMBOL_SIZE: Record<SymbolType, SymbolSize> = {
   militia: { width: 22, height: 24, anchorY: 12 / 24 },
   archer: { width: 32, height: 26, anchorY: 13 / 26 },
   knight: { width: 36, height: 32, anchorY: 16 / 32 },
-  scout: { width: 32, height: 26, anchorY: 13 / 26 }
+  scout: { width: 36, height: 32, anchorY: 16 / 32 }
 };
 
 export const COLORS: Record<Side, { fill: string; ink: string }> = {
@@ -170,25 +170,16 @@ export function symbolArt(type: SymbolType, side: Side) {
         `<image href="${knightIconDataUrl(side)}" x="0" y="0" width="${size.width}" height="${size.height}" preserveAspectRatio="xMidYMid meet"/>`
       );
     case 'scout':
-      // Scout = a pair of watchful eyes. Minimal military-map glyph, but unmistakably reconnaissance.
+      // Battlefield Scout = military unit frame with a single reconnaissance eye inside.
       return svg(
         size,
-        `<g stroke="${HALO}" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round" fill="${HALO}">
-          <path d="M2.5 13 Q8 6.5 13.5 13 Q8 19.5 2.5 13 Z"/>
-          <path d="M18.5 13 Q24 6.5 29.5 13 Q24 19.5 18.5 13 Z"/>
-        </g>
-        <g fill="${COLORS[side].fill}" stroke="${ink}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M2.5 13 Q8 6.5 13.5 13 Q8 19.5 2.5 13 Z"/>
-          <path d="M18.5 13 Q24 6.5 29.5 13 Q24 19.5 18.5 13 Z"/>
-        </g>
-        <g fill="${ink}">
-          <circle cx="8" cy="13" r="2.2"/>
-          <circle cx="24" cy="13" r="2.2"/>
-        </g>
-        <g fill="#ffffff" opacity=".88">
-          <circle cx="8.8" cy="12.2" r=".7"/>
-          <circle cx="24.8" cy="12.2" r=".7"/>
-        </g>`
+        `${frame('<rect x="3" y="3" width="30" height="26" rx="2"/>', side, 2.2)}
+        <path d="M8.5 16 Q18 7.5 27.5 16 Q18 24.5 8.5 16 Z"
+          fill="none" stroke="${HALO}" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M8.5 16 Q18 7.5 27.5 16 Q18 24.5 8.5 16 Z"
+          fill="${COLORS[side].fill}" stroke="${ink}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="18" cy="16" r="3.1" fill="${ink}"/>
+        <circle cx="19" cy="15" r=".8" fill="#ffffff" opacity=".9"/>`
       );
   }
 }
