@@ -183,21 +183,31 @@ export function symbolArt(type: SymbolType, side: Side) {
         <circle cx="18" cy="16" r="3.1" fill="${ink}"/>
         <circle cx="19" cy="15" r=".8" fill="#ffffff" opacity=".9"/>`
       );
-    case 'cannon':
-      // Special battlefield unit: a compact, box-free cannon silhouette.
-      // Keep the glyph visually comparable to the other troop symbols at 24-34 px.
+    case 'cannon': {
+      // Special battlefield unit: same readable cannon silhouette as the approved artwork,
+      // reduced to a compact, box-free military-map glyph.
+      const cannonBody = `<path d="M2.5 17.8 L9.2 15.4 L12.2 9.6 L24.4 6.2 L29.8 7.8 L30.8 10.8 L17.9 13.8 L14.2 18.7 L7.2 20.1 Z"/>`;
+      const wheel = `<circle cx="11.8" cy="14.5" r="5.7"/>`;
       return svg(
         size,
         `
+        <g fill="none" stroke="${SHADOW}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity=".28" transform="translate(1.1 1.2)">
+          ${cannonBody}
+          ${wheel}
+        </g>
+        <g fill="none" stroke="${HALO}" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round">
+          ${cannonBody}
+          ${wheel}
+        </g>
         <g fill="${COLORS[side].fill}" stroke="${ink}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 17 L11 14 L13 8 L24 5.5 L29.5 7.5 L30.5 11 L18.5 13.5 L14 18.5 L6 20 Z"/>
-          <circle cx="12.5" cy="14" r="5.3" fill="${HALO}" stroke="${ink}" stroke-width="1.8"/>
-          <circle cx="12.5" cy="14" r="3.6" fill="${COLORS[side].fill}" stroke="none"/>
-          <path d="M12.5 11.2 V16.8 M9.7 14 H15.3" stroke="${ink}" stroke-width="1.15"/>
-
-          <path d="M24 5.5 L30 4.2 L31 7.1 L29.5 8.2 Z"/>
-        </g>`
+          ${cannonBody}
+          ${wheel}
+        </g>
+        <path d="M8.6 14.5 H15 M11.8 11.3 V17.7" stroke="${ink}" stroke-width="1.15" stroke-linecap="round"/>
+        <path d="M24.4 6.2 L29.8 5 L30.8 7.8 L29.8 8.4" fill="${COLORS[side].fill}" stroke="${ink}" stroke-width="1.6" stroke-linejoin="round"/>
+        `
       );
+    }
     case 'royal_guard':
       // Royal Guard = a distinctive elite castle defender:
       // same circular frame language as the Castle, but with the Castle's star reduced inside it.
