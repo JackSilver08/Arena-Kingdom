@@ -43,6 +43,7 @@ const FORMATION_LABELS: Record<FormationType, string> = {
 };
 const HUD_INTERVAL_MS = 100;
 const CASTLE_ALERT_COOLDOWN_MS = 12_000;
+const FENCE_DIRECTIONS = ['N','NE','E','SE','S','SW','W','NW'] as const;
 const END_MODAL_DELAY_MS = 1200;
 
 interface Actions {
@@ -70,6 +71,7 @@ function typeCountsLabel(type: UnitType, count: number) {
 export class GameController {
   mode: ControlMode = 'idle';
   buildType: BuildableType = 'village';
+  buildFenceRotation = 0;
   fraction: ArmyFraction = 'all';
   formation: FormationType = 'line';
   readonly selection = new Set<number>();
@@ -180,6 +182,13 @@ export class GameController {
     else this.refreshHud(true);
   }
 
+  rotateFence(step = 1) {
+    if (!this.canCommand || this.mode !== 'build' || this.buildType !== 'fence') return;
+    this.buildFenceRotation = ((this.buildFenceRotation + step) % 8 + 8) % 8;
+    this.setHint(`Fence facing ${FENCE_DIRECTIONS[this.buildFenceRotation]} · ${this.buildFenceRotation * 45}°. Scroll or press R to rotate.`);
+    this.refreshHud(true);
+  }
+
   chooseFraction(fraction: ArmyFraction) {
     this.fraction = fraction;
     if (this.mode !== 'troops') this.setMode('troops');
@@ -198,13 +207,13 @@ export class GameController {
   placementPoint(x: number, y: number) {
     const view = this.view;
     if (!view) return { x, y };
-    return snapPlacement(view.buildings, this.mySide, this.buildType, Math.round(x), Math.round(y));
+    return snapPlacement(view.buildings, this.mySide, this.buildType, Math.round(x), Math.round(y), this.buildType === 'fence' ? this.buildFenceRotation : undefined);
   }
 
   placementCheck(x: number, y: number) {
     const view = this.view;
     if (!view) return { ok: false, reason: '' };
-    return canPlaceBuilding(view.buildings, this.mySide, this.buildType, x, y);
+    return canPlaceBuilding(view.buildings, this.mySide, this.buildType, x, y, this.buildType === 'fence' ? this.buildFenceRotation : undefined);
   }
 
   placeBuilding(rawX: number, rawY: number, keepBuilding: boolean) {
@@ -220,7 +229,7 @@ export class GameController {
       this.flash(check.reason, true);
       return;
     }
-    this.session.send({ type: 'build', building: this.buildType, x, y });
+    this.session.send({ type: 'build', building: this.buildType, x, y, ...(this.buildType === 'fence' ? { rotation: this.buildFenceRotation } : {}) });
     if (!keepBuilding) this.setMode('idle');
   }
 
@@ -372,7 +381,8 @@ export class GameController {
           this.setMode(this.mode === 'troops' ? 'idle' : 'troops');
           return true;
         case 'r':
-          this.recruit(event.shiftKey ? 5 : 1);
+          if (this.mode === 'build' && this.buildType === 'fence') this.rotateFence(event.shiftKey ? -1 : 1);
+          else this.recruit(event.shiftKey ? 5 : 1);
           return true;
         case 'f':
           this.tacticalFallback();
@@ -447,6 +457,18 @@ export class GameController {
           break;
         case 'choose-building':
           this.chooseBuilding(button.dataset.type as BuildableType);
+          break;
+        case 'fence-direction': {
+          const rotation = Number(button.dataset.rotation);
+          if (this.mode === 'build' && this.buildType === 'fence' && Number.isInteger(rotation) && rotation >= 0 && rotation < 8) {
+            this.buildFenceRotation = rotation;
+            this.setHint(`Fence facing ${FENCE_DIRECTIONS[rotation]} · ${rotation * 45}°.`);
+            this.refreshHud(true);
+          }
+          break;
+        }
+        case 'rotate-fence':
+          this.rotateFence(Number(button.dataset.step) || 1);
           break;
         case 'choose-fraction':
           this.chooseFraction(button.dataset.fraction as ArmyFraction);
@@ -777,6 +799,7 @@ export class GameController {
     }
 
     if (this.mode === 'build') {
+      const directionSlots = [7,0,1,6,-1,2,5,4,3];
       return html`<div class="popup-title">Build <small>keys 1-4 · Shift-click keeps building</small></div>
         <div class="popup-options">
           ${BUILDABLE_TYPES.map((type, i) => {
@@ -797,6 +820,22 @@ export class GameController {
             </button>`;
           })}
         </div>
+        ${this.buildType === 'fence'
+          ? html`<section class="fence-rotation-panel" aria-label="Fence rotation controls">
+              <div class="fence-rotation-head"><div><strong>Fence direction</strong><span>${FENCE_DIRECTIONS[this.buildFenceRotation]} · ${this.buildFenceRotation * 45}°</span></div><small>Wheel or R</small></div>
+              <div class="fence-rotation-grid" role="radiogroup" aria-label="Fence direction">
+                ${directionSlots.map((rotation) => rotation < 0
+                  ? html`<div class="fence-dir-center"><b>${this.buildFenceRotation * 45}°</b><small>Current</small></div>`
+                  : html`<button type="button" class="fence-dir-btn ${this.buildFenceRotation === rotation ? 'active' : ''}" data-action="fence-direction" data-rotation="${rotation}" aria-pressed="${this.buildFenceRotation === rotation}" title="${FENCE_DIRECTIONS[rotation]} · ${rotation * 45}°"><b>${FENCE_DIRECTIONS[rotation]}</b><small>${rotation * 45}°</small></button>`
+                )}</div>
+              <div class="fence-rotation-actions">
+                <button type="button" class="fence-rot-btn" data-action="rotate-fence" data-step="-1" aria-label="Rotate counterclockwise">⟲</button>
+                <span>${FENCE_DIRECTIONS[this.buildFenceRotation]} · ${this.buildFenceRotation * 45}°</span>
+                <button type="button" class="fence-rot-btn" data-action="rotate-fence" data-step="1" aria-label="Rotate clockwise">⟳</button>
+              </div>
+              <p class="popup-note">Cuộn chuột hoặc nhấn [R] để xoay 8 hướng.</p>
+            </section>`
+          : ''}
         <p class="popup-note">${BUILDING_STATS[this.buildType].description}</p>`;
     }
 
@@ -857,7 +896,7 @@ export class GameController {
     const upkeep = armyUpkeep(army, supply);
     const contextBuilding = view?.buildings.find((b) => b.id === (this.contextBarracksId ?? this.contextCastleId));
     const contextStatus = contextBuilding ? `${contextBuilding.queue}|${contextBuilding.trainType ?? '-'}|${Math.round(contextBuilding.trainProgress * 10)}` : '';
-    const contextKey = `${me}|${this.mode}|${this.buildType}|${this.fraction}|${this.formation}|${this.contextBarracksId ?? '-'}|${this.contextCastleId ?? '-'}|${contextStatus}|${this.mode === 'troops' ? `${army}|${supply}|${upkeep}|${this.selection.size}` : ''}`;
+    const contextKey = `${me}|${this.mode}|${this.buildType}|${this.buildType === 'fence' && this.mode === 'build' ? this.buildFenceRotation : '-'}|${this.fraction}|${this.formation}|${this.contextBarracksId ?? '-'}|${this.contextCastleId ?? '-'}|${contextStatus}|${this.mode === 'troops' ? `${army}|${supply}|${upkeep}|${this.selection.size}` : ''}`;
     if (contextKey !== this.contextKey) {
       this.contextKey = contextKey;
       const popup = $(this.root, '[data-context]');
@@ -972,7 +1011,10 @@ export class GameController {
 
   private defaultHint() {
     if (this.session.status === 'ended') return 'The battle is over.';
-    if (this.mode === 'build') return `${BUILDING_STATS[this.buildType].label}: click inside your territory to place it.`;
+    if (this.mode === 'build') {
+      if (this.buildType === 'fence') return `Fence: ${FENCE_DIRECTIONS[this.buildFenceRotation]} · ${this.buildFenceRotation * 45}° · scroll or R/Shift+R to rotate · click to place.`;
+      return `${BUILDING_STATS[this.buildType].label}: click inside your territory to place it.`;
+    }
     if (this.mode === 'troops') {
       const f = FORMATION_STATS[this.formation];
       const view = this.view;
