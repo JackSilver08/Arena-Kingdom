@@ -126,7 +126,7 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       id: snap.b[i],
       side: SIDE_CODES[flags & 1],
       type,
-      rotation: type === 'fence' ? ((flags >> 4) & 0x7) : undefined,
+      ...(type === 'fence' ? { rotation: (flags >> 4) & 0x7 } : {}),
       x: snap.b[i + 2],
       y: snap.b[i + 3],
       hp: snap.b[i + 4],
