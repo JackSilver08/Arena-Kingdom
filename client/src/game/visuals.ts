@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_RULES, type BuildingType, type Side, type UnitType } from '@arena-kingdom/shared';
 import { svgDataUrl } from './art';
 import { knightIconDataUrl } from './knightIcon';
+import { cannonIconDataUrl } from './cannonIcon';
 import { arenaMapArtV2, type MapViewSize } from './mapArt';
 import { SYMBOL_SIZE, symbolArt, type SymbolSize } from './symbols';
 import {
@@ -109,8 +110,9 @@ export class BattleVisualRenderer {
       load(unitTextureKey('scout', side), symbolArt('scout', side), scout.width, scout.height);
       const royalGuard = SYMBOL_SIZE.royal_guard;
       load(unitTextureKey('royal_guard', side), symbolArt('royal_guard', side), royalGuard.width, royalGuard.height);
-      // Knight uses the exact embedded raster glyph from the supplied reference image.
+      // Knight and Cannon use embedded raster assets.
       this.loadImageData(unitTextureKey('knight', side), knightIconDataUrl(side));
+      this.loadImageData(unitTextureKey('cannon', side), cannonIconDataUrl(side));
     }
 
     load(mapTextureKey(this.view, this.mapStyle), arenaMapArtV2(this.view, this.mapStyle), this.view.width, this.view.height);
