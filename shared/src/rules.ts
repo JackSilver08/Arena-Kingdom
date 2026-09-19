@@ -179,56 +179,71 @@ export function territoryBounds(side:Side,padX=0,padY=padX){
   return {minX:land.minX+padX,maxX:land.maxX-padX,minY:land.minY+padY,maxY:land.maxY-padY};
 }
 
-type Located={x:number;y:number;type:BuildingType};
+type Located={x:number;y:number;type:BuildingType;rotation?:number};
+export function normalizeFenceRotation(rotation?: number) {
+  if (!Number.isInteger(rotation)) return 0;
+  return ((rotation as number) % 8 + 8) % 8;
+}
+export function fenceAngle(rotation?: number) { return normalizeFenceRotation(rotation) * Math.PI / 4; }
+function rotateToLocal(dx:number,dy:number,angle:number) { const cos=Math.cos(angle),sin=Math.sin(angle); return {x:dx*cos+dy*sin,y:-dx*sin+dy*cos}; }
+function rotateFromLocal(x:number,y:number,angle:number) { const cos=Math.cos(angle),sin=Math.sin(angle); return {x:x*cos-y*sin,y:x*sin+y*cos}; }
+function fenceLongAxis(rotation?:number) { const angle=fenceAngle(rotation); return {x:-Math.sin(angle),y:Math.cos(angle)}; }
+function fenceHalfExtents(rotation?:number) { const angle=fenceAngle(rotation),cos=Math.abs(Math.cos(angle)),sin=Math.abs(Math.sin(angle)); const {halfWidth:hw,halfHeight:hh}=BUILDING_STATS.fence; return {x:cos*hw+sin*hh,y:sin*hw+cos*hh}; }
+function fenceCorners(building:Located,rotationOverride?:number) {
+  const angle=fenceAngle(rotationOverride ?? building.rotation ?? 0),{halfWidth:hw,halfHeight:hh}=BUILDING_STATS.fence;
+  return ([[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]] as const).map(([x,y])=>{const p=rotateFromLocal(x,y,angle);return{x:building.x+p.x,y:building.y+p.y};});
+}
+function fenceEndpoints(building:Located,rotationOverride?:number) {
+  const axis=fenceLongAxis(rotationOverride ?? building.rotation),half=BUILDING_STATS.fence.halfHeight;
+  return [{x:building.x-axis.x*half,y:building.y-axis.y*half},{x:building.x+axis.x*half,y:building.y+axis.y*half}];
+}
+function projectionRange(points:readonly Vec2[],axis:Vec2) { let min=Infinity,max=-Infinity; for(const p of points){const v=p.x*axis.x+p.y*axis.y;min=Math.min(min,v);max=Math.max(max,v);} return {min,max}; }
+function polygonsOverlapSAT(a:readonly Vec2[],b:readonly Vec2[]) {
+  const axes:Vec2[]=[]; for(const points of [a,b]) for(let i=0;i<points.length;i++){const p=points[i],q=points[(i+1)%points.length],ex=q.x-p.x,ey=q.y-p.y,len=Math.hypot(ex,ey)||1;axes.push({x:-ey/len,y:ex/len});}
+  for(const axis of axes){const pa=projectionRange(a,axis),pb=projectionRange(b,axis);if(pa.max<pb.min||pb.max<pa.min)return false;} return true;
+}
+function circleVsFenceOverlap(circle:{x:number;y:number;radius:number},fence:Located) {
+  const local=rotateToLocal(circle.x-fence.x,circle.y-fence.y,fenceAngle(fence.rotation)),{halfWidth:hw,halfHeight:hh}=BUILDING_STATS.fence;
+  return Math.hypot(Math.max(Math.abs(local.x)-hw,0),Math.max(Math.abs(local.y)-hh,0)) < circle.radius + BUILDING_GAP;
+}
+function fencesMayJoin(a:Located,b:Located) { return fenceEndpoints(a).some(pa=>fenceEndpoints(b).some(pb=>Math.hypot(pa.x-pb.x,pa.y-pb.y)<=2.5)); }
 export function distanceToBuilding(building:Located,x:number,y:number){
-  const stats=BUILDING_STATS[building.type];
-  if(stats.shape==='circle')return Math.max(0,Math.hypot(x-building.x,y-building.y)-stats.halfWidth);
-  const dx=Math.max(Math.abs(x-building.x)-stats.halfWidth,0),dy=Math.max(Math.abs(y-building.y)-stats.halfHeight,0);
-  return Math.hypot(dx,dy);
+  const stats=BUILDING_STATS[building.type]; if(stats.shape==='circle')return Math.max(0,Math.hypot(x-building.x,y-building.y)-stats.halfWidth);
+  const local=rotateToLocal(x-building.x,y-building.y,fenceAngle(building.rotation));
+  return Math.hypot(Math.max(Math.abs(local.x)-stats.halfWidth,0),Math.max(Math.abs(local.y)-stats.halfHeight,0));
 }
 export function approachPoint(building:Located,x:number,y:number){
-  const stats=BUILDING_STATS[building.type];
-  if(stats.shape==='circle')return{x:building.x,y:building.y};
-  return{x:Math.min(building.x+stats.halfWidth,Math.max(building.x-stats.halfWidth,x)),y:Math.min(building.y+stats.halfHeight,Math.max(building.y-stats.halfHeight,y))};
+  const stats=BUILDING_STATS[building.type]; if(stats.shape==='circle')return{x:building.x,y:building.y};
+  const angle=fenceAngle(building.rotation),local=rotateToLocal(x-building.x,y-building.y,angle);
+  const clamped={x:Math.min(stats.halfWidth,Math.max(-stats.halfWidth,local.x)),y:Math.min(stats.halfHeight,Math.max(-stats.halfHeight,local.y))};
+  const world=rotateFromLocal(clamped.x,clamped.y,angle); return{x:building.x+world.x,y:building.y+world.y};
 }
-
 export type PlacementCheck={ok:true}|{ok:false;reason:string};
-const BUILDING_GAP=12,EDGE_PADDING=8,FENCE_SNAP_DISTANCE=34;
-/**
- * A fence only needs this much of its length on land. It may run out over the beach, so a chain
- * of snapped fences started anywhere can always be carried on until it seals the far shore.
- */
-const FENCE_LAND_GRIP=8;
-
-export function canPlaceBuilding(buildings:readonly(Located&{side?:Side})[],side:Side,type:BuildableType,x:number,y:number):PlacementCheck{
+const BUILDING_GAP=12,EDGE_PADDING=8,FENCE_SNAP_DISTANCE=34,FENCE_LAND_GRIP=8;
+export function canPlaceBuilding(buildings:readonly(Located&{side?:Side})[],side:Side,type:BuildableType,x:number,y:number,rawRotation?:number):PlacementCheck{
   if(!Number.isFinite(x)||!Number.isFinite(y))return{ok:false,reason:'Invalid position.'};
-  const stats=BUILDING_STATS[type],reach=stats.halfWidth+EDGE_PADDING;
-  const pastFront=side==='blue'?x+reach>FRONT_LINE.blue:x-reach<FRONT_LINE.red;
-  const onLand=type==='fence'
-    ?[-1,0,1].some(k=>isWalkableLand(x,y+k*(stats.halfHeight-FENCE_LAND_GRIP)))
-    :isWalkableLand(x,y,stats.halfWidth+EDGE_PADDING);
+  const rotation=type==='fence'?normalizeFenceRotation(rawRotation):0,stats=BUILDING_STATS[type];
+  const extent=type==='fence'?fenceHalfExtents(rotation):{x:stats.halfWidth,y:stats.halfHeight};
+  const pastFront=side==='blue'?x+extent.x+EDGE_PADDING>FRONT_LINE.blue:x-extent.x-EDGE_PADDING<FRONT_LINE.red;
+  const onLand=type==='fence'?(()=>{const axis=fenceLongAxis(rotation),grip=Math.max(0,stats.halfHeight-FENCE_LAND_GRIP);return[-1,0,1].some(k=>isWalkableLand(x+axis.x*k*grip,y+axis.y*k*grip));})():isWalkableLand(x,y,Math.max(extent.x,extent.y)+EDGE_PADDING);
   if(pastFront||!onLand)return{ok:false,reason:`You can only build on your own ${side==='blue'?'BLUE':'RED'} half of the island.`};
+  const candidate:Located={x,y,type,rotation};
   for(const other of buildings){
-    const os=BUILDING_STATS[other.type],gap=type==='fence'&&other.type==='fence'?0:BUILDING_GAP;
-    if(Math.abs(other.x-x)<stats.halfWidth+os.halfWidth+gap&&Math.abs(other.y-y)<stats.halfHeight+os.halfHeight+gap)return{ok:false,reason:'Too close to another building.'};
-  }
-  return{ok:true};
+    const os=BUILDING_STATS[other.type];
+    if(type==='fence'&&other.type==='fence'){if(fencesMayJoin(candidate,other))continue;if(polygonsOverlapSAT(fenceCorners(candidate),fenceCorners(other)))return{ok:false,reason:'Too close to another building.'};continue;}
+    if(type==='fence'&&os.shape==='circle'&&circleVsFenceOverlap({x:other.x,y:other.y,radius:os.halfWidth+BUILDING_GAP},candidate))return{ok:false,reason:'Too close to another building.'};
+    if(stats.shape==='circle'&&other.type==='fence'&&circleVsFenceOverlap({x,y,radius:stats.halfWidth+BUILDING_GAP},other))return{ok:false,reason:'Too close to another building.'};
+    if(stats.shape==='circle'&&other.type!=='fence'&&Math.abs(other.x-x)<stats.halfWidth+os.halfWidth+BUILDING_GAP&&Math.abs(other.y-y)<stats.halfHeight+os.halfHeight+BUILDING_GAP)return{ok:false,reason:'Too close to another building.'};
+  } return{ok:true};
 }
-
-export function snapPlacement(buildings:readonly(Located&{side:Side})[],side:Side,type:BuildableType,x:number,y:number){
-  if(type!=='fence')return{x,y};
-  // Fences stand vertically, so segments chain end to end along Y.
-  const height=BUILDING_STATS.fence.halfHeight*2;let best={x,y},bestDistance=FENCE_SNAP_DISTANCE;
-  for(const fence of buildings){
-    if(fence.type!=='fence'||fence.side!==side)continue;
-    for(const candidate of[{x:fence.x,y:fence.y-height},{x:fence.x,y:fence.y+height}]){
-      const d=Math.hypot(candidate.x-x,candidate.y-y);
-      if(d<bestDistance&&canPlaceBuilding(buildings,side,'fence',candidate.x,candidate.y).ok){best=candidate;bestDistance=d;}
-    }
-  }
-  return best;
+export function snapPlacement(buildings:readonly(Located&{side:Side})[],side:Side,type:BuildableType,x:number,y:number,rawRotation?:number){
+  if(type!=='fence')return{x,y}; const rotation=normalizeFenceRotation(rawRotation),axis=fenceLongAxis(rotation);
+  let best={x,y},bestDistance=FENCE_SNAP_DISTANCE;
+  for(const fence of buildings){if(fence.type!=='fence'||fence.side!==side)continue;for(const anchor of fenceEndpoints(fence))for(const sign of [-1,1] as const){
+    const center={x:anchor.x-axis.x*BUILDING_STATS.fence.halfHeight*sign,y:anchor.y-axis.y*BUILDING_STATS.fence.halfHeight*sign},d=Math.hypot(center.x-x,center.y-y);
+    if(d>=bestDistance||!canPlaceBuilding(buildings,side,'fence',center.x,center.y,rotation).ok)continue; best=center;bestDistance=d;
+  }} return best;
 }
-
 export function incomeFor(villages:number){return GAME_RULES.economy.castleIncome+villages*GAME_RULES.economy.villageIncome}
 
 export function armySupplyCapacity(buildings:readonly Located[]){
