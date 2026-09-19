@@ -1,7 +1,7 @@
 import { coastline, isWalkableLand } from './island.js';
 import type { ArmyFraction, BuildableType, BuildingType, Side, UnitType, Vec2 } from './types.js';
 
-export const GAME_VERSION = '0.5.0';
+export const GAME_VERSION = '0.6.0';
 
 type Rect={minX:number;maxX:number;minY:number;maxY:number};
 /** Each kingdom builds on its side of its front line; the strip between them is no man's land. */
@@ -69,6 +69,24 @@ export const GAME_RULES={
     hpMultiplier:1.5,
     damageMultiplier:2/3
   },
+  royalGuard:{
+    roster:7,
+    hp:250,
+    damage:24,
+    speed:150,
+    radius:11,
+    attackRange:18,
+    attackCooldownMs:800,
+    vision:180,
+    activationRange:520,
+    emergencyRange:160,
+    mediumThreat:18,
+    highThreat:32,
+    emergencyThreat:42,
+    emergencyHoldMs:10_000,
+    returnDistance:70,
+    threatWeight:{soldier:10,archer:9,knight:16,militia:7,scout:3,royal_guard:18}
+  },
   limits:{maxUnitsPerSide:40,maxBuildingsPerSide:30},
   peace:{responseWindowMs:15_000,cooldownMs:30_000},
   fallback:{
@@ -105,7 +123,8 @@ export const UNIT_STATS:Record<UnitType,UnitStats>={
   militia:{label:'Militia',cost:0,trainMs:0,hp:150,radius:10,speed:52,aggroRange:205,attack:{damage:8,range:14,cooldownMs:800},vision:180},
   archer:{label:'Archer',cost:21,trainMs:2600,hp:75,radius:10,speed:45,aggroRange:210,attack:{damage:9,range:190,cooldownMs:1100},buildingAttack:{damage:10,range:125,cooldownMs:1250},vision:190},
   knight:{label:'Knight',cost:32,trainMs:3200,hp:85,radius:11,speed:150,aggroRange:150,attack:{damage:20,range:18,cooldownMs:1000},vision:170},
-  scout:{label:'Scout',cost:10,trainMs:1800,hp:40,radius:9,speed:100,aggroRange:0,attack:{damage:0,range:0,cooldownMs:999999},vision:300}
+  scout:{label:'Scout',cost:10,trainMs:1800,hp:40,radius:9,speed:100,aggroRange:0,attack:{damage:0,range:0,cooldownMs:999999},vision:300},
+  royal_guard:{label:'Royal Guard',cost:0,trainMs:0,hp:GAME_RULES.royalGuard.hp,radius:GAME_RULES.royalGuard.radius,speed:GAME_RULES.royalGuard.speed,aggroRange:520,attack:{damage:GAME_RULES.royalGuard.damage,range:GAME_RULES.royalGuard.attackRange,cooldownMs:GAME_RULES.royalGuard.attackCooldownMs},vision:GAME_RULES.royalGuard.vision}
 };
 
 export interface Placement{side:Side;type:BuildingType;x:number;y:number}
