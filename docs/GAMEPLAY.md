@@ -1,4 +1,4 @@
-# Arena Kingdom v0.5.0 Gameplay
+# Arena Kingdom v0.6.0 Gameplay
 
 All numbers live in [`shared/src/rules.ts`](../shared/src/rules.ts); the in-game guide (`/guide`) is generated from the same file.
 
@@ -24,7 +24,7 @@ Buildings can only be placed in your own territory, outside the contested centre
 
 | Building | Cost | HP   | Notes                                                   |
 | -------- | ---- | ---- | ------------------------------------------------------- |
-| Castle   | —    | 1500 | Shoots nearby enemy soldiers. Losing it loses the match; also trains Scouts. |
+| Castle   | —    | 1500 | Shoots nearby attackers; under Emergency Defense its volley expands from 1 to 3 arrows; also trains Scouts. |
 | Village  | 70   | 300  | +6 gold per income tick; 160 vision                    |
 | Barracks | 110  | 500  | Trains Soldiers / Archers / Knights; queue up to 5; 140 vision |
 | Tower    | 120  | 700  | Defensive fire; 320 vision                             |
@@ -59,7 +59,7 @@ Enemy territory starts hidden under large, soft **cold-gray cloud masses**. The 
 - A **Scout** costs 10 gold, trains for 1.8s at the Castle, has 40 HP, 100 speed and 300 vision. It does not automatically attack.
 - When enemy forces leave vision, a small last-known marker can remain briefly before fading.
 
-Crossing into enemy territory with the regular army can reveal the area, but it also exposes valuable troops to counterattack. Scouts are faster information tools, not frontline fighters.
+Crossing into enemy territory with the regular army can reveal the area, but it also exposes valuable troops to counterattack. Scouts are faster information tools, not frontline fighters. Royal Guards stay hidden until the Castle AI deploys them and never pursue beyond their own kingdom.
 
 ## Controls
 
@@ -71,7 +71,7 @@ Crossing into enemy territory with the regular army can reveal the area, but it 
 | `A` / `S`                | Select whole army / hold position                         |
 | `B`, then `1` `2` `3`    | Build Village / Barracks / Tower, click to place (Shift keeps building) |
 | `R` / Shift + `R`        | Recruit 1 / 5 soldiers at the least busy barracks         |
-| Click your barracks      | Open the Barracks recruitment deck                        |\n| Click your Castle        | Open Castle Recon and recruit a Scout for 10 gold        |
+| Click your barracks      | Open the Barracks recruitment deck                        |\n| Click your Castle        | Open Castle Recon and recruit a Scout for 10 gold        |\n| Royal Guard              | No manual command. Castle AI deploys 1-2 guards, 3 max in normal threat, or all surviving guards during emergency defence |
 | `T`, then `1` `2` `3`    | Send All / ⅓ / ⅔ of the army to a clicked point           |
 | `F`                      | Tactical Fall Back. Selected troops fall back; with no selection, the whole regular army falls back |
 | `M`                      | Messenger: propose peace, surrender                       |
@@ -112,4 +112,4 @@ The engine automatically assigns roles. Low-health troops and Archers prioritize
 
 When the retreaters reach their defensive destination, or the pursuing enemy moves at least 260 world units away, surviving rearguards automatically begin the rolling retreat to the same defensive point. The defensive destination prefers a Tower, then Village, then Fence, then Castle.
 
-For groups of 2-5 regular troops, the minimum one-unit rearguard rule takes precedence over the 35% maximum because an integer split cannot satisfy both constraints.
+For groups of 2-5 regular troops, the minimum one-unit rearguard rule takes precedence over the 35% maximum because an integer split cannot satisfy both constraints.\n\n## Royal Guard & Castle AI\n\nEach Castle has a hidden roster of **7 Royal Guards**. They cost no gold, do not use army supply, do not appear in the regular Troops command deck, and cannot be selected or ordered manually.\n\nThe Castle evaluates hostile units that have crossed into its own territory and are inside a 520-unit threat bubble. Normal responses are adaptive: 1 guard for a light threat, 2 for a medium threat, and 3 for a high threat. A critical threat can deploy all surviving guards and holds Emergency Defense for at least 10 seconds.\n\nRoyal Guard stats: 250 HP, 24 damage, 150 speed, 18 melee range. A deployed guard can only chase targets while those targets remain inside its own kingdom. When an enemy escapes across the border, the guard disengages and returns to the Castle.\n\nDuring Emergency Defense the Castle fires a **3-arrow volley** instead of one arrow, selecting up to three nearby enemy units as separate targets.\n\nRoyal Guards that safely return to the Castle go back into the hidden Castle roster; guards that die are lost for the rest of the match.
