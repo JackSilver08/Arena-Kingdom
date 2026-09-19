@@ -183,13 +183,13 @@ export function symbolArt(type: SymbolType, side: Side) {
         <circle cx="19" cy="15" r=".8" fill="#ffffff" opacity=".9"/>`
       );
     case 'royal_guard':
-      // Royal Guard = elite castle defender: military frame with a crown.
+      // Royal Guard = a distinctive elite castle defender:
+      // same circular frame language as the Castle, but with the Castle's star reduced inside it.
       return svg(
         size,
-        `${frame('<rect x="3" y="3" width="32" height="28" rx="2"/>', side, 2.4)}
-        <path d="M9 12 L13 20 L19 9 L25 20 L29 12 L28 24 H10 Z"
-          fill="${COLORS[side].fill}" stroke="${ink}" stroke-width="1.9" stroke-linejoin="round"/>
-        <circle cx="19" cy="17" r="2.4" fill="${ink}"/>`
+        `${frame('<circle cx="19" cy="17" r="15.2"/>', side, 2.4)}
+        <circle cx="19" cy="17" r="10.8" fill="none" stroke="${ink}" stroke-width="1.2" stroke-dasharray="3 2.2"/>
+        <path d="${star(19, 17, 7.8, 3.3)}" fill="${ink}"/>`
       );
   }
 }
