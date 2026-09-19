@@ -56,7 +56,7 @@ test('NavGrid blocks enemies but not owners for horizontal and diagonal fences',
 test('snapshot wire format round-trips fence rotation without growing the payload',()=>{
   const engine=new MatchEngine();
   engine.state.players.blue.gold=10_000;
-  assert.equal(engine.command('blue',{type:'build',building:'fence',x:600,y:400,rotation:3}).ok,true);
+  assert.equal(engine.command('blue',{type:'build',building:'fence',x:600,y:540,rotation:3}).ok,true);
   const encoded=encodeSnapshot(engine.state,[]);
   assert.equal(encoded.b.length%9,0);
   const fence=decodeSnapshot(JSON.parse(JSON.stringify(encoded))).view.buildings.find(b=>b.type==='fence'&&b.side==='blue');
