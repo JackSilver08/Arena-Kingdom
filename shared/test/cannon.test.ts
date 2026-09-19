@@ -70,9 +70,9 @@ test('Cannon splash damage hits nearby enemies with falloff', () => {
 
   primary.type = 'scout';
   splash.type = 'scout';
-  primary.x = cannon.x + 110;
+  primary.x = cannon.x + 150;
   primary.y = cannon.y;
-  splash.x = cannon.x + 130;
+  splash.x = cannon.x + 175;
   splash.y = cannon.y;
   primary.hp = primary.maxHp = 200;
   splash.hp = splash.maxHp = 200;
