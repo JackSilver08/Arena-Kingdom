@@ -1,5 +1,6 @@
 import type { BuildingType, Side } from '@arena-kingdom/shared';
 import { UNIT_SHOP_ASSETS, type ShopUnitType } from './unitShopAssets';
+import { cannonIconDataUrl } from './cannonIcon';
 
 /**
  * Illustrated vector art for menus, the HUD and the home page. Each function returns a standalone
@@ -85,7 +86,8 @@ export function barracksArt(side: Side) {
  * The source is kept as a transparent raster asset for fidelity; Red adapts the same artwork with CSS.
  */
 export function unitShopArt(type: ShopUnitType, side: Side) {
-  return `<img class="unit-shop-image unit-shop-image-${side}" src="${UNIT_SHOP_ASSETS[type]}" alt="" aria-hidden="true" draggable="false" />`;
+  const src = type === 'cannon' ? cannonIconDataUrl(side) : UNIT_SHOP_ASSETS[type];
+  return `<img class="unit-shop-image unit-shop-image-${type} unit-shop-image-${side}" src="${src}" alt="" aria-hidden="true" draggable="false" />`;
 }
 
 export function fallbackIcon(side: Side) {
