@@ -63,7 +63,7 @@ function formationGlyph(type: FormationType) {
 }
 
 function typeCountsLabel(type: UnitType, count: number) {
-  const symbols: Record<UnitType, string> = { soldier: '⚔', militia: '🛡', archer: '🏹', knight: '♞' };
+  const symbols: Record<UnitType, string> = { soldier: '⚔', militia: '🛡', archer: '🏹', knight: '♞', scout: '◉' };
   return `${symbols[type]} ${count}`;
 }
 
@@ -79,6 +79,8 @@ export class GameController {
   private hudCache = new Map<string, string>();
   private contextKey = '';
   private contextBarracksId: number | null = null;
+  private contextCastleId: number | null = null;
+  private rememberedEnemyCastleShare = 1;
   private hoverText: string | null = null;
   private hint = '';
   private hintUntil = 0;
@@ -165,6 +167,7 @@ export class GameController {
   setMode(mode: ControlMode) {
     if (mode !== 'idle' && !this.canCommand) return;
     this.contextBarracksId = null;
+    this.contextCastleId = null;
     this.mode = mode;
     if (mode === 'build') this.setHint('Click inside your territory to build. Shift-click to keep building. Right-click or Esc to cancel.');
     else if (mode === 'troops') this.setHint(`Choose a formation, then click a destination. ${FORMATION_LABELS[this.formation]}: ${formationPercent(FORMATION_STATS[this.formation].attackMultiplier)} attack, ${formationPercent(FORMATION_STATS[this.formation].defenseMultiplier)} defence, ${formationPercent(FORMATION_STATS[this.formation].speedMultiplier)} speed.`);
@@ -233,9 +236,23 @@ export class GameController {
     this.refreshHud(true);
   }
 
-  closeContext() {
-    if (this.contextBarracksId === null) return;
+  openCastle(castleId: number) {
+    if (!this.canCommand) return;
+    const castle = this.view?.buildings.find(
+      (b) => b.id === castleId && b.side === this.mySide && b.type === 'castle'
+    );
+    if (!castle) return;
+    this.mode = 'idle';
     this.contextBarracksId = null;
+    this.contextCastleId = castleId;
+    this.contextKey = '';
+    this.refreshHud(true);
+  }
+
+    closeContext() {
+    if (this.contextBarracksId === null && this.contextCastleId === null) return;
+    this.contextBarracksId = null;
+    this.contextCastleId = null;
     this.contextKey = '';
     this.refreshHud(true);
   }
@@ -275,6 +292,7 @@ export class GameController {
 
   selectUnits(ids: number[], additive: boolean) {
     this.contextBarracksId = null;
+    this.contextCastleId = null;
     if (!additive) this.selection.clear();
     for (const id of ids) this.selection.add(id);
     this.refreshHud(true);
@@ -288,6 +306,7 @@ export class GameController {
 
   clearSelection() {
     this.contextBarracksId = null;
+    this.contextCastleId = null;
     if (!this.selection.size) return;
     this.selection.clear();
     this.refreshHud(true);
@@ -692,6 +711,38 @@ export class GameController {
     const me = this.mySide;
     const gold = view?.players[me].gold ?? 0;
 
+    if (this.contextCastleId !== null) {
+      const castle = view?.buildings.find(
+        (b) => b.id === this.contextCastleId && b.side === me && b.type === 'castle'
+      );
+      if (!castle) return null;
+      const queueLabel = castle.queue
+        ? `${castle.queue} queued · Scout training`
+        : 'Recon queue empty';
+      return html`<section class="barracks-context recon-context">
+        <div class="barracks-context-head">
+          <div><strong>Castle Recon</strong><span>${queueLabel}</span></div>
+          <button type="button" class="context-close" data-action="close-context" aria-label="Close">×</button>
+        </div>
+        <div class="barracks-units">
+          <button
+            type="button"
+            class="barracks-unit-option ${gold < UNIT_STATS.scout.cost ? 'unaffordable' : ''}"
+            data-action="recruit-unit"
+            data-unit-type="scout"
+            data-barracks-id="${castle.id}"
+            data-cost="${UNIT_STATS.scout.cost}"
+            title="Recruit a Scout"
+          >
+            <span class="barracks-unit-art scout-unit-art">${trusted(symbolArt('scout', me))}</span>
+            <span class="barracks-unit-copy"><b>Scout</b><small>1.8s · 300 vision · 100 speed · 40 HP</small></span>
+            <span class="yb option-cost">${UNIT_STATS.scout.cost}$</span>
+          </button>
+        </div>
+        <p class="popup-note recon-note">Scouts reveal enemy territory but are lightly protected. Enemy militia and regular troops can destroy them.</p>
+      </section>`;
+    }
+
     if (this.contextBarracksId !== null) {
       const barracks = view?.buildings.find(
         (b) => b.id === this.contextBarracksId && b.side === me && b.type === 'barracks'
@@ -750,7 +801,7 @@ export class GameController {
     }
 
     if (this.mode === 'troops') {
-      const army = view?.units.filter((u) => u.side === me && u.type !== 'militia') ?? [];
+      const army = view?.units.filter((u) => u.side === me && u.type !== 'militia' && u.type !== 'scout') ?? [];
       const supply = view ? armySupplyCapacity(view.buildings.filter((b) => b.side === me)) : 0;
       const upkeep = armyUpkeep(army.length, supply);
       const selected = FORMATION_STATS[this.formation];
@@ -804,13 +855,15 @@ export class GameController {
     const army = view ? view.units.filter((u) => u.side === me).length : 0;
     const supply = view ? armySupplyCapacity(view.buildings.filter((b) => b.side === me)) : 0;
     const upkeep = armyUpkeep(army, supply);
-    const contextKey = `${me}|${this.mode}|${this.buildType}|${this.fraction}|${this.formation}|${this.contextBarracksId ?? '-'}|${this.mode === 'troops' ? `${army}|${supply}|${upkeep}|${this.selection.size}` : ''}`;
+    const contextBuilding = view?.buildings.find((b) => b.id === (this.contextBarracksId ?? this.contextCastleId));
+    const contextStatus = contextBuilding ? `${contextBuilding.queue}|${contextBuilding.trainType ?? '-'}|${Math.round(contextBuilding.trainProgress * 10)}` : '';
+    const contextKey = `${me}|${this.mode}|${this.buildType}|${this.fraction}|${this.formation}|${this.contextBarracksId ?? '-'}|${this.contextCastleId ?? '-'}|${contextStatus}|${this.mode === 'troops' ? `${army}|${supply}|${upkeep}|${this.selection.size}` : ''}`;
     if (contextKey !== this.contextKey) {
       this.contextKey = contextKey;
       const popup = $(this.root, '[data-context]');
       const markup = this.contextMarkup(view);
       popup.hidden = !markup;
-      popup.dataset.mode = this.contextBarracksId !== null ? 'recruit' : this.mode;
+      popup.dataset.mode = this.contextBarracksId !== null || this.contextCastleId !== null ? 'recruit' : this.mode;
       if (markup) setHtml(popup, markup);
     }
     const messengerOpen = !$(this.root, '[data-messenger]').hidden;
@@ -847,7 +900,12 @@ export class GameController {
 
       const castleShare = (side: Side) => {
         const castle = view.buildings.find((b) => b.side === side && b.type === 'castle');
-        return castle ? castle.hp / castle.maxHp : 0;
+        if (castle) {
+          const share = castle.hp / castle.maxHp;
+          if (side === enemy) this.rememberedEnemyCastleShare = share;
+          return share;
+        }
+        return side === enemy ? this.rememberedEnemyCastleShare : 0;
       };
       this.set('myCastle', `${Math.round(castleShare(me) * 1000)}`, (el, v) => (el.style.width = `${Number(v) / 10}%`));
       this.set('enemyCastle', `${Math.round(castleShare(enemy) * 1000)}`, (el, v) => (el.style.width = `${Number(v) / 10}%`));
@@ -926,7 +984,7 @@ export class GameController {
     if (this.selection.size) {
       return `${this.selection.size} troop${this.selection.size > 1 ? 's' : ''} selected · right-click to attack · Shift+right-click to move · S to hold`;
     }
-    return 'Drag to select troops · click your barracks to recruit · build villages to strengthen your economy and army supply · destroy the enemy castle!';
+    return 'Drag to select troops · click your barracks to recruit · click your Castle to send a Scout · build villages to strengthen your economy and army supply · destroy the enemy castle!';
   }
 
   private renderEnd() {
