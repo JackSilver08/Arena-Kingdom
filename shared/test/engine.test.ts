@@ -161,7 +161,6 @@ test('fog filters hidden enemy events', () => {
   assert.equal(engine.eventsForSide('blue', [hidden]).length, 1);
 });
 
-});
 
 test('knight damage is reduced by 3% against an active soldier formation', () => {
   const setup = (formed: boolean) => {
