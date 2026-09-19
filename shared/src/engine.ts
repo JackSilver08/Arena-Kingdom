@@ -1453,7 +1453,8 @@ export class MatchEngine {
           if(px<py)push.x=Math.sign(point.x||prev.x||1)*hw;else push.y=Math.sign(point.y||prev.y||1)*hh;
         }
         const out=world(push.x,push.y);u.x=out.x;u.y=out.y;
-      const clamped = clampToIsland(u.x, u.y, radius);
+      }
+      const clamped = clampToIsland(u.x, u.y, unitRadius);
       u.x = clamped.x;
       u.y = clamped.y;
     }
