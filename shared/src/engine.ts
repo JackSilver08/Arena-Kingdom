@@ -315,7 +315,8 @@ export class MatchEngine {
       switch (event.type) {
         case 'shot':
         case 'arrowShot':
-          return event.side === side || visible(event.fromX, event.fromY);
+        case 'cannonShot':
+          return event.side === side || visible(event.fromX, event.fromY) || visible(event.toX, event.toY);
         case 'unitDied':
         case 'unitTrained':
         case 'buildingPlaced':
@@ -374,7 +375,7 @@ export class MatchEngine {
   }
 
   private train(side: Side, buildingId: number | undefined, requested: number, unitType: UnitType): CommandResult {
-    if (!['soldier', 'archer', 'knight', 'scout'].includes(unitType)) return { ok: false, error: 'That unit cannot be trained here.' };
+    if (!['soldier', 'archer', 'knight', 'scout', 'cannon'].includes(unitType)) return { ok: false, error: 'That unit cannot be trained here.' };
 
     const producerType: BuildingType = unitType === 'scout' ? 'castle' : 'barracks';
     const count = Math.min(Math.max(requested, 1), GAME_RULES.economy.maxQueuePerBarracks);
@@ -954,19 +955,23 @@ export class MatchEngine {
           if (u.cooldownMs <= 0) {
             u.cooldownMs = attack.cooldownMs;
             u.lastAttackMs = s.timeMs;
-            this.damage(u.side, aim, attack.damage, u.formation ?? 'line', u.type);
-            if (u.type === 'archer') {
-              this.events.push({
-                type: 'arrowShot',
-                side: u.side,
-                fromX: Math.round(u.x),
-                fromY: Math.round(u.y - 4),
-                toX: Math.round(aim.x),
-                toY: Math.round(aim.y),
-                targetId: aim.id
-              });
+            if (u.type === 'cannon') {
+              this.fireCannon(u, aim, attack);
+            } else {
+              this.damage(u.side, aim, attack.damage, u.formation ?? 'line', u.type);
+              if (u.type === 'archer') {
+                this.events.push({
+                  type: 'arrowShot',
+                  side: u.side,
+                  fromX: Math.round(u.x),
+                  fromY: Math.round(u.y - 4),
+                  toX: Math.round(aim.x),
+                  toY: Math.round(aim.y),
+                  targetId: aim.id
+                });
+              }
+              this.events.push({ type: 'hit', x: Math.round(aim.x), y: Math.round(aim.y) });
             }
-            this.events.push({ type: 'hit', x: Math.round(aim.x), y: Math.round(aim.y) });
           }
         } else {
           const point = isBuilding(aim) ? approachPoint(aim, u.x, u.y) : { x: aim.x, y: aim.y };
@@ -1462,6 +1467,38 @@ export class MatchEngine {
       u.x = clamped.x;
       u.y = clamped.y;
     }
+  }
+
+  private fireCannon(u: UnitState, aim: Entity, attack: AttackStats) {
+    const splashRadius = UNIT_STATS.cannon.splashRadius ?? 0;
+    const impactX = aim.x;
+    const impactY = aim.y;
+    this.damage(u.side, aim, attack.damage, undefined, u.type);
+
+    if (splashRadius > 0) {
+      const entities: Entity[] = [...this.state.units, ...this.state.buildings];
+      for (const target of entities) {
+        if (target.id === aim.id || target.side === u.side || target.hp <= 0) continue;
+        const distance = isBuilding(target)
+          ? distanceToBuilding(target, impactX, impactY)
+          : dist(target.x, target.y, impactX, impactY);
+        if (distance > splashRadius) continue;
+        const falloff = Math.max(0.25, 1 - distance / splashRadius);
+        this.damage(u.side, target, attack.damage * 0.65 * falloff, undefined, u.type);
+      }
+    }
+
+    this.events.push({
+      type: 'cannonShot',
+      side: u.side,
+      fromX: Math.round(u.x),
+      fromY: Math.round(u.y),
+      toX: Math.round(impactX),
+      toY: Math.round(impactY),
+      targetId: aim.id,
+      radius: splashRadius
+    });
+    this.events.push({ type: 'hit', x: Math.round(impactX), y: Math.round(impactY) });
   }
 
   /**
