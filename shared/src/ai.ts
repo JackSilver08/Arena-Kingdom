@@ -124,8 +124,8 @@ export class BotController {
 
     this.answerPeace(engine);
 
-    const army = engine.armyOf(side);
-    const enemyArmy = engine.armyOf(enemy);
+    const army = engine.armyOf(side).filter((u) => u.type !== 'royal_guard');
+    const enemyArmy = engine.armyOf(enemy).filter((u) => u.type !== 'royal_guard');
     const alive = new Set(army.map((u) => u.id));
     this.waveIds = new Set([...this.waveIds].filter((id) => alive.has(id)));
 
@@ -281,7 +281,7 @@ export class BotController {
   private strength(engine: MatchEngine, side: Side) {
     const castle = engine.castleOf(side);
     const castleShare = castle ? castle.hp / castle.maxHp : 0;
-    return engine.armyOf(side).length * 2 + engine.buildingsOf(side, 'village').length * 3 + castleShare * 20;
+    return engine.armyOf(side).filter((u) => u.type !== 'royal_guard').length * 2 + engine.buildingsOf(side, 'village').length * 3 + castleShare * 20;
   }
 
   private tryBuild(engine: MatchEngine, type: BuildableType) {
