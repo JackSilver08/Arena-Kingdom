@@ -818,7 +818,7 @@ export class MatchEngine {
       if (b.type === 'barracks' || b.type === 'castle') {
         const trainingType = b.trainType ?? 'soldier';
         const trainingStats = UNIT_STATS[trainingType];
-        if (b.queue > 0 && (b.type === 'barracks' || trainingType === 'scout') && this.armyOf(b.side).length < GAME_RULES.limits.maxUnitsPerSide) {
+        if (b.queue > 0 && ((b.type === 'barracks' && trainingType !== 'scout') || (b.type === 'castle' && trainingType === 'scout')) && this.armyOf(b.side).length < GAME_RULES.limits.maxUnitsPerSide) {
           b.trainMs += dt;
           if (b.trainMs >= trainingStats.trainMs) {
             b.trainMs = 0;
