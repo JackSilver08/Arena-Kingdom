@@ -107,7 +107,7 @@ export class ArenaRoom extends Room<object, { private: boolean }, ClientData, Cu
       rejoined.userData = { side, commandWindowStart: 0, commandCount: 0 };
       this.sendWelcome(rejoined, side);
       this.broadcastLobby();
-      if (this.engine) rejoined.send('s', encodeSnapshot(this.engine.state, []));
+      this.sendSnapshotTo(rejoined, []);
       if (this.endMessage) rejoined.send('end', this.endMessage);
     } catch {
       if (this.phase === 'playing') this.engine?.forfeit(side, 'disconnect');
@@ -158,7 +158,7 @@ export class ArenaRoom extends Room<object, { private: boolean }, ClientData, Cu
     this.engine = new MatchEngine();
     this.phase = 'playing';
     this.broadcastLobby();
-    this.broadcast('s', encodeSnapshot(this.engine.state, []));
+    this.sendSnapshots([]);
     this.setSimulationInterval((deltaMs) => this.tick(deltaMs), GAME_RULES.tickMs);
   }
 
@@ -170,10 +170,27 @@ export class ArenaRoom extends Room<object, { private: boolean }, ClientData, Cu
     this.sinceSnapshot += deltaMs;
     if (this.sinceSnapshot >= SNAPSHOT_MS || engine.ended) {
       this.sinceSnapshot = 0;
-      this.broadcast('s', encodeSnapshot(engine.state, this.pendingEvents));
+      this.sendSnapshots(this.pendingEvents);
       this.pendingEvents = [];
     }
     if (engine.ended) this.finishMatch(engine);
+  }
+
+  private sendSnapshots(events: readonly GameEvent[]) {
+    const engine = this.engine;
+    if (!engine) return;
+    for (const client of this.clients) {
+      const side = client.userData?.side;
+      if (!side) continue;
+      client.send('s', encodeSnapshot(engine.viewForSide(side), engine.eventsForSide(side, events)));
+    }
+  }
+
+  private sendSnapshotTo(client: Client<ClientData, CurrentUser>, events: readonly GameEvent[]) {
+    const engine = this.engine;
+    const side = client.userData?.side;
+    if (!engine || !side) return;
+    client.send('s', encodeSnapshot(engine.viewForSide(side), engine.eventsForSide(side, events)));
   }
 
   private handleCommand(client: Client<ClientData, CurrentUser>, payload: unknown) {
