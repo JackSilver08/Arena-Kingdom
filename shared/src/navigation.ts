@@ -118,12 +118,12 @@ export class NavGrid {
     this.wallCover = { blue: new Uint8Array(n), red: new Uint8Array(n) };
   }
 
-  rebuild(buildings: readonly { id: number; side: Side; type: BuildingType; x: number; y: number; hp: number }[]) {
+  rebuild(buildings: readonly { id: number; side: Side; type: BuildingType; x: number; y: number; hp: number; rotation?: number }[]) {
     this.walls = { blue: [], red: [] };
     for (const b of buildings) {
       if (b.type !== 'fence' || b.hp <= 0) continue;
       const stats = BUILDING_STATS.fence;
-      const rawRotation=(b as {rotation?:number}).rotation;
+      const rawRotation=b.rotation;
       const rotation=Number.isInteger(rawRotation)?((rawRotation as number)%8+8)%8:0;
       const rad=fenceAngle(rotation),cos=Math.cos(rad),sin=Math.sin(rad);
       const hw=stats.halfWidth+CLEARANCE,hh=stats.halfHeight+CLEARANCE;
