@@ -798,13 +798,16 @@ export class BattleScene extends Phaser.Scene {
 
   private playEvents(events: GameEvent[]) {
     for (const event of events) {
-      if (this.effects > MAX_EFFECTS && (event.type === 'hit' || event.type === 'shot' || event.type === 'arrowShot')) continue;
+      if (this.effects > MAX_EFFECTS && (event.type === 'hit' || event.type === 'shot' || event.type === 'arrowShot' || event.type === 'cannonShot')) continue;
       switch (event.type) {
         case 'shot':
           this.arrow(event.fromX, event.fromY, event.toX, event.toY, 0.2);
           break;
         case 'arrowShot':
           this.arrow(event.fromX, event.fromY, event.toX, event.toY, 0.85);
+          break;
+        case 'cannonShot':
+          this.cannonball(event.fromX, event.fromY, event.toX, event.toY, event.radius);
           break;
         case 'hit':
           this.spark(event.x + Phaser.Math.Between(-5, 5), event.y - 8 + Phaser.Math.Between(-5, 5), 0.55);
@@ -862,6 +865,42 @@ export class BattleScene extends Phaser.Scene {
         image.destroy();
       }
     });
+  }
+
+  private cannonball(fromX:number, fromY:number, toX:number, toY:number, radius:number) {
+    const ball = this.add.circle(fromX, fromY, 4, 0x1f2937, 1).setDepth(DEPTH.arrows);
+    this.track(ball);
+    const motion = { t: 0 };
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const distance = Math.hypot(dx, dy);
+    const arc = Math.min(140, Math.max(35, distance * 0.22));
+    this.tweens.add({
+      targets: motion,
+      t: 1,
+      duration: Math.min(700, 260 + distance * 0.9),
+      ease: 'Sine.easeInOut',
+      onUpdate: () => {
+        const t = motion.t;
+        const x = fromX + dx * t;
+        const y = fromY + dy * t - Math.sin(Math.PI * t) * arc;
+        ball.setPosition(x, y);
+      },
+      onComplete: () => {
+        ball.destroy();
+        this.cannonExplosion(toX, toY, radius);
+      }
+    });
+  }
+
+  private cannonExplosion(x:number, y:number, radius:number) {
+    const splash = Math.max(24, radius);
+    this.ring(x, y, 0xff9f1c, 0.15, Math.max(1.8, splash / 18), 420);
+    this.ring(x, y, 0xffffff, 0.1, Math.max(1.2, splash / 24), 260);
+    for(let i=0;i<5;i++) {
+      this.spark(x + Phaser.Math.Between(-Math.round(splash * 0.5), Math.round(splash * 0.5)),
+        y + Phaser.Math.Between(-Math.round(splash * 0.5), Math.round(splash * 0.5)), 0.8);
+    }
   }
 
   private spark(x: number, y: number, scale: number) {
