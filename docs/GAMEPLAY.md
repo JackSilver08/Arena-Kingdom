@@ -35,7 +35,8 @@ Buildings can only be placed in your own territory, outside the contested centre
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | Soldier | 18 | 2.2s | 100 | 52 | 12 / 0.8s | 14 | Basic melee infantry |
 | Archer | 21 | 2.6s | 75 | 45 | 9 / 1.1s | 190 | Long-range harassment; 125 range against buildings |
-| Knight | 32 | 3.2s | 85 | 150 | 20 / 1.0s | 18 | Fast cavalry; 170 vision |\n| Scout | 10 | 1.8s | 40 | 100 | — | — | Recon unit; 300 vision; recruited from the Castle |
+| Knight | 32 | 3.2s | 85 | 150 | 20 / 1.0s | 18 | Fast cavalry; 170 vision |
+| Scout | 10 | 1.8s | 40 | 100 | — | — | Recon unit; 300 vision; recruited from the Castle |
 
 Barracks train one unit type per active queue. Multiple barracks can train different unit types in parallel. The Castle has its own queue for Scouts.
 
@@ -71,7 +72,9 @@ Crossing into enemy territory with the regular army can reveal the area, but it 
 | `A` / `S`                | Select whole army / hold position                         |
 | `B`, then `1` `2` `3`    | Build Village / Barracks / Tower, click to place (Shift keeps building) |
 | `R` / Shift + `R`        | Recruit 1 / 5 soldiers at the least busy barracks         |
-| Click your barracks      | Open the Barracks recruitment deck                        |\n| Click your Castle        | Open Castle Recon and recruit a Scout for 10 gold        |\n| Royal Guard              | No manual command. Castle AI deploys 1-2 guards, 3 max in normal threat, or all surviving guards during emergency defence |
+| Click your barracks      | Open the Barracks recruitment deck                        |
+| Click your Castle        | Open Castle Recon and recruit a Scout for 10 gold        |
+| Royal Guard              | No manual command. Castle AI deploys 1-2 guards, 3 max in normal threat, or all surviving guards during emergency defence |
 | `T`, then `1` `2` `3`    | Send All / ⅓ / ⅔ of the army to a clicked point           |
 | `F`                      | Tactical Fall Back. Selected troops fall back; with no selection, the whole regular army falls back |
 | `M`                      | Messenger: propose peace, surrender                       |
@@ -112,4 +115,16 @@ The engine automatically assigns roles. Low-health troops and Archers prioritize
 
 When the retreaters reach their defensive destination, or the pursuing enemy moves at least 260 world units away, surviving rearguards automatically begin the rolling retreat to the same defensive point. The defensive destination prefers a Tower, then Village, then Fence, then Castle.
 
-For groups of 2-5 regular troops, the minimum one-unit rearguard rule takes precedence over the 35% maximum because an integer split cannot satisfy both constraints.\n\n## Royal Guard & Castle AI\n\nEach Castle has a hidden roster of **7 Royal Guards**. They cost no gold, do not use army supply, do not appear in the regular Troops command deck, and cannot be selected or ordered manually.\n\nThe Castle evaluates hostile units that have crossed into its own territory and are inside a 520-unit threat bubble. Normal responses are adaptive: 1 guard for a light threat, 2 for a medium threat, and 3 for a high threat. A critical threat can deploy all surviving guards and holds Emergency Defense for at least 10 seconds.\n\nRoyal Guard stats: 250 HP, 24 damage, 150 speed, 18 melee range. A deployed guard can only chase targets while those targets remain inside its own kingdom. When an enemy escapes across the border, the guard disengages and returns to the Castle.\n\nDuring Emergency Defense the Castle fires a **3-arrow volley** instead of one arrow, selecting up to three nearby enemy units as separate targets.\n\nRoyal Guards that safely return to the Castle go back into the hidden Castle roster; guards that die are lost for the rest of the match.
+For groups of 2-5 regular troops, the minimum one-unit rearguard rule takes precedence over the 35% maximum because an integer split cannot satisfy both constraints.
+
+## Royal Guard & Castle AI
+
+Each Castle has a hidden roster of **7 Royal Guards**. They cost no gold, do not use army supply, do not appear in the regular Troops command deck, and cannot be selected or ordered manually.
+
+The Castle evaluates hostile units that have crossed into its own territory and are inside a 520-unit threat bubble. Normal responses are adaptive: 1 guard for a light threat, 2 for a medium threat, and 3 for a high threat. A critical threat can deploy all surviving guards and holds Emergency Defense for at least 10 seconds.
+
+Royal Guard stats: 250 HP, 24 damage, 150 speed, 18 melee range. A deployed guard can only chase targets while those targets remain inside its own kingdom. When an enemy escapes across the border, the guard disengages and returns to the Castle.
+
+During Emergency Defense the Castle fires a **3-arrow volley** instead of one arrow, selecting up to three nearby enemy units as separate targets.
+
+Royal Guards that safely return to the Castle go back into the hidden Castle roster; guards that die are lost for the rest of the match.
