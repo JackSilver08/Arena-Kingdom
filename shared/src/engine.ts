@@ -10,6 +10,8 @@ import {
   armyUpkeep,
   canPlaceBuilding,
   distanceToBuilding,
+  fenceAngle,
+  normalizeFenceRotation,
   forwardDir,
   fractionOf,
   incomeFor,
@@ -118,10 +120,11 @@ export function parseCommand(input: unknown): Command | null {
     Array.isArray(v) && v.length <= MAX_UNIT_IDS_PER_COMMAND && v.every((id) => Number.isInteger(id));
   const optionalId = (v: unknown) => v === undefined || Number.isInteger(v);
   const optionalFormation = (v: unknown) => v === undefined || FORMATION_TYPES.includes(v as FormationType);
+  const optionalRotation = (v: unknown) => v === undefined || (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 7);
   switch (c.type) {
     case 'build':
-      return BUILDABLE_TYPES.includes(c.building as BuildableType) && num(c.x) && num(c.y)
-        ? { type: 'build', building: c.building as BuildableType, x: c.x as number, y: c.y as number }
+      return BUILDABLE_TYPES.includes(c.building as BuildableType) && num(c.x) && num(c.y) && optionalRotation(c.rotation)
+        ? { type: 'build', building: c.building as BuildableType, x: c.x as number, y: c.y as number, rotation: c.rotation as number | undefined }
         : null;
     case 'train': {
       if (!optionalId(c.barracksId) || !optionalId(c.count)) return null;
@@ -234,7 +237,7 @@ export class MatchEngine {
     if (this.ended) return { ok: false, error: 'The match is over.' };
     switch (cmd.type) {
       case 'build':
-        return this.build(side, cmd.building, cmd.x, cmd.y);
+        return this.build(side, cmd.building, cmd.x, cmd.y, cmd.rotation);
       case 'train':
         return this.train(side, cmd.barracksId, cmd.count ?? 1, cmd.unitType ?? 'soldier');
       case 'move':
@@ -344,23 +347,24 @@ export class MatchEngine {
 
   // ---------------------------------------------------------------- commands
 
-  private build(side: Side, type: BuildableType, rawX: number, rawY: number): CommandResult {
+  private build(side: Side, type: BuildableType, rawX: number, rawY: number, rawRotation?: number): CommandResult {
     const stats = BUILDING_STATS[type];
     const player = this.state.players[side];
     const x = Math.round(rawX);
     const y = Math.round(rawY);
+    const rotation = type === 'fence' ? normalizeFenceRotation(rawRotation) : undefined;
     if (player.gold < stats.cost) return { ok: false, error: `Need ${stats.cost} gold to build a ${stats.label}.` };
     if (this.buildingsOf(side).length >= GAME_RULES.limits.maxBuildingsPerSide) {
       return { ok: false, error: 'Building limit reached.' };
     }
-    const check = canPlaceBuilding(this.state.buildings, side, type, x, y);
+    const check = canPlaceBuilding(this.state.buildings, side, type, x, y, rotation);
     if (!check.ok) return { ok: false, error: check.reason };
     player.gold -= stats.cost;
     player.stats.goldSpent += stats.cost;
     player.stats.buildingsBuilt += 1;
-    this.spawnBuilding(side, type, x, y);
+    this.spawnBuilding(side, type, x, y, rotation);
     if (type === 'fence') this.navDirty = true;
-    this.events.push({ type: 'buildingPlaced', side, building: type, x, y });
+    this.events.push({ type: 'buildingPlaced', side, building: type, x, y, rotation });
     this.refreshIncome();
     return { ok: true, message: `${stats.label} constructed.` };
   }
@@ -1398,8 +1402,6 @@ export class MatchEngine {
 
   private resolveCollisions() {
     const units = this.state.units;
-    const radius = UNIT_STATS.soldier.radius;
-    const minDist = radius * 2;
     for (let i = 0; i < units.length; i++) {
       const a = units[i];
       for (let j = i + 1; j < units.length; j++) {
@@ -1407,6 +1409,7 @@ export class MatchEngine {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const d2 = dx * dx + dy * dy;
+        const minDist = UNIT_STATS[a.type].radius + UNIT_STATS[b.type].radius;
         if (d2 >= minDist * minDist) continue;
         const d = Math.sqrt(d2) || 0.01;
         const push = (minDist - d) / 2;
@@ -1420,10 +1423,12 @@ export class MatchEngine {
     }
 
     for (const u of units) {
+      const unitRadius = UNIT_STATS[u.type].radius;
       for (const building of this.state.buildings) {
+        if (building.hp <= 0) continue;
         const stats = BUILDING_STATS[building.type];
         if (stats.shape === 'circle') {
-          const r = stats.halfWidth + radius;
+          const r = stats.halfWidth + unitRadius;
           const dx = u.x - building.x;
           const dy = u.y - building.y;
           const d2 = dx * dx + dy * dy;
@@ -1435,26 +1440,19 @@ export class MatchEngine {
         }
         // Troops walk through their own fences.
         if (building.side === u.side) continue;
-        const minX = building.x - stats.halfWidth - radius;
-        const maxX = building.x + stats.halfWidth + radius;
-        const minY = building.y - stats.halfHeight - radius;
-        const maxY = building.y + stats.halfHeight + radius;
-        if (u.x <= minX || u.x >= maxX || u.y <= minY || u.y >= maxY) continue;
-        // Push back towards the side the unit came from, so crowds cannot tunnel through.
-        if (u.prevY <= minY) u.y = minY;
-        else if (u.prevY >= maxY) u.y = maxY;
-        else if (u.prevX <= minX) u.x = minX;
-        else if (u.prevX >= maxX) u.x = maxX;
-        else {
-          const exits = [
-            { d: u.y - minY, apply: () => (u.y = minY) },
-            { d: maxY - u.y, apply: () => (u.y = maxY) },
-            { d: u.x - minX, apply: () => (u.x = minX) },
-            { d: maxX - u.x, apply: () => (u.x = maxX) }
-          ];
-          exits.sort((p, q) => p.d - q.d)[0].apply();
+        const angle=fenceAngle(building.rotation),cos=Math.cos(angle),sin=Math.sin(angle);
+        const local=(x:number,y:number)=>({x:(x-building.x)*cos+(y-building.y)*sin,y:-(x-building.x)*sin+(y-building.y)*cos});
+        const world=(x:number,y:number)=>({x:building.x+x*cos-y*sin,y:building.y+x*sin+y*cos});
+        const point=local(u.x,u.y),prev=local(u.prevX,u.prevY),hw=stats.halfWidth+unitRadius,hh=stats.halfHeight+unitRadius;
+        if(Math.abs(point.x)>hw||Math.abs(point.y)>hh)continue;
+        let push={x:point.x,y:point.y};
+        if(Math.abs(prev.x)>hw||Math.abs(prev.y)>hh){
+          if(prev.x<-hw)push.x=-hw;else if(prev.x>hw)push.x=hw;else if(prev.y<-hh)push.y=-hh;else if(prev.y>hh)push.y=hh;
+        }else{
+          const px=hw-Math.abs(point.x),py=hh-Math.abs(point.y);
+          if(px<py)push.x=Math.sign(point.x||prev.x||1)*hw;else push.y=Math.sign(point.y||prev.y||1)*hh;
         }
-      }
+        const out=world(push.x,push.y);u.x=out.x;u.y=out.y;
       const clamped = clampToIsland(u.x, u.y, radius);
       u.x = clamped.x;
       u.y = clamped.y;
@@ -1567,12 +1565,13 @@ export class MatchEngine {
     return { side, gold: GAME_RULES.economy.startingGold, income: 0, stats: emptyStats(), peaceCooldownUntil: 0 };
   }
 
-  private spawnBuilding(side: Side, type: BuildingType, x: number, y: number) {
+  private spawnBuilding(side: Side, type: BuildingType, x: number, y: number, rawRotation?: number) {
     const hp = BUILDING_STATS[type].hp;
     const building: BuildingState = {
       id: this.state.nextId++,
       side,
       type,
+      rotation: type === 'fence' ? normalizeFenceRotation(rawRotation) : undefined,
       x,
       y,
       hp,
