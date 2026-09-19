@@ -63,7 +63,7 @@ function formationGlyph(type: FormationType) {
 }
 
 function typeCountsLabel(type: UnitType, count: number) {
-  const symbols: Record<UnitType, string> = { soldier: '⚔', militia: '🛡', archer: '🏹', knight: '♞', scout: '◉' };
+  const symbols: Record<UnitType, string> = { soldier: '⚔', militia: '🛡', archer: '🏹', knight: '♞', scout: '◉', royal_guard: '♛' };
   return `${symbols[type]} ${count}`;
 }
 
@@ -316,7 +316,7 @@ export class GameController {
     const view = this.view;
     if (!view) return;
     this.selectUnits(
-      view.units.filter((u) => u.side === this.mySide).map((u) => u.id),
+      view.units.filter((u) => u.side === this.mySide && u.type !== 'royal_guard').map((u) => u.id),
       false
     );
   }
@@ -579,7 +579,7 @@ export class GameController {
     const view = this.view;
     if (!view || !this.selection.size) return;
     const alive = new Set<number>();
-    for (const u of view.units) if (u.side === this.mySide) alive.add(u.id);
+    for (const u of view.units) if (u.side === this.mySide && u.type !== 'royal_guard') alive.add(u.id);
     for (const id of this.selection) if (!alive.has(id)) this.selection.delete(id);
   }
 
@@ -801,7 +801,7 @@ export class GameController {
     }
 
     if (this.mode === 'troops') {
-      const army = view?.units.filter((u) => u.side === me && u.type !== 'militia' && u.type !== 'scout') ?? [];
+      const army = view?.units.filter((u) => u.side === me && u.type !== 'militia' && u.type !== 'scout' && u.type !== 'royal_guard') ?? [];
       const supply = view ? armySupplyCapacity(view.buildings.filter((b) => b.side === me)) : 0;
       const upkeep = armyUpkeep(army.length, supply);
       const selected = FORMATION_STATS[this.formation];
@@ -852,7 +852,7 @@ export class GameController {
     const enemy = s.enemySide;
     if (force) this.hudElapsed = 0;
 
-    const army = view ? view.units.filter((u) => u.side === me).length : 0;
+    const army = view ? view.units.filter((u) => u.side === me && u.type !== 'royal_guard').length : 0;
     const supply = view ? armySupplyCapacity(view.buildings.filter((b) => b.side === me)) : 0;
     const upkeep = armyUpkeep(army, supply);
     const contextBuilding = view?.buildings.find((b) => b.id === (this.contextBarracksId ?? this.contextCastleId));
@@ -976,7 +976,7 @@ export class GameController {
     if (this.mode === 'troops') {
       const f = FORMATION_STATS[this.formation];
       const view = this.view;
-      const army = view ? view.units.filter((u) => u.side === this.mySide).length : 0;
+      const army = view ? view.units.filter((u) => u.side === this.mySide && u.type !== 'royal_guard').length : 0;
       const supply = view ? armySupplyCapacity(view.buildings.filter((b) => b.side === this.mySide)) : 0;
       const upkeep = armyUpkeep(army, supply);
       return `Send ${FRACTION_LABELS[this.fraction]} in ${FORMATION_LABELS[this.formation]}: ${formationPercent(f.attackMultiplier)} attack · ${formationPercent(f.defenseMultiplier)} defence · ${formationPercent(f.speedMultiplier)} speed · supply ${army}/${supply}${upkeep ? ` · upkeep −${upkeep}$/${GAME_RULES.economy.incomeIntervalMs / 1000}s` : ''}.`;
