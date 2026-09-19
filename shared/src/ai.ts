@@ -181,8 +181,10 @@ export class BotController {
     const reserve = profile.reserve + (saving && project ? BUILDING_STATS[project].cost : 0);
     if (Math.random() < profile.recruitChance || intruders.length) {
       for (const b of engine.buildingsOf(side, 'barracks')) {
-        while (b.queue < 2 && gold() >= soldierCost + reserve && engine.armyOf(side).length < profile.armyCap) {
+        while (b.queue < 2 && engine.armyOf(side).length < profile.armyCap) {
           const unitType = b.trainType ?? this.recruitType();
+          const unitCost = UNIT_STATS[unitType].cost;
+          if (gold() < unitCost + reserve) break;
           if (!engine.command(side, { type: 'train', barracksId: b.id, unitType }).ok) break;
         }
       }
@@ -237,11 +239,13 @@ export class BotController {
   private recruitType(): UnitType {
     const roll = Math.random();
     if (this.difficulty === 'hard') {
+      if (roll < 0.07) return 'cannon';
       if (roll < 0.24) return 'knight';
       if (roll < 0.58) return 'archer';
       return 'soldier';
     }
     if (this.difficulty === 'normal') {
+      if (roll < 0.03) return 'cannon';
       if (roll < 0.18) return 'knight';
       if (roll < 0.5) return 'archer';
       return 'soldier';
