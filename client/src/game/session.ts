@@ -113,7 +113,7 @@ export class LocalSession extends GameSession {
       isBot: true,
       connected: true
     };
-    this.view = this.engine.state;
+    this.view = this.engine.viewForSide('blue');
     this.status = 'playing';
   }
 
@@ -124,8 +124,9 @@ export class LocalSession extends GameSession {
       this.engine.update(deltaMs);
     }
     const events = this.engine.drainEvents();
+    this.view = this.engine.viewForSide('blue');
     if (this.engine.state.result && !this.end) this.finish(this.engine.state.result);
-    return events;
+    return this.engine.eventsForSide('blue', events);
   }
 
   send(command: Command) {
