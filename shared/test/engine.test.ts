@@ -520,6 +520,10 @@ test('snapshots round-trip through the wire format', () => {
   const scoutSnapshot = encodeSnapshot(engine.state, []);
   assert.equal(scoutSnapshot.v, 4);
   assert.equal(decodeSnapshot(JSON.parse(JSON.stringify(scoutSnapshot))).view.units.find((u) => u.id === scout.id)?.type, 'scout');
+  const royalGuard = engine.armyOf('red')[0];
+  royalGuard.type = 'royal_guard';
+  const royalSnapshot = encodeSnapshot(engine.state, []);
+  assert.equal(decodeSnapshot(JSON.parse(JSON.stringify(royalSnapshot))).view.units.find((u) => u.id === royalGuard.id)?.type, 'royal_guard');
 });
 
 test('parseCommand rejects malformed input', () => {
@@ -532,6 +536,55 @@ test('parseCommand rejects malformed input', () => {
   assert.deepEqual(parseCommand({ type: 'fallback', unitIds: [1, 2] }), { type: 'fallback', unitIds: [1, 2] });
   assert.equal(parseCommand({ type: 'fallback', unitIds: ['1'] }), null);
   assert.deepEqual(parseCommand({ type: 'surrender' }), { type: 'surrender' });
+});
+
+test('Royal Guard deploys adaptively, is not part of the controllable army, and respects territory leash', () => {
+  const engine = new MatchEngine();
+  engine.state.buildings = engine.state.buildings.filter((b) => !(b.side === 'blue' && b.type === 'village'));
+  const red = engine.armyOf('red');
+  for (const unit of red.slice(1)) unit.hp = 0;
+  const intruder = red[0];
+  intruder.hp = 1000;
+  intruder.maxHp = 1000;
+  intruder.x = 340;
+  intruder.y = 540;
+
+  run(engine, GAME_RULES.tickMs);
+  let guards = engine.state.units.filter((u) => u.side === 'blue' && u.type === 'royal_guard');
+  assert.equal(guards.length, 1, 'one light intruder should trigger one Royal Guard');
+  assert.equal(engine.command('blue', { type: 'move', unitIds: [guards[0].id], x: 300, y: 540, attack: true }).ok, false);
+
+  intruder.x = GAME_RULES.map.redLand.minX + 10;
+  run(engine, GAME_RULES.tickMs);
+  guards = engine.state.units.filter((u) => u.side === 'blue' && u.type === 'royal_guard');
+  assert.ok(guards.length >= 1);
+  assert.equal(guards[0].royalGuardState, 'returning');
+  assert.ok(isPointInTerritory('blue', guards[0].x, guards[0].y), 'Royal Guard must stay in its own territory');
+});
+
+test('critical Castle threat deploys seven guards and fires three arrows per volley', () => {
+  const engine = new MatchEngine();
+  engine.state.buildings = engine.state.buildings.filter((b) => !(b.side === 'blue' && b.type === 'village'));
+  const castle = engine.castleOf('blue')!;
+  const red = engine.armyOf('red');
+  red.forEach((unit, i) => {
+    if (i < 3) {
+      unit.type = 'knight';
+      unit.hp = 1000;
+      unit.maxHp = 1000;
+      unit.x = castle.x + 52 + i * 18;
+      unit.y = castle.y + (i - 1) * 18;
+      unit.order = { kind: 'idle' };
+    } else {
+      unit.hp = 0;
+    }
+  });
+
+  run(engine, GAME_RULES.tickMs);
+  const guards = engine.state.units.filter((u) => u.side === 'blue' && u.type === 'royal_guard');
+  assert.equal(guards.length, 7, 'critical threat should deploy all seven living guards');
+  const shots = engine.drainEvents().filter((event) => event.type === 'shot');
+  assert.equal(shots.length, 3, 'Emergency Defense should create a three-arrow volley');
 });
 
 test('bots finish a match without corrupting state', () => {
