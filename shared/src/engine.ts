@@ -1469,7 +1469,7 @@ export class MatchEngine {
     }
   }
 
-  private fireCannon(u: UnitState, aim: Entity, attack: AttackStats) {
+  private fireCannon(u: UnitState, aim: Entity, attack: { damage: number }) {
     const splashRadius = UNIT_STATS.cannon.splashRadius ?? 0;
     const impactX = aim.x;
     const impactY = aim.y;
