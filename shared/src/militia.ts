@@ -218,7 +218,7 @@ function settle(engine: MatchEngine) {
 }
 
 function filterControllable(engine: MatchEngine, side: Side, ids: readonly number[]) {
-  return engine.state.units.filter((u) => ids.includes(u.id) && u.side === side && u.type !== 'militia');
+  return engine.state.units.filter((u) => ids.includes(u.id) && u.side === side && u.type !== 'militia' && u.type !== 'royal_guard');
 }
 
 const proto = MatchEngine.prototype as MatchEngine & {
