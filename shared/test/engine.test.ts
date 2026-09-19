@@ -409,7 +409,7 @@ test('soldiers fight and destroying the castle ends the match', () => {
   engine.state.buildings = engine.state.buildings.filter((b) => !(b.side === 'red' && b.type === 'village'));
   // Remove the red defenders and weaken the castle so the siege resolves deterministically.
   for (const unit of engine.armyOf('red')) unit.hp = 0;
-  castle.hp = 300;
+  castle.hp = 30;
   engine.command('blue', { type: 'army', fraction: 'all', x: castle.x, y: castle.y, targetId: castle.id });
   // Let the Castle AI reveal its defensive layer, then remove it so this focused test
   // measures the underlying castle-destruction path rather than Royal Guard combat.
