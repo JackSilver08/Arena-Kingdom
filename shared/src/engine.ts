@@ -64,6 +64,10 @@ export interface UnitState extends UnitView {
   blockedUntil: number;
   /** Tactical Fall Back assignment. */
   fallbackRole?: 'retreat' | 'rearguard';
+  /** Internal Castle-defense ownership for the hidden Royal Guard class. */
+  royalGuardCastleId?: number;
+  /** Royal Guard lifecycle state. */
+  royalGuardState?: 'deployed' | 'returning';
   /** End of the temporary retreat speed buff. */
   fallbackUntilMs?: number;
   /** Shared group marker used by rolling retreat. */
@@ -95,6 +99,7 @@ const ARRIVE_DISTANCE = 5;
 const PATHS_PER_TICK = 24;
 const PATH_REFRESH_MS = 2000;
 const BLOCKED_RETRY_MS = 1500;
+const ROYAL_GUARD_WEIGHTS: Record<UnitType, number> = GAME_RULES.royalGuard.threatWeight;
 
 function dist(ax: number, ay: number, bx: number, by: number) {
   return Math.hypot(ax - bx, ay - by);
@@ -176,6 +181,12 @@ export class MatchEngine {
   private readonly nav = new NavGrid();
   private navDirty = true;
   private pathBudget = PATHS_PER_TICK;
+  private readonly royalGuardReserve: Record<Side, number> = {
+    blue: GAME_RULES.royalGuard.roster,
+    red: GAME_RULES.royalGuard.roster
+  };
+  private readonly royalGuardDefense = new Map<number, { desired: number; emergencyUntilMs: number }>();
+  private readonly royalGuardReturnIds = new Set<number>();
 
   constructor() {
     this.state = {
@@ -255,6 +266,12 @@ export class MatchEngine {
 
   buildingsOf(side: Side, type?: BuildingType) {
     return this.state.buildings.filter((b) => b.side === side && (!type || b.type === type));
+  }
+
+  private regularArmySize(side: Side) {
+    return this.state.units.filter(
+      (u) => u.side === side && u.type !== 'militia' && u.type !== 'royal_guard'
+    ).length;
   }
 
   castleOf(side: Side) {
@@ -378,7 +395,7 @@ export class MatchEngine {
     let error = '';
     for (let i = 0; i < count; i++) {
       const pending = producers.reduce((sum, b) => sum + b.queue, 0);
-      if (this.armyOf(side).length + pending >= GAME_RULES.limits.maxUnitsPerSide) {
+      if (this.regularArmySize(side) + pending >= GAME_RULES.limits.maxUnitsPerSide) {
         error = `Army limit (${GAME_RULES.limits.maxUnitsPerSide}) reached.`;
         break;
       }
@@ -420,7 +437,9 @@ export class MatchEngine {
     formation?: FormationType
   ): CommandResult {
     const wanted = new Set(unitIds);
-    const units = this.state.units.filter((u) => u.side === side && wanted.has(u.id));
+    const units = this.state.units.filter(
+      (u) => u.side === side && wanted.has(u.id) && u.type !== 'royal_guard'
+    );
     if (!units.length) return { ok: false, error: 'No troops selected.' };
     const selectedFormation = formation ?? 'line';
     const targeted = this.assignOrders(side, units, x, y, attack, targetId, selectedFormation);
@@ -436,7 +455,9 @@ export class MatchEngine {
     targetId?: number,
     formation?: FormationType
   ): CommandResult {
-    const army = this.armyOf(side).filter((u) => u.type !== 'militia' && u.type !== 'scout');
+    const army = this.armyOf(side).filter(
+      (u) => u.type !== 'militia' && u.type !== 'scout' && u.type !== 'royal_guard'
+    );
     if (!army.length) return { ok: false, error: 'You have no regular combat troops.' };
     const amount = Math.max(1, Math.ceil(army.length * fractionOf(fraction)));
     const chosen = army
@@ -453,7 +474,7 @@ export class MatchEngine {
     const wanted = new Set(unitIds);
     let stopped = 0;
     for (const u of this.state.units) {
-      if (u.side !== side || !wanted.has(u.id)) continue;
+      if (u.side !== side || !wanted.has(u.id) || u.type === 'royal_guard') continue;
       u.order = { kind: 'idle' };
       u.formation = undefined;
       this.clearFallback(u);
@@ -471,6 +492,7 @@ export class MatchEngine {
         u.hp > 0 &&
         u.type !== 'militia' &&
         u.type !== 'scout' &&
+        u.type !== 'royal_guard' &&
         u.garrisonVillageId === undefined &&
         (!wanted || wanted.has(u.id))
     );
@@ -782,7 +804,7 @@ export class MatchEngine {
 
     for (const side of SIDES) {
       const stats = s.players[side].stats;
-      stats.peakArmy = Math.max(stats.peakArmy, this.armyOf(side).length);
+      stats.peakArmy = Math.max(stats.peakArmy, this.regularArmySize(side));
     }
 
     if (!this.ended && s.timeMs >= GAME_RULES.maxMatchMs) {
@@ -816,11 +838,12 @@ export class MatchEngine {
     for (const b of s.buildings) {
       if (b.hp <= 0) continue;
       const stats = BUILDING_STATS[b.type];
+      if (b.type === 'castle') this.updateCastleDefense(b);
 
       if (b.type === 'barracks' || b.type === 'castle') {
         const trainingType = b.trainType ?? 'soldier';
         const trainingStats = UNIT_STATS[trainingType];
-        if (b.queue > 0 && ((b.type === 'barracks' && trainingType !== 'scout') || (b.type === 'castle' && trainingType === 'scout')) && this.armyOf(b.side).length < GAME_RULES.limits.maxUnitsPerSide) {
+        if (b.queue > 0 && ((b.type === 'barracks' && trainingType !== 'scout') || (b.type === 'castle' && trainingType === 'scout')) && this.regularArmySize(b.side) < GAME_RULES.limits.maxUnitsPerSide) {
           b.trainMs += dt;
           if (b.trainMs >= trainingStats.trainMs) {
             b.trainMs = 0;
@@ -845,27 +868,29 @@ export class MatchEngine {
       if (stats.attack) {
         b.cooldownMs -= dt;
         if (b.cooldownMs <= 0) {
-          let target: UnitState | null = null;
-          let best = stats.attack.range + soldier.radius;
-          for (const u of s.units) {
-            if (u.side === b.side || u.hp <= 0) continue;
-            const d = distanceToBuilding(b, u.x, u.y);
-            if (d <= best) {
-              best = d;
-              target = u;
-            }
-          }
-          if (target) {
+          const targets = s.units
+            .filter((u) => u.side !== b.side && u.hp > 0)
+            .map((u) => ({ u, d: distanceToBuilding(b, u.x, u.y) }))
+            .filter((entry) => entry.d <= stats.attack!.range + soldier.radius)
+            .sort((a, z) => a.d - z.d)
+            .map((entry) => entry.u);
+          const emergency =
+            b.type === 'castle' &&
+            (this.royalGuardDefense.get(b.id)?.emergencyUntilMs ?? 0) > s.timeMs;
+          const volley = emergency ? targets.slice(0, 3) : targets.slice(0, 1);
+          if (volley.length) {
             b.cooldownMs = stats.attack.cooldownMs;
-            this.damage(b.side, target, stats.attack.damage);
-            this.events.push({
-              type: 'shot',
-              side: b.side,
-              fromX: b.x,
-              fromY: b.y - stats.halfHeight * 0.8,
-              toX: Math.round(target.x),
-              toY: Math.round(target.y)
-            });
+            for (const target of volley) {
+              this.damage(b.side, target, stats.attack.damage);
+              this.events.push({
+                type: 'shot',
+                side: b.side,
+                fromX: b.x,
+                fromY: b.y - stats.halfHeight * 0.8,
+                toX: Math.round(target.x),
+                toY: Math.round(target.y)
+              });
+            }
           } else {
             b.cooldownMs = 0;
           }
@@ -884,6 +909,10 @@ export class MatchEngine {
 
     for (const u of s.units) {
       if (u.hp <= 0) continue;
+      if (u.type === 'royal_guard') {
+        this.updateRoyalGuard(u, dt);
+        continue;
+      }
       const stats = UNIT_STATS[u.type];
       const formation = FORMATION_STATS[u.formation ?? 'line'];
       u.cooldownMs = Math.max(0, u.cooldownMs - dt);
@@ -955,6 +984,280 @@ export class MatchEngine {
       u.moving = Math.abs(u.x - u.prevX) + Math.abs(u.y - u.prevY) > 0.05;
       u.attacking = s.timeMs - u.lastAttackMs < ATTACK_ANIMATION_MS;
     }
+
+    if (this.royalGuardReturnIds.size) {
+      const returning = new Set(this.royalGuardReturnIds);
+      this.royalGuardReturnIds.clear();
+      this.state.units = this.state.units.filter((u) => {
+        if (!returning.has(u.id)) return true;
+        this.royalGuardReserve[u.side] = Math.min(
+          GAME_RULES.royalGuard.roster,
+          this.royalGuardReserve[u.side] + 1
+        );
+        return false;
+      });
+    }
+  }
+
+  private enemyThreatsForCastle(castle: BuildingState) {
+    return this.state.units
+      .filter((u) => u.side !== castle.side && u.hp > 0)
+      .map((u) => ({
+        u,
+        distance: dist(castle.x, castle.y, u.x, u.y),
+        weight: ROYAL_GUARD_WEIGHTS[u.type]
+      }))
+      .filter(
+        (entry) =>
+          entry.distance <= GAME_RULES.royalGuard.activationRange &&
+          isPointInTerritory(castle.side, entry.u.x, entry.u.y)
+      )
+      .sort((a, b) => a.distance - b.distance);
+  }
+
+  private royalGuardThreatScore(
+    castle: BuildingState,
+    threats: ReturnType<MatchEngine['enemyThreatsForCastle']>
+  ) {
+    const radius = GAME_RULES.royalGuard.activationRange;
+    return threats.reduce((score, threat) => {
+      const proximity = 0.45 + 0.55 * Math.max(0, 1 - threat.distance / radius);
+      return score + threat.weight * proximity;
+    }, 0);
+  }
+
+  private updateCastleDefense(castle: BuildingState) {
+    const previous =
+      this.royalGuardDefense.get(castle.id) ?? { desired: 0, emergencyUntilMs: 0 };
+    const threats = this.enemyThreatsForCastle(castle);
+    const score = this.royalGuardThreatScore(castle, threats);
+    const nearest = threats[0]?.distance ?? Number.POSITIVE_INFINITY;
+    const emergency =
+      previous.emergencyUntilMs > this.state.timeMs ||
+      score >= GAME_RULES.royalGuard.emergencyThreat ||
+      (nearest <= GAME_RULES.royalGuard.emergencyRange && score >= GAME_RULES.royalGuard.highThreat) ||
+      (castle.hp / castle.maxHp <= 0.45 && score >= GAME_RULES.royalGuard.highThreat);
+
+    let emergencyUntilMs = previous.emergencyUntilMs;
+    if (emergency) {
+      emergencyUntilMs = Math.max(
+        emergencyUntilMs,
+        this.state.timeMs + GAME_RULES.royalGuard.emergencyHoldMs
+      );
+    }
+
+    let desired = 0;
+    if (emergency || emergencyUntilMs > this.state.timeMs) desired = GAME_RULES.royalGuard.roster;
+    else if (score >= GAME_RULES.royalGuard.highThreat) desired = 3;
+    else if (score >= GAME_RULES.royalGuard.mediumThreat) desired = 2;
+    else if (threats.length) desired = 1;
+
+    const active = this.state.units.filter(
+      (u) =>
+        u.type === 'royal_guard' &&
+        u.side === castle.side &&
+        u.royalGuardCastleId === castle.id &&
+        u.hp > 0
+    );
+
+    if (desired >= active.length) {
+      for (const guard of active) guard.royalGuardState = 'deployed';
+    }
+
+    const needed = Math.max(
+      0,
+      Math.min(
+        desired,
+        this.royalGuardReserve[castle.side] + active.length
+      ) - active.length
+    );
+    for (let i = 0; i < needed; i++) this.spawnRoyalGuard(castle);
+
+    const refreshed = this.state.units.filter(
+      (u) =>
+        u.type === 'royal_guard' &&
+        u.side === castle.side &&
+        u.royalGuardCastleId === castle.id &&
+        u.hp > 0
+    );
+    if (desired < refreshed.length) {
+      const toReturn = [...refreshed]
+        .sort(
+          (a, b) =>
+            dist(b.x, b.y, castle.x, castle.y) -
+            dist(a.x, a.y, castle.x, castle.y)
+        )
+        .slice(0, refreshed.length - desired);
+      for (const guard of toReturn) {
+        guard.royalGuardState = 'returning';
+        guard.order = {
+          kind: 'move',
+          x: castle.x - forwardDir(castle.side) * (BUILDING_STATS.castle.halfWidth + 20),
+          y: castle.y,
+          attack: false
+        };
+        this.resetNavigation(guard);
+      }
+    }
+
+    this.royalGuardDefense.set(castle.id, { desired, emergencyUntilMs });
+  }
+
+  private spawnRoyalGuard(castle: BuildingState) {
+    if (this.royalGuardReserve[castle.side] <= 0) return null;
+    const index =
+      GAME_RULES.royalGuard.roster - this.royalGuardReserve[castle.side];
+    const angle =
+      -0.95 +
+      (index % GAME_RULES.royalGuard.roster) *
+        (1.9 / Math.max(1, GAME_RULES.royalGuard.roster - 1));
+    const radius =
+      BUILDING_STATS.castle.halfWidth + GAME_RULES.royalGuard.radius + 16;
+    const spawn = clampToIsland(
+      castle.x + Math.cos(angle) * radius * forwardDir(castle.side),
+      castle.y + Math.sin(angle) * radius,
+      GAME_RULES.royalGuard.radius
+    );
+    const guard = this.spawnUnit(
+      castle.side,
+      'royal_guard',
+      spawn.x,
+      spawn.y
+    );
+    guard.royalGuardCastleId = castle.id;
+    guard.royalGuardState = 'deployed';
+    this.royalGuardReserve[castle.side] -= 1;
+    return guard;
+  }
+
+  private updateRoyalGuard(u: UnitState, dt: number) {
+    const castle =
+      u.royalGuardCastleId === undefined
+        ? undefined
+        : this.state.buildings.find(
+            (b) => b.id === u.royalGuardCastleId && b.type === 'castle' && b.hp > 0
+          );
+    if (!castle) {
+      this.royalGuardReturnIds.add(u.id);
+      return;
+    }
+
+    const radius = GAME_RULES.royalGuard.radius;
+    if (!isPointInTerritory(u.side, u.x, u.y)) {
+      u.royalGuardState = 'returning';
+    }
+
+    const defense = this.royalGuardDefense.get(castle.id);
+    const returning =
+      u.royalGuardState === 'returning' ||
+      (defense?.desired ?? 0) <= 0;
+
+    if (returning) {
+      u.royalGuardState = 'returning';
+      u.cooldownMs = Math.max(0, u.cooldownMs - dt);
+      const speed = GAME_RULES.royalGuard.speed * dt / 1000;
+      const goal = {
+        x: castle.x - forwardDir(u.side) * (BUILDING_STATS.castle.halfWidth + 20),
+        y: castle.y
+      };
+      if (dist(u.x, u.y, castle.x, castle.y) <= GAME_RULES.royalGuard.returnDistance) {
+        this.royalGuardReturnIds.add(u.id);
+      } else {
+        const beforeX = u.x;
+        const beforeY = u.y;
+        this.navigate(u, goal.x, goal.y, speed, radius + 8);
+        if (!isPointInTerritory(u.side, u.x, u.y)) {
+          u.x = beforeX;
+          u.y = beforeY;
+        }
+      }
+      u.moving = Math.abs(u.x - u.prevX) + Math.abs(u.y - u.prevY) > 0.05;
+      u.attacking = false;
+      return;
+    }
+
+    u.royalGuardState = 'deployed';
+    u.cooldownMs = Math.max(0, u.cooldownMs - dt);
+    const target = this.pickRoyalGuardTarget(u, castle);
+    if (!target) {
+      const hold = {
+        x: castle.x - forwardDir(u.side) * (BUILDING_STATS.castle.halfWidth + 55),
+        y: castle.y
+      };
+      const beforeX = u.x;
+      const beforeY = u.y;
+      if (dist(u.x, u.y, hold.x, hold.y) > 40) {
+        this.navigate(
+          u,
+          hold.x,
+          hold.y,
+          GAME_RULES.royalGuard.speed * dt / 1000,
+          radius + 10
+        );
+      }
+      if (!isPointInTerritory(u.side, u.x, u.y)) {
+        u.x = beforeX;
+        u.y = beforeY;
+      }
+      u.moving = Math.abs(u.x - u.prevX) + Math.abs(u.y - u.prevY) > 0.05;
+      u.attacking = false;
+      return;
+    }
+
+    const attack = UNIT_STATS.royal_guard.attack;
+    const reach =
+      dist(u.x, u.y, target.x, target.y) -
+      UNIT_STATS[target.type].radius -
+      radius;
+    if (reach <= attack.range && isPointInTerritory(u.side, target.x, target.y)) {
+      if (u.cooldownMs <= 0) {
+        u.cooldownMs = attack.cooldownMs;
+        u.lastAttackMs = this.state.timeMs;
+        this.damage(u.side, target, attack.damage, 'line', 'royal_guard');
+        this.events.push({
+          type: 'hit',
+          x: Math.round(target.x),
+          y: Math.round(target.y)
+        });
+      }
+    } else {
+      const beforeX = u.x;
+      const beforeY = u.y;
+      this.navigate(
+        u,
+        target.x,
+        target.y,
+        GAME_RULES.royalGuard.speed * dt / 1000,
+        attack.range + radius + 8
+      );
+      if (!isPointInTerritory(u.side, u.x, u.y)) {
+        u.x = beforeX;
+        u.y = beforeY;
+        u.royalGuardState = 'returning';
+      }
+    }
+    u.moving = Math.abs(u.x - u.prevX) + Math.abs(u.y - u.prevY) > 0.05;
+    u.attacking =
+      this.state.timeMs - u.lastAttackMs < ATTACK_ANIMATION_MS;
+  }
+
+  private pickRoyalGuardTarget(u: UnitState, castle: BuildingState) {
+    return this.state.units
+      .filter(
+        (other) =>
+          other.side !== u.side &&
+          other.hp > 0 &&
+          isPointInTerritory(u.side, other.x, other.y)
+      )
+      .sort((a, b) => {
+        const ad =
+          dist(u.x, u.y, a.x, a.y) +
+          dist(castle.x, castle.y, a.x, a.y) * 0.25;
+        const bd =
+          dist(u.x, u.y, b.x, b.y) +
+          dist(castle.x, castle.y, b.x, b.y) * 0.25;
+        return ad - bd;
+      })[0] ?? null;
   }
 
   /** Enemy troops first, then the current building target, then buildings in range. Fences are never picked. */
@@ -1315,7 +1618,9 @@ export class MatchEngine {
       retreating: undefined,
       fallbackUntilMs: undefined,
       fallbackGroupId: undefined,
-      fallbackGoal: undefined
+      fallbackGoal: undefined,
+      royalGuardCastleId: undefined,
+      royalGuardState: undefined
     };
     this.state.units.push(unit);
     return unit;
