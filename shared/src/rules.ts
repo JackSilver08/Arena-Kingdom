@@ -206,7 +206,11 @@ function circleVsFenceOverlap(circle:{x:number;y:number;radius:number},fence:Loc
   const local=rotateToLocal(circle.x-fence.x,circle.y-fence.y,fenceAngle(fence.rotation)),{halfWidth:hw,halfHeight:hh}=BUILDING_STATS.fence;
   return Math.hypot(Math.max(Math.abs(local.x)-hw,0),Math.max(Math.abs(local.y)-hh,0)) < circle.radius + BUILDING_GAP;
 }
-function fencesMayJoin(a:Located,b:Located) { return fenceEndpoints(a).some(pa=>fenceEndpoints(b).some(pb=>Math.hypot(pa.x-pb.x,pa.y-pb.y)<=2.5)); }
+function fencesMayJoin(a:Located,b:Located) {
+  const centerDistance = Math.hypot(a.x - b.x, a.y - b.y);
+  if (centerDistance <= 4) return false;
+  return fenceEndpoints(a).some(pa => fenceEndpoints(b).some(pb => Math.hypot(pa.x - pb.x, pa.y - pb.y) <= 2.5));
+}
 export function distanceToBuilding(building:Located,x:number,y:number){
   const stats=BUILDING_STATS[building.type]; if(stats.shape==='circle')return Math.max(0,Math.hypot(x-building.x,y-building.y)-stats.halfWidth);
   const local=rotateToLocal(x-building.x,y-building.y,fenceAngle(building.rotation));
