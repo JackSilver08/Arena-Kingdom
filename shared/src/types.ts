@@ -1,7 +1,7 @@
 export type Side = 'blue' | 'red';
 export type BuildingType = 'castle' | 'village' | 'barracks' | 'fence' | 'tower';
 export type BuildableType = Exclude<BuildingType, 'castle'>;
-export type UnitType = 'soldier' | 'militia' | 'archer' | 'knight' | 'scout';
+export type UnitType = 'soldier' | 'militia' | 'archer' | 'knight' | 'scout' | 'royal_guard';
 export type ArmyFraction = 'all' | 'one-third' | 'two-thirds';
 export type FormationType = 'line' | 'column' | 'wedge' | 'square';
 export type Difficulty = 'easy' | 'normal' | 'hard';
