@@ -1,5 +1,6 @@
 import type { BuildingType, Side } from '@arena-kingdom/shared';
 import { knightIconDataUrl } from './knightIcon';
+import { cannonIconDataUrl } from './cannonIcon';
 
 /**
  * Battlefield symbols in the style of military situation maps (loosely NATO APP-6): the frame's
@@ -182,6 +183,12 @@ export function symbolArt(type: SymbolType, side: Side) {
           fill="${COLORS[side].fill}" stroke="${ink}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
         <circle cx="18" cy="16" r="3.1" fill="${ink}"/>
         <circle cx="19" cy="15" r=".8" fill="#ffffff" opacity=".9"/>`
+      );
+    case 'cannon':
+      // Cannon keeps the approved recruitment silhouette wherever a map-symbol fallback is needed.
+      return svg(
+        size,
+        `<image href="${cannonIconDataUrl(side)}" x="0" y="0" width="${size.width}" height="${size.height}" preserveAspectRatio="xMidYMid meet"/>`
       );
     case 'royal_guard':
       // Royal Guard = a distinctive elite castle defender:
