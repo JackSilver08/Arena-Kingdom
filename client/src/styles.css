@@ -3142,24 +3142,39 @@ input:not([type='radio']):focus {
 }
 
 .recon-context {
-  min-width: 330px;
+  min-width: 430px;
 }
 .recon-context .scout-unit-art {
-  width: 64px;
-  height: 64px;
+  width: 78px;
+  height: 68px;
   display: grid;
   place-items: center;
 }
 .recon-context .scout-unit-art svg {
-  width: 58px;
+  width: 66px;
   height: 58px;
 }
+.recon-context .scout-unit-art svg rect {
+  display: none;
+}
+.recon-context .barracks-unit-copy {
+  gap: calc(var(--s) * 0.3);
+}
+.recon-context .barracks-unit-copy b {
+  font-size: calc(var(--s) * 1.55);
+  line-height: 1.1;
+}
+.recon-context .barracks-unit-copy small {
+  color: #6b7280;
+  font-size: calc(var(--s) * 1.05);
+  line-height: 1.25;
+}
 .recon-note {
-  max-width: 330px;
-  line-height: 1.35;
+  max-width: 430px;
+  line-height: 1.45;
 }
 
-.barracks-context { display: grid; gap: calc(var(--s) * 0.8); }
+.barracks-context { display: grid; gap: calc(var(--s) * 1); }
 .barracks-context-head {
   display: flex;
   align-items: center;
@@ -3188,11 +3203,11 @@ input:not([type='radio']):focus {
 .barracks-units { display: grid; gap: calc(var(--s) * 0.45); }
 .barracks-unit-option {
   display: grid;
-  grid-template-columns: calc(var(--s) * 6) 1fr auto;
+  grid-template-columns: calc(var(--s) * 8) 1fr auto;
   align-items: center;
-  gap: calc(var(--s) * 0.7);
-  min-height: calc(var(--s) * 6);
-  padding: calc(var(--s) * 0.35) calc(var(--s) * 0.7);
+  gap: calc(var(--s) * 1.15);
+  min-height: calc(var(--s) * 7.8);
+  padding: calc(var(--s) * 0.65) calc(var(--s) * 1);
   border: 1px solid rgba(17, 24, 39, 0.08);
   border-radius: calc(var(--s) * 0.8);
   background: #fff;
@@ -3203,7 +3218,7 @@ input:not([type='radio']):focus {
 }
 .barracks-unit-option:hover { border-color: var(--yellow); background: #fffdf0; }
 .barracks-unit-option.unaffordable { opacity: 0.5; pointer-events: none; }
-.barracks-unit-art { display: grid; width: calc(var(--s) * 5.3); height: calc(var(--s) * 4.7); }
+.barracks-unit-art { display: grid; place-items: center; width: calc(var(--s) * 7.2); height: calc(var(--s) * 5.8); }
 .barracks-unit-art > * { width: 100%; height: 100%; object-fit: contain; }
 .barracks-unit-copy { display: grid; gap: 2px; }
 .barracks-unit-copy b { font-size: calc(var(--s) * 1.2); }
