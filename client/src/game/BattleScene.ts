@@ -571,7 +571,7 @@ export class BattleScene extends Phaser.Scene {
       const driftY = Math.cos(this.time.now / 11_000 + i * 1.3) * 9;
       const x = enemy.minX + spanX * rx + driftX;
       const y = enemy.minY + spanY * ry + driftY;
-      fog.stamp('fog-cloud', null, x, y, {
+      fog.stamp('fog-cloud', undefined, x, y, {
         scale,
         alpha: 0.96,
         rotation: Math.sin(this.time.now / 13_000 + i) * 0.025
