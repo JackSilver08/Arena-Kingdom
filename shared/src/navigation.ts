@@ -1,5 +1,5 @@
 import { isWalkableLand, segmentOnLand } from './island.js';
-import { BUILDING_STATS, GAME_RULES, UNIT_STATS } from './rules.js';
+import { BUILDING_STATS, GAME_RULES, UNIT_STATS, fenceAngle } from './rules.js';
 import type { BuildingType, Side, Vec2 } from './types.js';
 
 const CELL = 16;
@@ -10,13 +10,9 @@ const SEARCH_RADIUS_CELLS = 8;
 const WALL_CELL_COST = 12;
 
 interface Wall {
-  id: number;
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
+  id:number;x:number;y:number;rotation:number;rad:number;cos:number;sin:number;hw:number;hh:number;
+  minX:number;minY:number;maxX:number;maxY:number;
 }
-
 export interface PathResult {
   points: Vec2[];
   /** The last point, which differs from the goal when the goal itself is walled off. */
@@ -27,31 +23,12 @@ export interface PathResult {
  * Entry parameter (0..1) where segment A→B first touches the rectangle, or null.
  * Liang–Barsky clipping.
  */
-function segmentEntry(ax: number, ay: number, bx: number, by: number, wall: Wall): number | null {
-  const dx = bx - ax;
-  const dy = by - ay;
-  let t0 = 0;
-  let t1 = 1;
-  const checks: [number, number][] = [
-    [-dx, ax - wall.minX],
-    [dx, wall.maxX - ax],
-    [-dy, ay - wall.minY],
-    [dy, wall.maxY - ay]
-  ];
-  for (const [p, q] of checks) {
-    if (p === 0) {
-      if (q < 0) return null;
-      continue;
-    }
-    const r = q / p;
-    if (p < 0) {
-      if (r > t1) return null;
-      if (r > t0) t0 = r;
-    } else {
-      if (r < t0) return null;
-      if (r < t1) t1 = r;
-    }
-  }
+function segmentEntry(ax:number,ay:number,bx:number,by:number,wall:Wall):number|null {
+  const local=(x:number,y:number)=>{const dx=x-wall.x,dy=y-wall.y;return{x:dx*wall.cos+dy*wall.sin,y:-dx*wall.sin+dy*wall.cos};};
+  const a=local(ax,ay),b=local(bx,by),dx=b.x-a.x,dy=b.y-a.y;
+  let t0=0,t1=1;
+  const checks:[number,number][]=[[-dx,a.x+wall.hw],[dx,wall.hw-a.x],[-dy,a.y+wall.hh],[dy,wall.hh-a.y]];
+  for(const [p,q] of checks){if(p===0){if(q<0)return null;continue;}const rr=q/p;if(p<0){if(rr>t1)return null;if(rr>t0)t0=rr;}else{if(rr<t0)return null;if(rr<t1)t1=rr;}}
   return t0;
 }
 
@@ -146,13 +123,14 @@ export class NavGrid {
     for (const b of buildings) {
       if (b.type !== 'fence' || b.hp <= 0) continue;
       const stats = BUILDING_STATS.fence;
-      // A fence blocks the opposing side only.
+      const rawRotation=(b as {rotation?:number}).rotation;
+      const rotation=Number.isInteger(rawRotation)?((rawRotation as number)%8+8)%8:0;
+      const rad=fenceAngle(rotation),cos=Math.cos(rad),sin=Math.sin(rad);
+      const hw=stats.halfWidth+CLEARANCE,hh=stats.halfHeight+CLEARANCE;
+      const extentX=Math.abs(cos)*hw+Math.abs(sin)*hh,extentY=Math.abs(sin)*hw+Math.abs(cos)*hh;
       this.walls[b.side === 'blue' ? 'red' : 'blue'].push({
-        id: b.id,
-        minX: b.x - stats.halfWidth - CLEARANCE,
-        maxX: b.x + stats.halfWidth + CLEARANCE,
-        minY: b.y - stats.halfHeight - CLEARANCE,
-        maxY: b.y + stats.halfHeight + CLEARANCE
+        id:b.id,x:b.x,y:b.y,rotation,rad,cos,sin,hw,hh,
+        minX:b.x-extentX,maxX:b.x+extentX,minY:b.y-extentY,maxY:b.y+extentY
       });
     }
     for (const side of ['blue', 'red'] as const) {
@@ -171,8 +149,11 @@ export class NavGrid {
           for (let c = c0; c <= c1; c++) {
             const cx = this.originX + (c + 0.5) * CELL;
             if (cx < wall.minX || cx > wall.maxX) continue;
-            const i = r * this.cols + c;
-            grid[i] = 1;
+            const dx=cx-wall.x,dy=cy-wall.y;
+            const localX=dx*wall.cos+dy*wall.sin,localY=-dx*wall.sin+dy*wall.cos;
+            if(Math.abs(localX)>wall.hw||Math.abs(localY)>wall.hh)continue;
+            const i=r*this.cols+c;
+            grid[i]=1;
             cover[i] = Math.min(255, cover[i] + 1);
           }
         }
@@ -199,7 +180,11 @@ export class NavGrid {
 
   /** The wall covering a point, if any. */
   wallAt(side: Side, x: number, y: number) {
-    return this.walls[side].find((w) => x >= w.minX && x <= w.maxX && y >= w.minY && y <= w.maxY)?.id ?? null;
+    return this.walls[side].find((w) => {
+      if(x<w.minX||x>w.maxX||y<w.minY||y>w.maxY)return false;
+      const dx=x-w.x,dy=y-w.y,localX=dx*w.cos+dy*w.sin,localY=-dx*w.sin+dy*w.cos;
+      return Math.abs(localX)<=w.hw&&Math.abs(localY)<=w.hh;
+    })?.id ?? null;
   }
 
   /** The nearest walkable point to (x, y). */
@@ -320,9 +305,15 @@ export class NavGrid {
     const others = this.walls[side].filter((w) => w.id !== ignoreId);
     for (let i = 0; i < copy.length; i++) {
       if (!copy[i]) continue;
-      const { x, y } = this.center(i);
-      if (x < wall.minX || x > wall.maxX || y < wall.minY || y > wall.maxY) continue;
-      if (!others.some((w) => x >= w.minX && x <= w.maxX && y >= w.minY && y <= w.maxY)) copy[i] = 0;
+      const {x,y}=this.center(i);
+      if(x<wall.minX||x>wall.maxX||y<wall.minY||y>wall.maxY)continue;
+      const dx=x-wall.x,dy=y-wall.y,localX=dx*wall.cos+dy*wall.sin,localY=-dx*wall.sin+dy*wall.cos;
+      if(Math.abs(localX)>wall.hw||Math.abs(localY)>wall.hh)continue;
+      if(!others.some(w=>{
+        if(x<w.minX||x>w.maxX||y<w.minY||y>w.maxY)return false;
+        const odx=x-w.x,ody=y-w.y,ox=odx*w.cos+ody*w.sin,oy=-odx*w.sin+ody*w.cos;
+        return Math.abs(ox)<=w.hw&&Math.abs(oy)<=w.hh;
+      }))copy[i]=0;
     }
     return copy;
   }
