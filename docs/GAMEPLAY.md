@@ -1,4 +1,4 @@
-# Arena Kingdom v0.6.0 Gameplay
+# Arena Kingdom v0.7.0 Gameplay
 
 All numbers live in [`shared/src/rules.ts`](../shared/src/rules.ts); the in-game guide (`/guide`) is generated from the same file.
 
@@ -26,7 +26,7 @@ Buildings can only be placed in your own territory, outside the contested centre
 | -------- | ---- | ---- | ------------------------------------------------------- |
 | Castle   | —    | 1500 | Shoots nearby attackers; under Emergency Defense its volley expands from 1 to 3 arrows; also trains Scouts. |
 | Village  | 70   | 300  | +6 gold per income tick; 160 vision                    |
-| Barracks | 110  | 500  | Trains Soldiers / Archers / Knights; queue up to 5; 140 vision |
+| Barracks | 110  | 500  | Trains Soldiers / Archers / Knights / Cannons; queue up to 5; 140 vision |
 | Tower    | 120  | 700  | Defensive fire; 320 vision                             |
 
 ## Units
@@ -37,12 +37,13 @@ Buildings can only be placed in your own territory, outside the contested centre
 | Archer | 21 | 2.6s | 75 | 45 | 9 / 1.1s | 190 | Long-range harassment; 125 range against buildings |
 | Knight | 32 | 3.2s | 85 | 150 | 20 / 1.0s | 18 | Fast cavalry; 170 vision |
 | Scout | 10 | 1.8s | 40 | 100 | — | — | Recon unit; 300 vision; recruited from the Castle |
+| Cannon | 100 | 8.0s | 180 | 25 | 80 / 3.5s | 360 | Siege artillery; 120 building damage; 42-radius splash; expensive and slow |
 
 Barracks train one unit type per active queue. Multiple barracks can train different unit types in parallel. The Castle has its own queue for Scouts.
 
 Knights deal 3% less damage to Soldiers or Archers that are actively backed by at least one nearby matching regular unit in formation. The reduction applies only to the Knight's damage, so Knights remain effective against isolated or freestyle troops.
 
-Soldiers and Knights automatically engage enemies within their aggro range. Archers prefer enemy troops at long range and can also damage buildings from a shorter dedicated range.
+Soldiers and Knights automatically engage enemies within their aggro range. Archers prefer enemy troops at long range and can also damage buildings from a shorter dedicated range. Cannons are slow, expensive siege units with 360 range. Their cannonballs hit the primary target for full damage and apply reduced area damage to nearby enemies with distance-based falloff.
 
 Attack-move orders fight along the way; plain move orders (Shift + right-click) ignore enemies — use them to retreat.
 
@@ -58,6 +59,7 @@ Enemy territory starts hidden under large, soft **cold-gray cloud masses**. The 
 - Soldier: 150 vision; Archer: 190; Knight: 170; Militia: 180.
 - Castle: 400 vision; Tower: 320; Village: 160; Barracks: 140.
 - A **Scout** costs 10 gold, trains for 1.8s at the Castle, has 40 HP, 100 speed and 300 vision. It does not automatically attack.
+- A **Cannon** costs 100 gold, trains for 8.0s at a Barracks, has 180 HP, 25 speed, 220 vision, 360 attack range and 42 splash radius.
 - When enemy forces leave vision, a small last-known marker can remain briefly before fading.
 
 Crossing into enemy territory with the regular army can reveal the area, but it also exposes valuable troops to counterattack. Scouts are faster information tools, not frontline fighters. Royal Guards stay hidden until the Castle AI deploys them and never pursue beyond their own kingdom.
@@ -75,6 +77,7 @@ Crossing into enemy territory with the regular army can reveal the area, but it 
 | Click your barracks      | Open the Barracks recruitment deck                        |
 | Click your Castle        | Open Castle Recon and recruit a Scout for 10 gold        |
 | Royal Guard              | No manual command. Castle AI deploys 1-2 guards, 3 max in normal threat, or all surviving guards during emergency defence |
+| Cannon                   | Recruit from a Barracks for 100 gold; selectable and controllable like regular troops |
 | `T`, then `1` `2` `3`    | Send All / ⅓ / ⅔ of the army to a clicked point           |
 | `F`                      | Tactical Fall Back. Selected troops fall back; with no selection, the whole regular army falls back |
 | `M`                      | Messenger: propose peace, surrender                       |
