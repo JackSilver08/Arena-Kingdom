@@ -26,7 +26,7 @@ export interface EncodedSnapshot {
 }
 
 const SIDE_CODES: Side[] = ['blue', 'red'];
-const UNIT_CODES: UnitType[] = ['soldier', 'militia', 'archer', 'knight', 'scout'];
+const UNIT_CODES: UnitType[] = ['soldier', 'militia', 'archer', 'knight', 'scout', 'royal_guard'];
 // Append new types at the end so existing codes stay stable.
 const BUILDING_CODES: BuildingType[] = ['castle', 'village', 'barracks', 'tower', 'fence'];
 const REASON_CODES: EndReason[] = ['castle', 'surrender', 'peace', 'timeout', 'disconnect'];
@@ -68,7 +68,7 @@ export function encodeSnapshot(view: MatchView, events: GameEvent[]): EncodedSna
     );
   }
   return {
-    v: 4,
+    v: 5,
     t: round(view.timeMs),
     n: round(view.nextIncomeInMs),
     p,
