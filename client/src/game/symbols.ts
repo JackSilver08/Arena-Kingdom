@@ -15,7 +15,7 @@ import { knightIconDataUrl } from './knightIcon';
  * Keep the markup ASCII: it is Base64-encoded with `btoa`.
  */
 
-export type SymbolType = BuildingType | 'troop' | 'militia' | 'archer' | 'knight' | 'scout' | 'royal_guard';
+export type SymbolType = BuildingType | 'troop' | 'militia' | 'archer' | 'knight' | 'scout' | 'royal_guard' | 'cannon';
 
 export interface SymbolSize {
   width: number;
@@ -34,7 +34,8 @@ export const SYMBOL_SIZE: Record<SymbolType, SymbolSize> = {
   archer: { width: 32, height: 26, anchorY: 13 / 26 },
   knight: { width: 36, height: 32, anchorY: 16 / 32 },
   scout: { width: 36, height: 32, anchorY: 16 / 32 },
-  royal_guard: { width: 38, height: 34, anchorY: 17 / 34 }
+  royal_guard: { width: 38, height: 34, anchorY: 17 / 34 },
+  cannon: { width: 48, height: 35, anchorY: 17.5 / 35 }
 };
 
 export const COLORS: Record<Side, { fill: string; ink: string }> = {
