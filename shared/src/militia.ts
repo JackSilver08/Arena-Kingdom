@@ -234,7 +234,7 @@ if (!proto.__militiaPatched) {
   const originalArmyOf = proto.armyOf;
 
   proto.armyOf = function patchedArmyOf(this: MatchEngine, side: Side) {
-    return originalArmyOf.call(this, side).filter((u) => u.type !== 'militia');
+    return originalArmyOf.call(this, side).filter((u) => u.type !== 'militia' && u.type !== 'royal_guard');
   };
 
   proto.command = function patchedCommand(this: MatchEngine, side: Side, cmd: Command) {
