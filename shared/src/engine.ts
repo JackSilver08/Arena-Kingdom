@@ -364,7 +364,11 @@ export class MatchEngine {
     player.stats.buildingsBuilt += 1;
     this.spawnBuilding(side, type, x, y, rotation);
     if (type === 'fence') this.navDirty = true;
-    this.events.push({ type: 'buildingPlaced', side, building: type, x, y, rotation });
+    this.events.push(
+      rotation === undefined
+        ? { type: 'buildingPlaced', side, building: type, x, y }
+        : { type: 'buildingPlaced', side, building: type, x, y, rotation }
+    );
     this.refreshIncome();
     return { ok: true, message: `${stats.label} constructed.` };
   }
@@ -1572,7 +1576,7 @@ export class MatchEngine {
       id: this.state.nextId++,
       side,
       type,
-      rotation: type === 'fence' ? normalizeFenceRotation(rawRotation) : undefined,
+      ...(type === 'fence' ? { rotation: normalizeFenceRotation(rawRotation) } : {}),
       x,
       y,
       hp,
