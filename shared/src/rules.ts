@@ -78,7 +78,7 @@ export const GAME_RULES={
     attackRange:18,
     attackCooldownMs:800,
     vision:180,
-    activationRange:520,
+    activationRange:180,
     emergencyRange:160,
     mediumThreat:18,
     highThreat:32,
