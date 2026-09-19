@@ -57,6 +57,8 @@ export interface BuildingView {
   trainProgress: number;
   /** Unit type currently being trained, or null when the queue is empty. */
   trainType: UnitType | null;
+  /** Fence orientation in 45° steps clockwise from north. */
+  rotation?: number;
 }
 
 export interface PlayerStats {
@@ -132,7 +134,7 @@ export interface MatchView {
 }
 
 export type Command =
-  | { type: 'build'; building: BuildableType; x: number; y: number }
+  | { type: 'build'; building: BuildableType; x: number; y: number; rotation?: number }
   | { type: 'train'; barracksId?: number; count?: number; unitType?: UnitType }
   /** With `targetId` the troops attack that enemy unit or building until it falls. */
   | { type: 'move'; unitIds: number[]; x: number; y: number; attack: boolean; targetId?: number; formation?: FormationType }
@@ -151,7 +153,7 @@ export type GameEvent =
   | { type: 'hit'; x: number; y: number }
   | { type: 'unitDied'; side: Side; x: number; y: number }
   | { type: 'unitTrained'; side: Side; x: number; y: number }
-  | { type: 'buildingPlaced'; side: Side; building: BuildingType; x: number; y: number }
+  | { type: 'buildingPlaced'; side: Side; building: BuildingType; x: number; y: number; rotation?: number }
   | { type: 'buildingDestroyed'; side: Side; building: BuildingType; x: number; y: number }
   | { type: 'peaceProposed'; by: Side }
   | { type: 'peaceDeclined'; by: Side }
