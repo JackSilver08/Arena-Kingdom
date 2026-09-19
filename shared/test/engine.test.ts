@@ -14,6 +14,7 @@ import {
   islandSpanY,
   parseCommand,
   snapPlacement,
+  isPointInTerritory,
   type GameEvent
 } from '../src/index.js';
 
@@ -518,7 +519,7 @@ test('snapshots round-trip through the wire format', () => {
   const scout = engine.armyOf('blue')[0];
   scout.type = 'scout';
   const scoutSnapshot = encodeSnapshot(engine.state, []);
-  assert.equal(scoutSnapshot.v, 4);
+  assert.equal(scoutSnapshot.v, 5);
   assert.equal(decodeSnapshot(JSON.parse(JSON.stringify(scoutSnapshot))).view.units.find((u) => u.id === scout.id)?.type, 'scout');
   const royalGuard = engine.armyOf('red')[0];
   royalGuard.type = 'royal_guard';
