@@ -259,6 +259,70 @@ export class MatchEngine {
     return this.state.buildings.find((b) => b.side === side && b.type === 'castle');
   }
 
+  /**
+   * Builds the observer-specific match view used by local rendering and online snapshots.
+   * Own territory is always known; the neutral strip is open information; enemy territory
+   * is revealed only around friendly units and buildings with vision.
+   */
+  viewForSide(side: Side): MatchView {
+    const sources = this.visionSources(side);
+    const visible = (x:number,y:number) =>
+      isPointInTerritory(side,x,y) ||
+      isInNeutralZone(x,y) ||
+      sources.some((source) => dist(source.x, source.y, x, y) <= source.radius);
+
+    return {
+      ...this.state,
+      units: this.state.units.filter((u) => u.side === side || visible(u.x, u.y)),
+      buildings: this.state.buildings.filter((b) => b.side === side || visible(b.x, b.y))
+    };
+  }
+
+  /**
+   * Prevent hidden enemy combat from leaking through network events. Own-side events, diplomacy,
+   * and match results remain authoritative; enemy world events require their coordinates to be visible.
+   */
+  eventsForSide(side: Side, events: readonly GameEvent[]) {
+    const sources = this.visionSources(side);
+    const visible = (x:number,y:number) =>
+      isPointInTerritory(side,x,y) ||
+      isInNeutralZone(x,y) ||
+      sources.some((source) => dist(source.x, source.y, x, y) <= source.radius);
+
+    return events.filter((event) => {
+      switch (event.type) {
+        case 'shot':
+        case 'arrowShot':
+          return event.side === side || visible(event.fromX, event.fromY);
+        case 'unitDied':
+        case 'unitTrained':
+        case 'buildingPlaced':
+        case 'buildingDestroyed':
+          return event.side === side || visible(event.x, event.y);
+        case 'hit':
+          return visible(event.x, event.y);
+        case 'peaceProposed':
+        case 'peaceDeclined':
+        case 'peaceExpired':
+        case 'matchEnded':
+          return true;
+      }
+    });
+  }
+
+  private visionSources(side: Side) {
+    const sources: Array<{x:number;y:number;radius:number}> = [];
+    for (const building of this.buildingsOf(side)) {
+      const radius = BUILDING_STATS[building.type].vision ?? 0;
+      if (radius > 0 && building.hp > 0) sources.push({ x: building.x, y: building.y, radius });
+    }
+    for (const unit of this.armyOf(side)) {
+      const radius = UNIT_STATS[unit.type].vision;
+      if (radius > 0 && unit.hp > 0) sources.push({ x: unit.x, y: unit.y, radius });
+    }
+    return sources;
+  }
+
   // ---------------------------------------------------------------- commands
 
   private build(side: Side, type: BuildableType, rawX: number, rawY: number): CommandResult {
@@ -282,22 +346,36 @@ export class MatchEngine {
     return { ok: true, message: `${stats.label} constructed.` };
   }
 
-  private train(side: Side, barracksId: number | undefined, requested: number, unitType: UnitType): CommandResult {
-    if (!['soldier', 'archer', 'knight'].includes(unitType)) return { ok: false, error: 'That unit cannot be trained here.' };
+  private train(side: Side, buildingId: number | undefined, requested: number, unitType: UnitType): CommandResult {
+    if (!['soldier', 'archer', 'knight', 'scout'].includes(unitType)) return { ok: false, error: 'That unit cannot be trained here.' };
+
+    const producerType: BuildingType = unitType === 'scout' ? 'castle' : 'barracks';
     const count = Math.min(Math.max(requested, 1), GAME_RULES.economy.maxQueuePerBarracks);
     const player = this.state.players[side];
     const trainStats = UNIT_STATS[unitType];
-    const barracks = this.buildingsOf(side, 'barracks');
-    if (!barracks.length) return { ok: false, error: 'Build a Barracks first.' };
-    let pool = barracks;
-    if (barracksId !== undefined) {
-      pool = barracks.filter((b) => b.id === barracksId);
-      if (!pool.length) return { ok: false, error: 'That barracks is not yours.' };
+    const producers = this.buildingsOf(side, producerType);
+    if (!producers.length) {
+      return {
+        ok: false,
+        error: unitType === 'scout' ? 'You need a Castle to recruit Scouts.' : 'Build a Barracks first.'
+      };
     }
+
+    let pool = producers;
+    if (buildingId !== undefined) {
+      pool = producers.filter((b) => b.id === buildingId);
+      if (!pool.length) {
+        return {
+          ok: false,
+          error: unitType === 'scout' ? 'That Castle is not yours.' : 'That barracks is not yours.'
+        };
+      }
+    }
+
     let queued = 0;
     let error = '';
     for (let i = 0; i < count; i++) {
-      const pending = barracks.reduce((sum, b) => sum + b.queue, 0);
+      const pending = producers.reduce((sum, b) => sum + b.queue, 0);
       if (this.armyOf(side).length + pending >= GAME_RULES.limits.maxUnitsPerSide) {
         error = `Army limit (${GAME_RULES.limits.maxUnitsPerSide}) reached.`;
         break;
@@ -306,20 +384,26 @@ export class MatchEngine {
         error = `Need ${trainStats.cost} gold to recruit a ${trainStats.label}.`;
         break;
       }
+
       const target = pool
         .filter((b) => b.queue < GAME_RULES.economy.maxQueuePerBarracks)
         .filter((b) => b.queue === 0 || b.trainType === unitType)
         .sort((a, b) => a.queue - b.queue)[0];
+
       if (!target) {
-        error = 'All eligible barracks are training a different unit type.';
+        error = unitType === 'scout'
+          ? 'The Castle is already training a different unit.'
+          : 'All eligible barracks are training a different unit type.';
         break;
       }
+
       target.queue += 1;
       target.trainType = unitType;
       player.gold -= trainStats.cost;
       player.stats.goldSpent += trainStats.cost;
       queued += 1;
     }
+
     if (!queued) return { ok: false, error };
     return { ok: true, message: `${queued} ${trainStats.label.toLowerCase()}${queued > 1 ? 's' : ''} queued.` };
   }
@@ -350,8 +434,8 @@ export class MatchEngine {
     targetId?: number,
     formation?: FormationType
   ): CommandResult {
-    const army = this.armyOf(side);
-    if (!army.length) return { ok: false, error: 'You have no troops.' };
+    const army = this.armyOf(side).filter((u) => u.type !== 'militia' && u.type !== 'scout');
+    if (!army.length) return { ok: false, error: 'You have no regular combat troops.' };
     const amount = Math.max(1, Math.ceil(army.length * fractionOf(fraction)));
     const chosen = army
       .map((u) => ({ u, idle: u.order.kind === 'idle' ? 0 : 1, d: dist(u.x, u.y, x, y) }))
@@ -384,6 +468,7 @@ export class MatchEngine {
         u.side === side &&
         u.hp > 0 &&
         u.type !== 'militia' &&
+        u.type !== 'scout' &&
         u.garrisonVillageId === undefined &&
         (!wanted || wanted.has(u.id))
     );
@@ -730,10 +815,10 @@ export class MatchEngine {
       if (b.hp <= 0) continue;
       const stats = BUILDING_STATS[b.type];
 
-      if (b.type === 'barracks') {
+      if (b.type === 'barracks' || b.type === 'castle') {
         const trainingType = b.trainType ?? 'soldier';
         const trainingStats = UNIT_STATS[trainingType];
-        if (b.queue > 0 && this.armyOf(b.side).length < GAME_RULES.limits.maxUnitsPerSide) {
+        if (b.queue > 0 && (b.type === 'barracks' || trainingType === 'scout') && this.armyOf(b.side).length < GAME_RULES.limits.maxUnitsPerSide) {
           b.trainMs += dt;
           if (b.trainMs >= trainingStats.trainMs) {
             b.trainMs = 0;
@@ -809,7 +894,7 @@ export class MatchEngine {
         if (explicit && explicit.hp > 0 && explicit.side !== u.side) target = explicit;
         else u.order = { kind: 'idle' };
       }
-      const engage = u.order.kind === 'idle' || (u.order.kind === 'move' && u.order.attack);
+      const engage = u.type !== 'scout' && (u.order.kind === 'idle' || (u.order.kind === 'move' && u.order.attack));
       if (!target && engage) target = this.pickTarget(u);
 
       // A walled-off route turns the blocking fence into the target for a while.
