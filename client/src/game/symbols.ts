@@ -170,13 +170,24 @@ export function symbolArt(type: SymbolType, side: Side) {
         `<image href="${knightIconDataUrl(side)}" x="0" y="0" width="${size.width}" height="${size.height}" preserveAspectRatio="xMidYMid meet"/>`
       );
     case 'scout':
+      // Scout = a pair of watchful eyes. Minimal military-map glyph, but unmistakably reconnaissance.
       return svg(
         size,
-        `<g fill="none" stroke="${ink}" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M16 2 L30 13 L16 24 L2 13 Z" fill="${COLORS[side].fill}" stroke-width="2.2"/>
-          <circle cx="16" cy="13" r="5.2" stroke-width="1.9"/>
-          <circle cx="16" cy="13" r="1.8" fill="${ink}" stroke="none"/>
-          <path d="M6 13 H2 M30 13 H26" stroke-width="1.5"/>
+        `<g stroke="${HALO}" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round" fill="${HALO}">
+          <path d="M2.5 13 Q8 6.5 13.5 13 Q8 19.5 2.5 13 Z"/>
+          <path d="M18.5 13 Q24 6.5 29.5 13 Q24 19.5 18.5 13 Z"/>
+        </g>
+        <g fill="${COLORS[side].fill}" stroke="${ink}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2.5 13 Q8 6.5 13.5 13 Q8 19.5 2.5 13 Z"/>
+          <path d="M18.5 13 Q24 6.5 29.5 13 Q24 19.5 18.5 13 Z"/>
+        </g>
+        <g fill="${ink}">
+          <circle cx="8" cy="13" r="2.2"/>
+          <circle cx="24" cy="13" r="2.2"/>
+        </g>
+        <g fill="#ffffff" opacity=".88">
+          <circle cx="8.8" cy="12.2" r=".7"/>
+          <circle cx="24.8" cy="12.2" r=".7"/>
         </g>`
       );
   }
