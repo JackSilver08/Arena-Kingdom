@@ -105,6 +105,8 @@ export class BattleVisualRenderer {
       load(unitTextureKey('militia', side), symbolArt('militia', side), militia.width, militia.height);
       const archer = SYMBOL_SIZE.archer;
       load(unitTextureKey('archer', side), symbolArt('archer', side), archer.width, archer.height);
+      const scout = SYMBOL_SIZE.scout;
+      load(unitTextureKey('scout', side), symbolArt('scout', side), scout.width, scout.height);
       // Knight uses the exact embedded raster glyph from the supplied reference image.
       this.loadImageData(unitTextureKey('knight', side), knightIconDataUrl(side));
     }

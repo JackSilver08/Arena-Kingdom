@@ -15,7 +15,7 @@ import { knightIconDataUrl } from './knightIcon';
  * Keep the markup ASCII: it is Base64-encoded with `btoa`.
  */
 
-export type SymbolType = BuildingType | 'troop' | 'militia' | 'archer' | 'knight';
+export type SymbolType = BuildingType | 'troop' | 'militia' | 'archer' | 'knight' | 'scout';
 
 export interface SymbolSize {
   width: number;
@@ -32,7 +32,8 @@ export const SYMBOL_SIZE: Record<SymbolType, SymbolSize> = {
   troop: { width: 30, height: 24, anchorY: 11 / 24 },
   militia: { width: 22, height: 24, anchorY: 12 / 24 },
   archer: { width: 32, height: 26, anchorY: 13 / 26 },
-  knight: { width: 36, height: 32, anchorY: 16 / 32 }
+  knight: { width: 36, height: 32, anchorY: 16 / 32 },
+  scout: { width: 32, height: 26, anchorY: 13 / 26 }
 };
 
 export const COLORS: Record<Side, { fill: string; ink: string }> = {
@@ -167,6 +168,16 @@ export function symbolArt(type: SymbolType, side: Side) {
       return svg(
         size,
         `<image href="${knightIconDataUrl(side)}" x="0" y="0" width="${size.width}" height="${size.height}" preserveAspectRatio="xMidYMid meet"/>`
+      );
+    case 'scout':
+      return svg(
+        size,
+        `<g fill="none" stroke="${ink}" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 2 L30 13 L16 24 L2 13 Z" fill="${COLORS[side].fill}" stroke-width="2.2"/>
+          <circle cx="16" cy="13" r="5.2" stroke-width="1.9"/>
+          <circle cx="16" cy="13" r="1.8" fill="${ink}" stroke="none"/>
+          <path d="M6 13 H2 M30 13 H26" stroke-width="1.5"/>
+        </g>`
       );
   }
 }

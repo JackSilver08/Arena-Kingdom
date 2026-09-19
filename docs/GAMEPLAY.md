@@ -1,4 +1,4 @@
-# Arena Kingdom v0.4.3 Gameplay
+# Arena Kingdom v0.5.0 Gameplay
 
 All numbers live in [`shared/src/rules.ts`](../shared/src/rules.ts); the in-game guide (`/guide`) is generated from the same file.
 
@@ -24,10 +24,10 @@ Buildings can only be placed in your own territory, outside the contested centre
 
 | Building | Cost | HP   | Notes                                                   |
 | -------- | ---- | ---- | ------------------------------------------------------- |
-| Castle   | —    | 1600 | Shoots nearby enemy soldiers (9 dmg/s). Losing it loses the match. |
-| Village  | 75   | 350  | +5 gold per income tick                                  |
-| Barracks | 120  | 550  | Trains soldiers; queue up to 5; barracks train in parallel |
-| Tower    | 130  | 800  | Shoots enemy soldiers (20 dmg every 0.8s)                |
+| Castle   | —    | 1500 | Shoots nearby enemy soldiers. Losing it loses the match; also trains Scouts. |
+| Village  | 70   | 300  | +6 gold per income tick; 160 vision                    |
+| Barracks | 110  | 500  | Trains Soldiers / Archers / Knights; queue up to 5; 140 vision |
+| Tower    | 120  | 700  | Defensive fire; 320 vision                             |
 
 ## Units
 
@@ -35,9 +35,9 @@ Buildings can only be placed in your own territory, outside the contested centre
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | Soldier | 18 | 2.2s | 100 | 52 | 12 / 0.8s | 14 | Basic melee infantry |
 | Archer | 21 | 2.6s | 75 | 45 | 9 / 1.1s | 190 | Long-range harassment; 125 range against buildings |
-| Knight | 32 | 3.2s | 85 | 150 | 20 / 1.0s | 18 | Fast cavalry; fragile, high-burst strike unit |
+| Knight | 32 | 3.2s | 85 | 150 | 20 / 1.0s | 18 | Fast cavalry; 170 vision |\n| Scout | 10 | 1.8s | 40 | 100 | — | — | Recon unit; 300 vision; recruited from the Castle |
 
-Barracks train one unit type per active queue. Multiple barracks can train different unit types in parallel.
+Barracks train one unit type per active queue. Multiple barracks can train different unit types in parallel. The Castle has its own queue for Scouts.
 
 Knights deal 3% less damage to Soldiers or Archers that are actively backed by at least one nearby matching regular unit in formation. The reduction applies only to the Knight's damage, so Knights remain effective against isolated or freestyle troops.
 
@@ -46,6 +46,20 @@ Soldiers and Knights automatically engage enemies within their aggro range. Arch
 Attack-move orders fight along the way; plain move orders (Shift + right-click) ignore enemies — use them to retreat.
 
 Archer shots use a visible rising-and-falling arrow projectile before the impact effect.
+
+## Fog of War & Recon
+
+Enemy territory starts hidden under large, soft **cold-gray cloud masses**. The clouds use a light blue-gray palette centered on **#D7DDE2**, with no hard border and a slow drift so the fog reads as atmosphere rather than a UI panel.
+
+- Your own territory is always visible.
+- The contested centre strip remains open information.
+- Friendly buildings and units reveal nearby enemy territory according to their vision radius.
+- Soldier: 150 vision; Archer: 190; Knight: 170; Militia: 180.
+- Castle: 400 vision; Tower: 320; Village: 160; Barracks: 140.
+- A **Scout** costs 10 gold, trains for 1.8s at the Castle, has 40 HP, 100 speed and 300 vision. It does not automatically attack.
+- When enemy forces leave vision, a small last-known marker can remain briefly before fading.
+
+Crossing into enemy territory with the regular army can reveal the area, but it also exposes valuable troops to counterattack. Scouts are faster information tools, not frontline fighters.
 
 ## Controls
 
@@ -57,7 +71,7 @@ Archer shots use a visible rising-and-falling arrow projectile before the impact
 | `A` / `S`                | Select whole army / hold position                         |
 | `B`, then `1` `2` `3`    | Build Village / Barracks / Tower, click to place (Shift keeps building) |
 | `R` / Shift + `R`        | Recruit 1 / 5 soldiers at the least busy barracks         |
-| Click your barracks      | Recruit a soldier there                                   |
+| Click your barracks      | Open the Barracks recruitment deck                        |\n| Click your Castle        | Open Castle Recon and recruit a Scout for 10 gold        |
 | `T`, then `1` `2` `3`    | Send All / ⅓ / ⅔ of the army to a clicked point           |
 | `F`                      | Tactical Fall Back. Selected troops fall back; with no selection, the whole regular army falls back |
 | `M`                      | Messenger: propose peace, surrender                       |
@@ -92,7 +106,7 @@ A peace proposal gives the opponent 15 seconds to answer. Proposals have a 30-se
 
 ## Tactical Fall Back
 
-Press `F` with selected troops to trigger a tactical fall back for only that group. Press `F` with no selection to fall back with the whole regular army. Militia are excluded from the command.
+Press `F` with selected troops to trigger a tactical fall back for only that group. Press `F` with no selection to fall back with the whole regular army. Militia and Scouts are excluded from the command.
 
 The engine automatically assigns roles. Low-health troops and Archers prioritize the retreat group, while durable frontline Soldiers preferentially form the rearguard. The rearguard takes 35% less damage while holding the line. Retreaters receive 20% extra movement speed for the first 4 seconds.
 

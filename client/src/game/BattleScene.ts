@@ -20,6 +20,7 @@ import { createBattleRecap } from './battleRecap';
 import { FrontlineOverlay } from './frontlineOverlay';
 import type { MapViewSize } from './mapArt';
 import { BATTLE_DEPTH, BattleVisualRenderer, battleView } from './visuals';
+import { svgDataUrl } from './art';
 
 const { width: W, height: H } = GAME_RULES.map;
 const UI_FONT = '"Segoe UI", Arial, system-ui, sans-serif';
@@ -33,6 +34,27 @@ const DRAG_THRESHOLD = 6;
 const RESIZE_SETTLE_MS = 200;
 const MAX_EFFECTS = 90;
 const DEPTH = BATTLE_DEPTH;
+const FOG_CLOUD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 360">
+  <defs>
+    <filter id="fog-soft" x="-30%" y="-35%" width="160%" height="170%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="fog-soft-core" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+  </defs>
+  <g filter="url(#fog-soft)">
+    <ellipse cx="112" cy="190" rx="118" ry="86" fill="#E9EDF0" fill-opacity=".42"/>
+    <ellipse cx="238" cy="128" rx="144" ry="104" fill="#D7DDE2" fill-opacity=".82"/>
+    <ellipse cx="382" cy="172" rx="126" ry="96" fill="#D7DDE2" fill-opacity=".78"/>
+    <ellipse cx="332" cy="276" rx="158" ry="72" fill="#C9D1D8" fill-opacity=".72"/>
+    <ellipse cx="158" cy="286" rx="146" ry="62" fill="#D7DDE2" fill-opacity=".7"/>
+  </g>
+  <g filter="url(#fog-soft-core)" opacity=".7">
+    <ellipse cx="250" cy="180" rx="104" ry="78" fill="#C9D1D8" fill-opacity=".7"/>
+    <ellipse cx="404" cy="238" rx="78" ry="60" fill="#F5F7F8" fill-opacity=".5"/>
+  </g>
+</svg>`;
 
 interface UnitSprite {
   image: Phaser.GameObjects.Image;
@@ -67,7 +89,12 @@ export class BattleScene extends Phaser.Scene {
   private ground!: Phaser.GameObjects.Graphics;
   private bars!: Phaser.GameObjects.Graphics;
   private overlay!: Phaser.GameObjects.Graphics;
+  private fogMemory!: Phaser.GameObjects.Graphics;
+  private fogEraser!: Phaser.GameObjects.Graphics;
+  private fogTexture!: Phaser.GameObjects.RenderTexture;
   private ghost!: Phaser.GameObjects.Image;
+  private lastKnown = new Map<number, { side: Side; type: UnitView['type'] | BuildingType; kind: 'unit' | 'building'; x: number; y: number; seenAt: number }>();
+  private readonly fogMemoryMs = 12_000;
   private frameNo = 0;
   private firstSync = true;
   private dragStart: { x: number; y: number } | null = null;
@@ -90,6 +117,7 @@ export class BattleScene extends Phaser.Scene {
 
   preload() {
     this.visuals.preload();
+    this.load.svg('fog-cloud', svgDataUrl(FOG_CLOUD_SVG, 520, 360));
   }
 
   create() {
@@ -103,6 +131,9 @@ export class BattleScene extends Phaser.Scene {
     this.ground = this.add.graphics().setDepth(DEPTH.ground);
     this.bars = this.add.graphics().setDepth(DEPTH.bars);
     this.overlay = this.add.graphics().setDepth(DEPTH.overlay);
+    this.fogTexture = this.add.renderTexture(0, 0, W, H).setOrigin(0, 0).setDepth(DEPTH.overlay - 20);
+    this.fogMemory = this.add.graphics().setDepth(DEPTH.overlay - 10);
+    this.fogEraser = this.add.graphics().setVisible(false);
     this.ghost = this.add
       .image(0, 0, this.visuals.building('village', this.controller.mySide).key)
       .setDepth(DEPTH.overlay)
@@ -141,6 +172,7 @@ export class BattleScene extends Phaser.Scene {
     const view = this.replayView ?? liveView;
     if (view) {
       this.sync(view, delta);
+      this.drawFog(view);
       this.frontline.update(view, delta, this.overlaysEnabled, this.reducedMotion);
     }
     if (!this.replayView) this.playEvents(events);
@@ -152,6 +184,7 @@ export class BattleScene extends Phaser.Scene {
     this.replayView = view;
     if (view) {
       this.sync(view, 1);
+      this.drawFog(view);
       this.frontline.update(view, 0, this.overlaysEnabled, true);
     }
   }
@@ -279,8 +312,9 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     const building = this.buildingAt(view.buildings, end.x, end.y);
-    if (building && building.side === c.mySide && building.type === 'barracks') {
-      c.openBarracks(building.id);
+    if (building && building.side === c.mySide) {
+      if (building.type === 'barracks') c.openBarracks(building.id);
+      else if (building.type === 'castle') c.openCastle(building.id);
       return;
     }
     if (!additive) c.clearSelection();
@@ -345,6 +379,16 @@ export class BattleScene extends Phaser.Scene {
   private sync(view: MatchView, delta: number) {
     const frame = ++this.frameNo;
     const smooth = this.smoothing ? Math.min(1, delta / 90) : 1;
+
+    const now = this.time.now;
+    for (const u of view.units) {
+      if (u.side === this.controller.mySide) continue;
+      this.lastKnown.set(u.id, { side: u.side, type: u.type, kind: 'unit', x: u.x, y: u.y, seenAt: now });
+    }
+    for (const b of view.buildings) {
+      if (b.side === this.controller.mySide) continue;
+      this.lastKnown.set(b.id, { side: b.side, type: b.type, kind: 'building', x: b.x, y: b.y, seenAt: now });
+    }
 
     for (const u of view.units) {
       let sprite = this.units.get(u.id);
@@ -496,6 +540,104 @@ export class BattleScene extends Phaser.Scene {
       g.fillRect(ux - 12, uy, 24, 5);
       g.fillStyle(share < 0.35 ? 0xff9f1c : 0x22c55e, 1);
       g.fillRect(ux - 11, uy + 1, 22 * share, 3);
+    }
+  }
+
+  private drawFog(view: MatchView) {
+    const fog = this.fogTexture;
+    const memory = this.fogMemory;
+    if (this.replayView || !view || !this.textures.exists('fog-cloud')) {
+      fog.setVisible(false);
+      memory.clear();
+      return;
+    }
+
+    fog.setVisible(true);
+    fog.clear();
+
+    const enemy = this.controller.mySide === 'blue' ? GAME_RULES.map.redLand : GAME_RULES.map.blueLand;
+    const spanX = enemy.maxX - enemy.minX;
+    const spanY = enemy.maxY - enemy.minY;
+    const cloudLayout = [
+      [0.08, 0.18, 0.76],
+      [0.56, 0.16, 0.72],
+      [0.92, 0.36, 0.70],
+      [0.31, 0.58, 0.74],
+      [0.75, 0.82, 0.72]
+    ] as const;
+
+    cloudLayout.forEach(([rx, ry, scale], i) => {
+      const driftX = Math.sin(this.time.now / 9000 + i * 1.7) * 12;
+      const driftY = Math.cos(this.time.now / 11_000 + i * 1.3) * 9;
+      const x = enemy.minX + spanX * rx + driftX;
+      const y = enemy.minY + spanY * ry + driftY;
+      fog.stamp('fog-cloud', undefined, x, y, {
+        scale,
+        alpha: 0.96,
+        rotation: Math.sin(this.time.now / 13_000 + i) * 0.025
+      });
+    });
+
+    const eraser = this.fogEraser;
+    eraser.clear();
+    eraser.fillStyle(0xffffff, 1);
+    eraser.fillPoints(territoryOutline(this.controller.mySide) as Phaser.Types.Math.Vector2Like[], true);
+    eraser.fillRect(GAME_RULES.map.blueLand.maxX - 5, 0, GAME_RULES.map.redLand.minX - GAME_RULES.map.blueLand.maxX + 10, H);
+
+    const revealSources: Array<{ x: number; y: number; radius: number }> = [];
+    for (const b of view.buildings) {
+      if (b.side !== this.controller.mySide || b.hp <= 0) continue;
+      const radius = BUILDING_STATS[b.type].vision ?? 0;
+      if (radius > 0) revealSources.push({ x: b.x, y: b.y, radius });
+    }
+    for (const u of view.units) {
+      if (u.side !== this.controller.mySide || u.hp <= 0) continue;
+      const radius = UNIT_STATS[u.type].vision;
+      if (radius > 0) revealSources.push({ x: u.x, y: u.y, radius });
+    }
+
+    for (const source of revealSources) {
+      const rings: Array<[number, number]> = [
+        [1.08, 0.12],
+        [0.96, 0.18],
+        [0.82, 0.25],
+        [0.66, 0.36],
+        [0.48, 0.55],
+        [0.24, 1]
+      ];
+      for (const [scale, alpha] of rings) {
+        eraser.fillStyle(0xffffff, alpha);
+        eraser.fillCircle(source.x, source.y, source.radius * scale);
+      }
+    }
+
+    eraser.setVisible(true);
+    fog.erase(eraser);
+    eraser.setVisible(false);
+
+    memory.clear();
+    const visibleEnemy = new Set(view.units.filter((u) => u.side !== this.controller.mySide).map((u) => u.id));
+    for (const b of view.buildings) if (b.side !== this.controller.mySide) visibleEnemy.add(b.id);
+
+    const now = this.time.now;
+    for (const [id, marker] of this.lastKnown) {
+      const age = now - marker.seenAt;
+      if (age >= this.fogMemoryMs) {
+        this.lastKnown.delete(id);
+        continue;
+      }
+      if (visibleEnemy.has(id)) continue;
+      const alpha = 0.38 * (1 - age / this.fogMemoryMs);
+      memory.lineStyle(2, 0x475569, alpha);
+      if (marker.kind === 'building') {
+        memory.strokeRect(marker.x - 9, marker.y - 9, 18, 18);
+      } else {
+        memory.strokeCircle(marker.x, marker.y, 9);
+        memory.lineBetween(marker.x - 6, marker.y, marker.x + 6, marker.y);
+        memory.lineBetween(marker.x, marker.y - 6, marker.x, marker.y + 6);
+      }
+      memory.fillStyle(0xd7dde2, Math.min(0.16, alpha * 0.5));
+      memory.fillCircle(marker.x, marker.y, marker.kind === 'building' ? 3 : 2);
     }
   }
 

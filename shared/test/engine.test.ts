@@ -13,7 +13,8 @@ import {
   isWalkableLand,
   islandSpanY,
   parseCommand,
-  snapPlacement
+  snapPlacement,
+  type GameEvent
 } from '../src/index.js';
 
 function run(engine: MatchEngine, ms: number) {
@@ -81,8 +82,85 @@ test('unit roster uses the current balance', () => {
   assert.equal(UNIT_STATS.knight.speed, 150);
   assert.equal(UNIT_STATS.knight.trainMs, 3200);
   assert.ok(UNIT_STATS.archer.attack.range > UNIT_STATS.soldier.attack.range);
+  assert.equal(UNIT_STATS.scout.cost, 10);
+  assert.equal(UNIT_STATS.scout.hp, 40);
+  assert.equal(UNIT_STATS.scout.speed, 100);
+  assert.equal(UNIT_STATS.scout.vision, 300);
   assert.equal(UNIT_STATS.archer.buildingAttack?.range, 125);
 });
+ 
+test('castle trains scouts and barracks reject scout queues', () => {
+  const engine = new MatchEngine();
+  engine.state.players.blue.gold = 1000;
+  const castle = engine.castleOf('blue')!;
+  const barracks = engine.buildingsOf('blue', 'barracks')[0];
+
+  assert.equal(engine.command('blue', { type: 'train', count: 1, unitType: 'scout', barracksId: castle.id }).ok, true);
+  assert.equal(engine.state.players.blue.gold, 990);
+  assert.equal(engine.command('blue', { type: 'train', count: 1, unitType: 'scout', barracksId: barracks.id }).ok, false);
+
+  run(engine, UNIT_STATS.scout.trainMs + 100);
+  const scouts = engine.armyOf('blue').filter((u) => u.type === 'scout');
+  assert.equal(scouts.length, 1);
+  assert.equal(castle.queue, 0);
+  assert.equal(castle.trainType, null);
+});
+
+test('fog of war keeps enemy hidden until friendly vision reaches it', () => {
+  const engine = new MatchEngine();
+  const redVillage = engine.buildingsOf('red', 'village')[0];
+  const redUnit = engine.armyOf('red')[0];
+  const blue = engine.armyOf('blue')[0];
+
+  let view = engine.viewForSide('blue');
+  assert.equal(view.units.some((u) => u.side === 'red'), false);
+  assert.equal(view.buildings.some((b) => b.side === 'red'), false);
+
+  blue.x = redVillage.x - 120;
+  blue.y = redVillage.y;
+  view = engine.viewForSide('blue');
+  assert.ok(view.buildings.some((b) => b.id === redVillage.id), 'Soldier vision should reveal the nearby enemy village');
+  assert.equal(view.units.some((u) => u.id === redUnit.id), false, 'The red army should remain outside Soldier vision');
+
+  blue.x = 700;
+  blue.y = 540;
+  view = engine.viewForSide('blue');
+  assert.equal(view.buildings.some((b) => b.id === redVillage.id), false, 'Leaving the area should hide the village again');
+});
+
+test('Scout extends vision deep into enemy territory', () => {
+  const engine = new MatchEngine();
+  const scout = engine.armyOf('blue')[0];
+  const redUnit = engine.armyOf('red')[0];
+
+  scout.type = 'scout';
+  scout.hp = UNIT_STATS.scout.hp;
+  scout.maxHp = UNIT_STATS.scout.hp;
+  scout.x = 885;
+  scout.y = redUnit.y;
+
+  let view = engine.viewForSide('blue');
+  assert.ok(view.units.some((u) => u.id === redUnit.id), 'Scout vision should expose the enemy army from the center line');
+
+  scout.x = 500;
+  scout.y = 540;
+  view = engine.viewForSide('blue');
+  assert.equal(view.units.some((u) => u.id === redUnit.id), false);
+});
+
+test('fog filters hidden enemy events', () => {
+  const engine = new MatchEngine();
+  const redVillage = engine.buildingsOf('red', 'village')[0];
+  const hidden: GameEvent = { type: 'buildingDestroyed', side: 'red', building: 'village', x: redVillage.x, y: redVillage.y };
+
+  assert.equal(engine.eventsForSide('blue', [hidden]).length, 0);
+
+  const blue = engine.armyOf('blue')[0];
+  blue.x = redVillage.x - 120;
+  blue.y = redVillage.y;
+  assert.equal(engine.eventsForSide('blue', [hidden]).length, 1);
+});
+
 
 test('knight damage is reduced by 3% against an active soldier formation', () => {
   const setup = (formed: boolean) => {
@@ -437,6 +515,11 @@ test('snapshots round-trip through the wire format', () => {
   const decoded = decodeSnapshot(JSON.parse(JSON.stringify(encoded))).view;
   assert.equal(decoded.units.find((u) => u.id === snapshotUnit.id)?.rearguard, true);
   assert.equal(decoded.units.find((u) => u.id === retreatUnit.id)?.retreating, true);
+  const scout = engine.armyOf('blue')[0];
+  scout.type = 'scout';
+  const scoutSnapshot = encodeSnapshot(engine.state, []);
+  assert.equal(scoutSnapshot.v, 4);
+  assert.equal(decodeSnapshot(JSON.parse(JSON.stringify(scoutSnapshot))).view.units.find((u) => u.id === scout.id)?.type, 'scout');
 });
 
 test('parseCommand rejects malformed input', () => {

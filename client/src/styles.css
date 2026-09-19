@@ -3141,6 +3141,24 @@ input:not([type='radio']):focus {
   padding: calc(var(--s) * 1.2);
 }
 
+.recon-context {
+  min-width: 330px;
+}
+.recon-context .scout-unit-art {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+}
+.recon-context .scout-unit-art svg {
+  width: 58px;
+  height: 58px;
+}
+.recon-note {
+  max-width: 330px;
+  line-height: 1.35;
+}
+
 .barracks-context { display: grid; gap: calc(var(--s) * 0.8); }
 .barracks-context-head {
   display: flex;
