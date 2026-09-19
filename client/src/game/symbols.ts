@@ -194,7 +194,7 @@ export function symbolArt(type: SymbolType, side: Side) {
           <circle cx="12.5" cy="14" r="5.3" fill="${HALO}" stroke="${ink}" stroke-width="1.8"/>
           <circle cx="12.5" cy="14" r="3.6" fill="${COLORS[side].fill}" stroke="none"/>
           <path d="M12.5 11.2 V16.8 M9.7 14 H15.3" stroke="${ink}" stroke-width="1.15"/>
-          <circle cx="22.5" cy="18.8" r="2.5"/>
+
           <path d="M24 5.5 L30 4.2 L31 7.1 L29.5 8.2 Z"/>
         </g>`
       );
