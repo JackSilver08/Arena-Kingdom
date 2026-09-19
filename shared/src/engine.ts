@@ -129,7 +129,7 @@ export function parseCommand(input: unknown): Command | null {
     case 'train': {
       if (!optionalId(c.barracksId) || !optionalId(c.count)) return null;
       const unitType = c.unitType === undefined ? 'soldier' : c.unitType;
-      if (!['soldier', 'archer', 'knight', 'scout'].includes(unitType as string)) return null;
+      if (!['soldier', 'archer', 'knight', 'scout', 'cannon'].includes(unitType as string)) return null;
       return {
         type: 'train',
         barracksId: c.barracksId as number | undefined,
