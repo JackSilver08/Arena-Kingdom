@@ -291,7 +291,7 @@ export class BattleScene extends Phaser.Scene {
     const c = this.controller;
     const view = c.view;
     if (!view) return;
-    const mine = view.units.filter((u) => u.side === c.mySide);
+    const mine = view.units.filter((u) => u.side === c.mySide && u.type !== 'royal_guard');
 
     if (Math.abs(end.x - start.x) > DRAG_THRESHOLD || Math.abs(end.y - start.y) > DRAG_THRESHOLD) {
       const minX = Math.min(start.x, end.x) - UNIT_RADIUS;
