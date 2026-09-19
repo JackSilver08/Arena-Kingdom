@@ -1,6 +1,5 @@
 import type { BuildingType, Side } from '@arena-kingdom/shared';
 import { knightIconDataUrl } from './knightIcon';
-import { cannonIconDataUrl } from './cannonIcon';
 
 /**
  * Battlefield symbols in the style of military situation maps (loosely NATO APP-6): the frame's
@@ -36,7 +35,7 @@ export const SYMBOL_SIZE: Record<SymbolType, SymbolSize> = {
   knight: { width: 36, height: 32, anchorY: 16 / 32 },
   scout: { width: 36, height: 32, anchorY: 16 / 32 },
   royal_guard: { width: 38, height: 34, anchorY: 17 / 34 },
-  cannon: { width: 48, height: 35, anchorY: 17.5 / 35 }
+  cannon: { width: 34, height: 24, anchorY: 12 / 24 }
 };
 
 export const COLORS: Record<Side, { fill: string; ink: string }> = {
@@ -185,10 +184,19 @@ export function symbolArt(type: SymbolType, side: Side) {
         <circle cx="19" cy="15" r=".8" fill="#ffffff" opacity=".9"/>`
       );
     case 'cannon':
-      // Cannon keeps the approved recruitment silhouette wherever a map-symbol fallback is needed.
+      // Special battlefield unit: a compact, box-free cannon silhouette.
+      // Keep the glyph visually comparable to the other troop symbols at 24-34 px.
       return svg(
         size,
-        `<image href="${cannonIconDataUrl(side)}" x="0" y="0" width="${size.width}" height="${size.height}" preserveAspectRatio="xMidYMid meet"/>`
+        `
+        <g fill="${COLORS[side].fill}" stroke="${ink}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 17 L11 14 L13 8 L24 5.5 L29.5 7.5 L30.5 11 L18.5 13.5 L14 18.5 L6 20 Z"/>
+          <circle cx="12.5" cy="14" r="5.3" fill="${HALO}" stroke="${ink}" stroke-width="1.8"/>
+          <circle cx="12.5" cy="14" r="3.6" fill="${COLORS[side].fill}" stroke="none"/>
+          <path d="M12.5 11.2 V16.8 M9.7 14 H15.3" stroke="${ink}" stroke-width="1.15"/>
+          <circle cx="22.5" cy="18.8" r="2.5"/>
+          <path d="M24 5.5 L30 4.2 L31 7.1 L29.5 8.2 Z"/>
+        </g>`
       );
     case 'royal_guard':
       // Royal Guard = a distinctive elite castle defender:
