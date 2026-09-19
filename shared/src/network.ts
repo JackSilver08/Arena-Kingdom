@@ -54,7 +54,10 @@ export function encodeSnapshot(view: MatchView, events: GameEvent[]): EncodedSna
   }
   const b: number[] = [];
   for (const building of view.buildings) {
-    const flags = SIDE_CODES.indexOf(building.side) | (BUILDING_CODES.indexOf(building.type) << 1);
+    const rotationBits = building.type === 'fence' && Number.isInteger(building.rotation)
+      ? ((building.rotation as number) & 7) << 4
+      : 0;
+    const flags = SIDE_CODES.indexOf(building.side) | (BUILDING_CODES.indexOf(building.type) << 1) | rotationBits;
     b.push(
       building.id,
       flags,
@@ -118,10 +121,12 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
   const buildingFields = snap.v !== undefined && snap.v >= 2 ? BUILDING_FIELDS : 8;
   for (let i = 0; i + buildingFields <= snap.b.length; i += buildingFields) {
     const flags = snap.b[i + 1];
+    const type = BUILDING_CODES[(flags >> 1) & 0x7] ?? 'village';
     buildings.push({
       id: snap.b[i],
       side: SIDE_CODES[flags & 1],
-      type: BUILDING_CODES[flags >> 1] ?? 'village',
+      type,
+      rotation: type === 'fence' ? ((flags >> 4) & 0x7) : undefined,
       x: snap.b[i + 2],
       y: snap.b[i + 3],
       hp: snap.b[i + 4],
