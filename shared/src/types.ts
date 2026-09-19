@@ -1,7 +1,7 @@
 export type Side = 'blue' | 'red';
 export type BuildingType = 'castle' | 'village' | 'barracks' | 'fence' | 'tower';
 export type BuildableType = Exclude<BuildingType, 'castle'>;
-export type UnitType = 'soldier' | 'militia' | 'archer' | 'knight' | 'scout' | 'royal_guard';
+export type UnitType = 'soldier' | 'militia' | 'archer' | 'knight' | 'scout' | 'royal_guard' | 'cannon';
 export type ArmyFraction = 'all' | 'one-third' | 'two-thirds';
 export type FormationType = 'line' | 'column' | 'wedge' | 'square';
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -150,6 +150,7 @@ export type CommandResult = { ok: true; message?: string } | { ok: false; error:
 export type GameEvent =
   | { type: 'shot'; side: Side; fromX: number; fromY: number; toX: number; toY: number }
   | { type: 'arrowShot'; side: Side; fromX: number; fromY: number; toX: number; toY: number; targetId: number }
+  | { type: 'cannonShot'; side: Side; fromX: number; fromY: number; toX: number; toY: number; targetId: number; radius: number }
   | { type: 'hit'; x: number; y: number }
   | { type: 'unitDied'; side: Side; x: number; y: number }
   | { type: 'unitTrained'; side: Side; x: number; y: number }
