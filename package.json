@@ -28,7 +28,8 @@
     "simulate:balance": "npm --workspace shared run simulate:balance --",
     "tunnel": "ngrok http 5173",
     "tunnel:prod": "ngrok http 2567",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "online": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/online.ps1"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
