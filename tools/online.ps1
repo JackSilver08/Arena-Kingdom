@@ -10,12 +10,8 @@ Write-Host "=== Arena Kingdom Online Host ===" -ForegroundColor Cyan
 Write-Host "LAN server: 192.168.0.218:$Port"
 Write-Host ""
 
-if (-not (Test-Path (Join-Path (Get-Location) "node_modules"))) {
-    Write-Host "[1/4] Installing dependencies..." -ForegroundColor Yellow
-    npm ci
-} else {
-    Write-Host "[1/4] Dependencies already installed." -ForegroundColor Green
-}
+Write-Host "[1/4] Syncing dependencies..." -ForegroundColor Yellow
+npm ci
 
 $rule = Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue
 if (-not $rule) {
