@@ -1,4 +1,4 @@
-import { coastline, isWalkableLand } from './island.js';
+import { coastline, isInsideMountain, isWalkableLand } from './island.js';
 import type { ArmyFraction, BuildableType, BuildingType, Side, UnitType, Vec2 } from './types.js';
 
 export const GAME_VERSION = '0.7.0';
@@ -243,7 +243,8 @@ export function canPlaceBuilding(buildings:readonly(Located&{side?:Side})[],side
   const extent=type==='fence'?fenceHalfExtents(rotation):{x:stats.halfWidth,y:stats.halfHeight};
   const pastFront=side==='blue'?x+extent.x+EDGE_PADDING>FRONT_LINE.blue:x-extent.x-EDGE_PADDING<FRONT_LINE.red;
   const onLand=type==='fence'?(()=>{const axis=fenceLongAxis(rotation),grip=Math.max(0,stats.halfHeight-FENCE_LAND_GRIP);return[-1,0,1].some(k=>isWalkableLand(x+axis.x*k*grip,y+axis.y*k*grip));})():isWalkableLand(x,y,Math.max(extent.x,extent.y)+EDGE_PADDING);
-  if(pastFront||!onLand)return{ok:false,reason:`You can only build on your own ${side==='blue'?'BLUE':'RED'} half of the island.`};
+  if(pastFront)return{ok:false,reason:`You can only build on your own ${side==='blue'?'BLUE':'RED'} half of the island.`};
+  if(!onLand)return{ok:false,reason:isInsideMountain(x,y)?'Cannot build on impassable mountain ridges.':`You can only build on your own ${side==='blue'?'BLUE':'RED'} half of the island.`};
   const candidate:Located={x,y,type,rotation};
   for(const other of buildings){
     const os=BUILDING_STATS[other.type];

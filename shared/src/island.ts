@@ -150,8 +150,38 @@ function nearestCore(x: number, y: number): CorePoint & { distance: number } {
   return { ...arcPoint(qx, qy, angle, s), distance };
 }
 
-/** True when (x, y) is on the island and at least `padding` from the shore. */
+export interface MountainRidge {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  label?: string;
+}
+
+export const MOUNTAIN_RIDGES: readonly MountainRidge[] = [
+  { cx: 720, cy: 270, rx: 54, ry: 28, label: 'North Ridge' },
+  { cx: 1200, cy: 270, rx: 54, ry: 28, label: 'North Ridge' },
+  { cx: 390, cy: 860, rx: 62, ry: 32, label: 'South Bluffs' },
+  { cx: 1530, cy: 860, rx: 62, ry: 32, label: 'South Bluffs' },
+  { cx: 960, cy: 820, rx: 74, ry: 38, label: 'Iron Peak' }
+];
+
+export function isInsideMountain(x: number, y: number, padding = 0): boolean {
+  for (const m of MOUNTAIN_RIDGES) {
+    const rx = m.rx + padding;
+    const ry = m.ry + padding;
+    const dx = x - m.cx;
+    const dy = y - m.cy;
+    if ((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** True when (x, y) is on the island, not in impassable mountain ridges, and at least `padding` from the shore. */
 export function isWalkableLand(x: number, y: number, padding = 0) {
+  if (isInsideMountain(x, y, padding)) return false;
   const core = nearestCore(x, y);
   return core.distance <= margin(core.s) - padding;
 }
@@ -170,10 +200,9 @@ const insideCore = (x: number, y: number) => {
   return dx * dx + dy * dy <= CORE.radius * CORE.radius;
 };
 
-/** True when the whole segment A→B stays on the island, `padding` from the shore. */
+/** True when the whole segment A→B stays on the island and clear of mountains, `padding` from the shore. */
 export function segmentOnLand(ax: number, ay: number, bx: number, by: number, padding = 0) {
-  // The core is convex and entirely land, which settles almost every segment at once.
-  if (padding <= MIN_MARGIN && insideCore(ax, ay) && insideCore(bx, by)) return true;
+  if (isInsideMountain(ax, ay, padding) || isInsideMountain(bx, by, padding)) return false;
   const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / SEGMENT_STEP));
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;

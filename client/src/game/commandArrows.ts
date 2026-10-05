@@ -182,12 +182,35 @@ export class CommandArrowOverlay {
       points.push(new Phaser.Math.Vector2(point.x, point.y));
     }
 
-    g.lineStyle(10, PAPER, 0.68 * fade);
+    g.lineStyle(12, PAPER, 0.75 * fade);
     g.strokePoints(points, false);
-    g.lineStyle(4, INK, 0.72 * fade);
+    g.lineStyle(5, INK, 0.76 * fade);
     g.strokePoints(points, false);
-    g.lineStyle(2.5, team, 0.96 * fade);
+    g.lineStyle(3, team, 0.98 * fade);
     g.strokePoints(points, false);
+
+    // Documentary campaign march chevrons along the arrow body
+    for (const tChevron of [0.32, 0.62]) {
+      const p = bezier(arrow.from, arrow.control, arrow.to, tChevron);
+      const tan = tangent(arrow.from, arrow.control, arrow.to, tChevron);
+      const ang = Math.atan2(tan.y, tan.x);
+      const chWing = Math.PI * 0.75;
+      const chSize = 5.5;
+      const chLeft = { x: p.x - Math.cos(ang - chWing) * chSize, y: p.y - Math.sin(ang - chWing) * chSize };
+      const chRight = { x: p.x - Math.cos(ang + chWing) * chSize, y: p.y - Math.sin(ang + chWing) * chSize };
+      g.lineStyle(2.5, PAPER, 0.9 * fade);
+      g.beginPath();
+      g.moveTo(chLeft.x, chLeft.y);
+      g.lineTo(p.x, p.y);
+      g.lineTo(chRight.x, chRight.y);
+      g.strokePath();
+      g.lineStyle(1.4, INK, 0.95 * fade);
+      g.beginPath();
+      g.moveTo(chLeft.x, chLeft.y);
+      g.lineTo(p.x, p.y);
+      g.lineTo(chRight.x, chRight.y);
+      g.strokePath();
+    }
 
     const head = bezier(arrow.from, arrow.control, arrow.to, 1);
     const t = tangent(arrow.from, arrow.control, arrow.to, 0.985);

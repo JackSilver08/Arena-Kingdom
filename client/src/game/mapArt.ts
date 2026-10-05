@@ -100,18 +100,44 @@ function coastPath(samples:CoastSample[],outset:number,rough:number,seed:number)
 /** A smooth, sparsely sampled copy of the coastline, for the engraved water lines around the island. */
 const waterLine=(samples:CoastSample[],outset:number)=>smoothClosed(samples.filter((_,i)=>i%3===0).map(s=>along(s,outset)));
 
-/** Contour rings with a spot height; `mirror` draws the same hill reflected for the red half. */
-function hill(cx:number,cy:number,rx:number,ry:number,height:number,seed:number,mirror=false,colors:MapPalette=VINTAGE){
+/** Detailed antique hachure mountain ridge with peaks, crests and spot height. */
+function mountainRidge(cx:number,cy:number,rx:number,ry:number,height:number,name:string,seed:number,mirror=false,colors:MapPalette=VINTAGE){
   const flip=(x:number)=>mirror?GAME_RULES.map.width-x:x;
-  const rings=[1,.72,.46,.22].map((scale,ring)=>smoothClosed(Array.from({length:32},(_,i):Point=>{
+  const x=flip(cx);
+  const rings=[1,.75,.5].map((scale,ring)=>smoothClosed(Array.from({length:32},(_,i):Point=>{
     const t=i/32*Math.PI*2;
-    const wobble=1+.13*Math.sin(3*t+seed+ring*.6)+.07*Math.sin(5*t+seed*2.3);
+    const wobble=1+.14*Math.sin(3*t+seed+ring*.6)+.08*Math.sin(5*t+seed*2.3);
     return[flip(cx+Math.cos(t)*rx*scale*wobble),cy+Math.sin(t)*ry*scale*wobble];
   })));
-  const x=flip(cx);
-  return`<path d="${rings.join('')}" fill="${colors.hillFill}" fill-opacity=".07" stroke="${colors.hillStroke}" stroke-width="1.3"/>
-    <path d="M${x-4} ${cy+3}h8l-4-7z" fill="${colors.ink}"/>
-    <text x="${x+7}" y="${cy+4}" font-size="12" fill="${colors.ink}" stroke="${colors.paper}" stroke-width="5" stroke-opacity=".9" paint-order="stroke" ${FONT}>${height}</text>`;
+
+  const peakOffsets=[-0.52,-0.18,0.18,0.52];
+  const peaks=peakOffsets.map((off,idx)=>{
+    const px=flip(cx+off*rx*(mirror?-1:1));
+    const py=cy+(idx%2===0?-5:3);
+    const pH=18+(idx===1?7:idx===2?5:0);
+    const pW=16+(idx===1?4:0);
+    const top:Point=[px,py-pH];
+    const leftBase:Point=[px-pW,py+7];
+    const rightBase:Point=[px+pW,py+7];
+    const midBase:Point=[px+2,py+7];
+    const hatches=[.25,.5,.75,.92].map(f=>{
+      const sx=top[0]+(midBase[0]-top[0])*f,sy=top[1]+(midBase[1]-top[1])*f;
+      const ex=top[0]+(rightBase[0]-top[0])*f,ey=top[1]+(rightBase[1]-top[1])*f;
+      return`M${sx.toFixed(1)} ${sy.toFixed(1)}L${ex.toFixed(1)} ${ey.toFixed(1)}`;
+    }).join('');
+    return`<polygon points="${fmt(leftBase)} ${fmt(top)} ${fmt(midBase)}" fill="${colors.paper}" stroke="${colors.ink}" stroke-width="1.1" stroke-linejoin="round"/>
+      <polygon points="${fmt(midBase)} ${fmt(top)} ${fmt(rightBase)}" fill="${colors.hillFill}" fill-opacity=".25" stroke="${colors.ink}" stroke-width="1.1" stroke-linejoin="round"/>
+      <path d="${hatches}" stroke="${colors.ink}" stroke-width=".75" opacity=".7"/>
+      <path d="M${fmt(top)}L${fmt(midBase)}" stroke="${colors.ink}" stroke-width="1.3"/>`;
+  }).join('');
+
+  return`<g class="mountain-ridge">
+    <path d="${rings.join('')}" fill="${colors.hillFill}" fill-opacity=".12" stroke="${colors.hillStroke}" stroke-width="1.2"/>
+    ${peaks}
+    <path d="M${x-4} ${cy-18}h8l-4-7z" fill="${colors.ink}"/>
+    <text x="${x+6}" y="${cy-17}" font-size="11" font-weight="bold" fill="${colors.ink}" stroke="${colors.paper}" stroke-width="4" stroke-opacity=".9" paint-order="stroke" ${FONT}>${height}</text>
+    <text x="${x}" y="${cy+ry+14}" text-anchor="middle" font-size="10" letter-spacing="2" font-style="italic" fill="${colors.ink}" stroke="${colors.paper}" stroke-width="3" stroke-opacity=".85" paint-order="stroke" ${FONT}>${name}</text>
+  </g>`;
 }
 
 /** Eight-point compass rose with alternating inked and blank halves. */
@@ -233,9 +259,9 @@ export function arenaMapArtV2(view:MapViewSize=GAME_RULES.map,style:MapStyle='do
         <g id="woods" filter="url(#forest)" mask="url(#woods-mask)"><rect width="${W}" height="${H}" fill="${colors.woods}" opacity="${colors.woodsOpacity}"/><rect width="${W}" height="${H}" fill="url(#trees)"/></g>
         <use href="#woods" transform="matrix(-1 0 0 1 ${W} 0)"/>
         <path d="${coastPath(samples,-7,0,0)}" fill="none" stroke="${colors.ink}" stroke-width="1.6" stroke-dasharray="1 6" stroke-linecap="round" opacity=".55"/>
-        ${hill(720,270,72,42,184,1,false,colors)}${hill(720,270,72,42,184,1,true,colors)}
-        ${hill(390,860,84,46,212,4,false,colors)}${hill(390,860,84,46,212,4,true,colors)}
-        ${hill(W/2,820,92,52,247,2.5,false,colors)}
+        ${mountainRidge(720,270,72,42,184,'NORTH RIDGE',1,false,colors)}${mountainRidge(720,270,72,42,184,'NORTH RIDGE',1,true,colors)}
+        ${mountainRidge(390,860,84,46,212,'SOUTH BLUFFS',4,false,colors)}${mountainRidge(390,860,84,46,212,'SOUTH BLUFFS',4,true,colors)}
+        ${mountainRidge(W/2,820,92,52,247,'IRON PEAK',2.5,false,colors)}
         <g fill="none">${frontLine(blueLand.maxX,1,colors.blueInk)}${frontLine(redLand.minX,-1,colors.redInk)}</g>
         ${territoryLabel((blueLand.minX+blueLand.maxX)/2,'BLUE KINGDOM',colors.blueInk)}
         ${territoryLabel((redLand.minX+redLand.maxX)/2,'RED KINGDOM',colors.redInk)}

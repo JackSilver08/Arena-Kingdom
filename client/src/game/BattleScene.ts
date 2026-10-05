@@ -22,6 +22,9 @@ import { FrontlineOverlay } from './frontlineOverlay';
 import type { MapViewSize } from './mapArt';
 import { BATTLE_DEPTH, BattleVisualRenderer, battleView } from './visuals';
 import { svgDataUrl } from './art';
+import { ShorelineWavesOverlay } from './shorelineWaves';
+import { LivingForestOverlay } from './livingForest';
+import { WeatherOverlay } from './weatherOverlay';
 
 const { width: W, height: H } = GAME_RULES.map;
 const UI_FONT = '"Segoe UI", Arial, system-ui, sans-serif';
@@ -103,6 +106,12 @@ export class BattleScene extends Phaser.Scene {
   private effects = 0;
   private view!: MapViewSize;
   private resizeTimer: Phaser.Time.TimerEvent | null = null;
+  private waves!: ShorelineWavesOverlay;
+  private forest!: LivingForestOverlay;
+  private weather!: WeatherOverlay;
+  private weatherBadge!: Phaser.GameObjects.Text;
+  private weatherBadgeBg!: Phaser.GameObjects.Graphics;
+  private lastWeatherType = '';
 
   constructor() {
     super('battle');
@@ -129,6 +138,22 @@ export class BattleScene extends Phaser.Scene {
     this.makeEffectTextures();
     this.drawWorld();
     this.frontline = new FrontlineOverlay(this);
+    this.waves = new ShorelineWavesOverlay(this);
+    this.forest = new LivingForestOverlay(this);
+    this.weather = new WeatherOverlay(this);
+
+    this.weatherBadgeBg = this.add.graphics().setDepth(DEPTH.effects + 100);
+    this.weatherBadge = this.add
+      .text(W / 2, 68, '', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '11px',
+        fontStyle: 'italic',
+        color: '#29323a',
+        align: 'center'
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.effects + 101);
+
     this.ground = this.add.graphics().setDepth(DEPTH.ground);
     this.bars = this.add.graphics().setDepth(DEPTH.bars);
     this.overlay = this.add.graphics().setDepth(DEPTH.overlay);
@@ -146,6 +171,16 @@ export class BattleScene extends Phaser.Scene {
         this.overlaysEnabled = settings.overlays;
         this.formationsEnabled = settings.formations;
         this.reducedMotion = settings.reducedMotion;
+        this.waves.setEnabled(settings.overlays);
+        this.forest.setEnabled(settings.overlays);
+        this.weather.setEnabled(settings.overlays);
+        if (!settings.overlays) {
+          this.weatherBadge.setVisible(false);
+          this.weatherBadgeBg.setVisible(false);
+        } else {
+          this.lastWeatherType = '';
+          this.updateWeatherBadge();
+        }
       });
       this.recap = createBattleRecap(this, battleRoot, this.controller);
     }
@@ -159,6 +194,11 @@ export class BattleScene extends Phaser.Scene {
       this.displaySettings = null;
       this.recap?.destroy();
       this.frontline?.destroy();
+      this.waves?.destroy();
+      this.forest?.destroy();
+      this.weather?.destroy();
+      this.weatherBadge?.destroy();
+      this.weatherBadgeBg?.destroy();
     });
     // The stage may have changed shape while the textures were loading.
     this.fitView();
@@ -176,8 +216,40 @@ export class BattleScene extends Phaser.Scene {
       this.drawFog(view);
       this.frontline.update(view, delta, this.overlaysEnabled, this.reducedMotion);
     }
+
+    const matchElapsed = view?.timeMs ?? _time;
+    this.waves.update(delta, this.reducedMotion);
+    this.weather.update(matchElapsed, delta, this.reducedMotion);
+    const weatherMod = this.weather.modifiers;
+    this.forest.setWind(weatherMod.windAngle, weatherMod.windStrength);
+    this.forest.update(delta, this.reducedMotion);
+    this.updateWeatherBadge();
+
     if (!this.replayView) this.playEvents(events);
     this.drawOverlay(view);
+  }
+
+  private updateWeatherBadge() {
+    if (!this.overlaysEnabled) {
+      this.weatherBadge.setVisible(false);
+      this.weatherBadgeBg.setVisible(false);
+      return;
+    }
+    const current = this.weather.weather;
+    if (current === this.lastWeatherType) return;
+    this.lastWeatherType = current;
+
+    const cfg = this.weather.modifiers;
+    this.weatherBadge.setText(`${cfg.icon} ${cfg.label} · ${cfg.description}`);
+    this.weatherBadge.setVisible(true);
+    this.weatherBadgeBg.setVisible(true);
+
+    const bounds = this.weatherBadge.getBounds();
+    this.weatherBadgeBg.clear();
+    this.weatherBadgeBg.fillStyle(0xeee6d2, 0.92);
+    this.weatherBadgeBg.lineStyle(1.2, 0x506a70, 0.7);
+    this.weatherBadgeBg.fillRoundedRect(bounds.x - 12, bounds.y - 4, bounds.width + 24, bounds.height + 8, 4);
+    this.weatherBadgeBg.strokeRoundedRect(bounds.x - 12, bounds.y - 4, bounds.width + 24, bounds.height + 8, 4);
   }
 
   /** Switch the renderer between the live match state and a recorded recap frame. */
