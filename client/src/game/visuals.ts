@@ -3,6 +3,7 @@ import { GAME_RULES, type BuildingType, type Side, type UnitType } from '@arena-
 import { svgDataUrl } from './art';
 import { knightIconDataUrl } from './knightIcon';
 import { arenaMapArtV2, type MapViewSize } from './mapArt';
+import { arenaMapArtMoba } from './mobaMapArt';
 import { SYMBOL_SIZE, symbolArt, type SymbolSize } from './symbols';
 import {
   DISPLAY_SETTINGS_EVENT,
@@ -58,6 +59,12 @@ export function unitTextureKey(type: UnitType, side: Side) {
 
 const MAP_TEXTURE = 'arena-map';
 const mapTextureKey = (view: MapViewSize, style: MapStyle) => `${MAP_TEXTURE}-${style}-${view.width}x${view.height}`;
+
+/** Pick the correct map art generator based on the chosen style. */
+function mapArtForStyle(view: MapViewSize, style: MapStyle): string {
+  if (style === 'moba') return arenaMapArtMoba(view);
+  return arenaMapArtV2(view, style);
+}
 
 export class BattleVisualRenderer {
   private terrain: Phaser.GameObjects.Image | null = null;
@@ -115,7 +122,7 @@ export class BattleVisualRenderer {
       load(unitTextureKey('cannon', side), symbolArt('cannon', side), cannon.width, cannon.height);
     }
 
-    load(mapTextureKey(this.view, this.mapStyle), arenaMapArtV2(this.view, this.mapStyle), this.view.width, this.view.height);
+    load(mapTextureKey(this.view, this.mapStyle), mapArtForStyle(this.view, this.mapStyle), this.view.width, this.view.height);
   }
 
   drawTerrain() {
@@ -141,7 +148,7 @@ export class BattleVisualRenderer {
       this.removeStaleMapTextures(key);
     };
     if (this.scene.textures.exists(key)) return apply();
-    this.load(key, arenaMapArtV2(view, style), view.width, view.height);
+    this.load(key, mapArtForStyle(view, style), view.width, view.height);
     this.scene.load.once(Phaser.Loader.Events.COMPLETE, apply);
     this.scene.load.start();
   }
@@ -157,7 +164,7 @@ export class BattleVisualRenderer {
       this.removeStaleMapTextures(key);
     };
     if (this.scene.textures.exists(key)) return apply();
-    this.load(key, arenaMapArtV2(view, this.mapStyle), view.width, view.height);
+    this.load(key, mapArtForStyle(view, this.mapStyle), view.width, view.height);
     this.scene.load.once(Phaser.Loader.Events.COMPLETE, apply);
     this.scene.load.start();
   }

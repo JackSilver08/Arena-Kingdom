@@ -1,4 +1,4 @@
-export type MapStyle = 'documentary' | 'vintage';
+export type MapStyle = 'documentary' | 'vintage' | 'moba';
 export interface DisplaySettings {
   mapStyle: MapStyle;
   overlays: boolean;
@@ -18,14 +18,14 @@ const prefersReducedMotion = () => {
 };
 
 export const DEFAULT_DISPLAY_SETTINGS: Readonly<DisplaySettings> = {
-  mapStyle: 'documentary',
+  mapStyle: 'moba',
   overlays: true,
   formations: false,
   reducedMotion: prefersReducedMotion()
 };
 
 function isMapStyle(value: unknown): value is MapStyle {
-  return value === 'documentary' || value === 'vintage';
+  return value === 'documentary' || value === 'vintage' || value === 'moba';
 }
 
 function normalize(value: unknown): Partial<DisplaySettings> {
