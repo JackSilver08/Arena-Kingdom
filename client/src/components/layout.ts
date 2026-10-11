@@ -1,3 +1,4 @@
+import { GAME_VERSION } from '@arena-kingdom/shared';
 import { api } from '../lib/api';
 import { $, html, setHtml } from '../lib/html';
 import { navigate, type Page, type RouteContext } from '../lib/router';
@@ -22,7 +23,7 @@ export function createLayout(app: HTMLElement) {
       </header>
       <main id="page" tabindex="-1"></main>
       <footer class="site-footer wrap">
-        <span>© 2026 Arena Kingdom · v0.2</span>
+        <span>© 2026 Arena Kingdom · v${GAME_VERSION}</span>
         <span>Web-first · 2D · Real-time · 1v1</span>
       </footer>`
   );

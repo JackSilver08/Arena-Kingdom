@@ -1,7 +1,7 @@
 {
   "name": "arena-kingdom",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.8.0",
   "description": "Arena Kingdom - lightweight 2D real-time strategy arena",
   "workspaces": [
     "client",
@@ -19,7 +19,10 @@
     "build:client": "npm --workspace client run build",
     "build:server": "npm --workspace server run build",
     "start": "npm --workspace server run start",
-    "test": "npm --workspace shared run test",
+    "test": "npm run test:shared && npm run test:client && npm run test:server",
+    "test:shared": "npm --workspace shared run test",
+    "test:client": "node --import tsx --test client/test/*.test.ts",
+    "test:server": "npm --workspace server run test",
     "typecheck": "npm run build:shared && npm --workspace client run typecheck && npm --workspace server run typecheck",
     "qa:static": "node tools/check-documentary.mjs",
     "check:bundle": "node tools/check-bundle.mjs",

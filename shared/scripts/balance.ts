@@ -5,6 +5,8 @@
  * Each pair is run in both colours so map-side bias is visible in the output.
  * The lab reports factual simulation metrics only. It does not change game rules.
  */
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   BUILDING_STATS,
   GAME_RULES,
@@ -13,6 +15,7 @@ import {
   armyUpkeep,
   canPlaceBuilding,
   forwardDir,
+  startingLayout,
   type BuildableType,
   type FormationType,
   type Side,
@@ -21,7 +24,7 @@ import {
 const STRATEGIES = ['rush', 'economy', 'defensive', 'balanced'] as const;
 type Strategy = (typeof STRATEGIES)[number];
 
-interface StrategyProfile {
+export interface StrategyProfile {
   attackAtMs: number;
   attackArmy: number;
   formation: FormationType;
@@ -113,7 +116,7 @@ function placeBuilding(engine: MatchEngine, side: Side, type: BuildableType): bo
   return false;
 }
 
-class StrategyController {
+export class StrategyController {
   private elapsedMs = 0;
   private attackTimer = 0;
   private firstAttackMs: number | null = null;
@@ -180,8 +183,9 @@ class StrategyController {
     const enemy: Side = this.side === 'blue' ? 'red' : 'blue';
     const castle = engine.castleOf(this.side);
     const buildings = engine.buildingsOf(this.side).filter((b) => b.type !== 'fence');
-    const intruders = engine.armyOf(enemy).filter(
+    const intruders = engine.viewForSide(this.side).units.filter(
       (u) =>
+        u.side === enemy &&
         forwardDir(this.side) * (u.x - GAME_RULES.map.midlineX) < 0 &&
         (buildings.some((b) => Math.hypot(b.x - u.x, b.y - u.y) <= 180) ||
           (castle ? Math.hypot(castle.x - u.x, castle.y - u.y) <= 260 : false))
@@ -232,11 +236,16 @@ class StrategyController {
   private attackTarget(engine: MatchEngine) {
     const enemy: Side = this.side === 'blue' ? 'red' : 'blue';
     const dir = forwardDir(this.side);
-    const candidates = engine
-      .buildingsOf(enemy)
-      .filter((b) => b.type !== 'fence')
+    const candidates = engine.viewForSide(this.side).buildings
+      .filter((b) => b.side === enemy && b.type !== 'fence')
       .sort((a, b) => dir * (a.x - b.x));
-    return candidates.find((b) => b.type === 'tower' || b.type === 'barracks') ?? engine.castleOf(enemy) ?? candidates[0] ?? null;
+    const revealed = candidates.find((b) => b.type === 'tower' || b.type === 'barracks') ??
+      candidates.find((b) => b.type === 'castle') ?? candidates[0];
+    if (revealed) return revealed;
+    // Starting base coordinates are public map information. Blind attack-move is legal;
+    // never attach a hidden ID or read the enemy castle's current state to this order.
+    const spawn = startingLayout(enemy).buildings.find((b) => b.type === 'castle')!;
+    return { x: spawn.x, y: spawn.y, id: undefined };
   }
 }
 
@@ -289,30 +298,35 @@ function runMatch(a: Strategy, b: Strategy, repeats: number): MatchMetrics[] {
   return metrics;
 }
 
-const requested = Number(process.argv[2] ?? '4');
-const repeats = Number.isFinite(requested) && requested > 0 ? Math.min(20, Math.floor(requested)) : 4;
-const pairs: [Strategy, Strategy][] = [];
-for (let i = 0; i < STRATEGIES.length; i++) {
-  for (let j = i + 1; j < STRATEGIES.length; j++) pairs.push([STRATEGIES[i], STRATEGIES[j]]);
+export function runBalanceLab(requested = 4) {
+  const repeats = Number.isFinite(requested) && requested > 0 ? Math.min(20, Math.floor(requested)) : 4;
+  const pairs: [Strategy, Strategy][] = [];
+  for (let i = 0; i < STRATEGIES.length; i++) {
+    for (let j = i + 1; j < STRATEGIES.length; j++) pairs.push([STRATEGIES[i], STRATEGIES[j]]);
+  }
+
+  const started = Date.now();
+  for (const [a, b] of pairs) {
+    const rows = runMatch(a, b, repeats);
+    const wins = rows.filter((row) => row.result === row.side).length;
+    const draws = rows.filter((row) => row.result === 'draw').length;
+    const avg = (selector: (row: MatchMetrics) => number) => rows.reduce((sum, row) => sum + selector(row), 0) / rows.length;
+    const firstAttack = rows.filter((row) => row.firstAttackMs !== null);
+    const overSupply = rows.filter((row) => row.firstOverSupplyMs !== null);
+    console.log(
+      `${a} vs ${b}: strategy=${wins}/${rows.length} wins, draws=${draws}, ` +
+        `avg=${(avg((row) => row.timeMs) / 60000).toFixed(2)}m, ` +
+        `peakArmy=${avg((row) => row.peakArmy).toFixed(1)}, peakSupply=${avg((row) => row.peakSupply).toFixed(1)}, ` +
+        `peakUpkeep=${avg((row) => row.peakUpkeep).toFixed(1)}, finalGold=${avg((row) => row.finalGold).toFixed(1)}, ` +
+        `villages=${avg((row) => row.villages).toFixed(1)}, ` +
+        `firstAttack=${firstAttack.length ? (avg((row) => row.firstAttackMs ?? 0) / 1000).toFixed(0) + 's' : 'n/a'}, ` +
+        `overSupply=${overSupply.length ? (avg((row) => row.firstOverSupplyMs ?? 0) / 1000).toFixed(0) + 's' : 'n/a'}`
+    );
+  }
+
+  console.log(`Balance lab finished in ${((Date.now() - started) / 1000).toFixed(1)}s with ${pairs.length * repeats} scripted matches.`);
 }
 
-const started = Date.now();
-for (const [a, b] of pairs) {
-  const rows = runMatch(a, b, repeats);
-  const wins = rows.filter((row) => row.result === row.side).length;
-  const draws = rows.filter((row) => row.result === 'draw').length;
-  const avg = (selector: (row: MatchMetrics) => number) => rows.reduce((sum, row) => sum + selector(row), 0) / rows.length;
-  const firstAttack = rows.filter((row) => row.firstAttackMs !== null);
-  const overSupply = rows.filter((row) => row.firstOverSupplyMs !== null);
-  console.log(
-    `${a} vs ${b}: strategy=${wins}/${rows.length} wins, draws=${draws}, ` +
-      `avg=${(avg((row) => row.timeMs) / 60000).toFixed(2)}m, ` +
-      `peakArmy=${avg((row) => row.peakArmy).toFixed(1)}, peakSupply=${avg((row) => row.peakSupply).toFixed(1)}, ` +
-      `peakUpkeep=${avg((row) => row.peakUpkeep).toFixed(1)}, finalGold=${avg((row) => row.finalGold).toFixed(1)}, ` +
-      `villages=${avg((row) => row.villages).toFixed(1)}, ` +
-      `firstAttack=${firstAttack.length ? (avg((row) => row.firstAttackMs ?? 0) / 1000).toFixed(0) + 's' : 'n/a'}, ` +
-      `overSupply=${overSupply.length ? (avg((row) => row.firstOverSupplyMs ?? 0) / 1000).toFixed(0) + 's' : 'n/a'}`
-  );
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  runBalanceLab(Number(process.argv[2] ?? '4'));
 }
-
-console.log(`Balance lab finished in ${((Date.now() - started) / 1000).toFixed(1)}s with ${pairs.length * repeats} scripted matches.`);

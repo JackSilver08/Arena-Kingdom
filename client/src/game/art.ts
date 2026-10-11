@@ -1,161 +1,22 @@
 import type { BuildingType, Side } from '@arena-kingdom/shared';
-import { UNIT_SHOP_ASSETS, type ShopUnitType } from './unitShopAssets';
-import { cannonIconDataUrl } from './cannonIcon';
+import type { ShopUnitType } from './unitShopAssets';
+import { fantasyEntityArt } from './fantasyArt';
 
-/**
- * Illustrated vector art for menus, the HUD and the home page. Each function returns a standalone
- * SVG (viewBox only) for inline use in the DOM. The battlefield itself draws map symbols (symbols.ts).
- */
-
-const INK = '#1f2937';
-const TEAM: Record<Side, { main: string; dark: string; light: string }> = {
-  blue: { main: '#3b82f6', dark: '#1d4ed8', light: '#93c5fd' },
-  red: { main: '#ef4444', dark: '#b91c1c', light: '#fca5a5' }
-};
-
+/** Menus and gameplay share the same original materials and silhouettes. */
 const svg = (viewBox: string, body: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${body}</svg>`;
 
-export function castleArt(side: Side) {
-  const t = TEAM[side];
-  return svg(
-    '0 0 120 116',
-    `<g stroke="#475569" stroke-width="2.5" stroke-linejoin="round">
-      <rect x="22" y="58" width="76" height="52" fill="#cbd5e1"/>
-      <rect x="8" y="38" width="26" height="72" fill="#e2e8f0"/>
-      <rect x="86" y="38" width="26" height="72" fill="#e2e8f0"/>
-      <rect x="40" y="30" width="40" height="80" fill="#f1f5f9"/>
-      <path d="M5 40 L21 6 L37 40 Z" fill="${t.main}"/>
-      <path d="M83 40 L99 6 L115 40 Z" fill="${t.main}"/>
-      <path d="M35 32 L60 2 L85 32 Z" fill="${t.main}"/>
-    </g>
-    <path d="M21 8 L35 39 L26 39 Z" fill="${t.dark}" opacity=".45"/>
-    <path d="M99 8 L113 39 L104 39 Z" fill="${t.dark}" opacity=".45"/>
-    <path d="M60 4 L83 31 L70 31 Z" fill="${t.dark}" opacity=".45"/>
-    <g fill="#475569">
-      <rect x="17" y="52" width="8" height="12" rx="4"/>
-      <rect x="95" y="52" width="8" height="12" rx="4"/>
-      <rect x="56" y="42" width="8" height="12" rx="4"/>
-    </g>
-    <path d="M48 110 V91 a12 12 0 0 1 24 0 V110 Z" fill="#64748b" stroke="#334155" stroke-width="2.5"/>
-    <path d="M60 81 V110" stroke="#334155" stroke-width="1.5"/>
-    <g stroke="#94a3b8" stroke-width="2" stroke-linecap="round">
-      <path d="M12 80 h8 M22 96 h8 M90 76 h8 M98 94 h8 M44 66 h8 M68 72 h8 M27 70 h6 M88 102 h6"/>
-    </g>`
-  );
-}
-
-function house(x: number, y: number, w: number, h: number, wall: string, roof: string, door: string) {
-  const roofH = h * 0.46;
-  return `<g stroke="${INK}" stroke-width="2" stroke-linejoin="round">
-    <rect x="${x + w * 0.12}" y="${y + roofH - 2}" width="${w * 0.76}" height="${h - roofH + 2}" fill="${wall}"/>
-    <path d="M${x} ${y + roofH} L${x + w / 2} ${y} L${x + w} ${y + roofH} Z" fill="${roof}"/>
-    <rect x="${x + w * 0.42}" y="${y + h * 0.66}" width="${w * 0.18}" height="${h * 0.34}" fill="${door}"/>
-  </g>`;
-}
-
-export function villageArt() {
-  return svg(
-    '0 0 66 58',
-    `${house(1, 6, 28, 30, '#60a5fa', '#1e40af', '#dc2626')}
-    ${house(35, 2, 28, 30, '#86efac', '#15803d', '#1e3a8a')}
-    ${house(15, 20, 34, 36, '#f5d0a9', '#b45309', '#dc2626')}
-    <rect x="22" y="40" width="6" height="6" fill="#93c5fd" stroke="${INK}" stroke-width="1.5"/>`
-  );
-}
-
-export function barracksArt(side: Side) {
-  const t = TEAM[side];
-  return svg(
-    '0 0 66 62',
-    `<path d="M37 3 V20" stroke="#374151" stroke-width="2.2" stroke-linecap="round"/>
-    <path d="M38 3 h14 l-4 4.5 l4 4.5 h-14 z" fill="${t.main}" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round"/>
-    <path d="M6 28 L33 15 L60 28 V54 H6 Z" fill="#f3f4f6" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/>
-    <path d="M6 28 L33 15 L60 28" fill="none" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/>
-    <rect x="21" y="34" width="24" height="20" fill="#111827"/>
-    <path d="M21 39 h24 M21 44 h24 M21 49 h24" stroke="#374151" stroke-width="1.2"/>
-    <rect x="10" y="34" width="7" height="7" fill="#9ca3af" stroke="${INK}" stroke-width="1.5"/>
-    <rect x="49" y="34" width="7" height="7" fill="#9ca3af" stroke="${INK}" stroke-width="1.5"/>
-    <rect x="6" y="53" width="54" height="4" fill="${t.main}"/>
-    <rect x="6" y="57" width="54" height="3" fill="${t.dark}"/>`
-  );
-}
-
-
-/**
- * Recruitment card artwork from the generated unit-card image.
- * The source is kept as a transparent raster asset for fidelity; Red adapts the same artwork with CSS.
- */
-export function unitShopArt(type: ShopUnitType, side: Side) {
-  const src = type === 'cannon' ? cannonIconDataUrl(side) : UNIT_SHOP_ASSETS[type];
-  return `<img class="unit-shop-image unit-shop-image-${type} unit-shop-image-${side}" src="${src}" alt="" aria-hidden="true" draggable="false" />`;
-}
-
-export function fallbackIcon(side: Side) {
-  const t = TEAM[side];
-  return svg(
-    '0 0 64 64',
-    `<path d="M32 4 L54 12 V30 C54 44 46 54 32 60 C18 54 10 44 10 30 V12 Z" fill="${t.main}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>
-    <path d="M32 15 V43 M22 29 H42" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
-    <path d="M8 33 L17 24 M8 33 L19 36 M56 33 L47 24" fill="none" stroke="${t.dark}" stroke-width="3.2" stroke-linecap="round"/>`
-  );
-}
-
-export function troopArt(side: Side) {
-  const t = TEAM[side];
-  return svg(
-    '0 0 26 36',
-    `<path d="M4 2 H22 V33 L13 26 L4 33 Z" fill="${t.main}" stroke="${INK}" stroke-width="2.2" stroke-linejoin="round"/>
-    <path d="M8 7 H18" stroke="${t.light}" stroke-width="2.2" stroke-linecap="round"/>
-    <path d="M22 2 V33 L13 26 V2 Z" fill="${t.dark}" opacity=".25"/>`
-  );
-}
-
-/** Build-menu icon: the palisade seen side-on. */
+export function castleArt(side: Side) { return fantasyEntityArt('castle', side); }
+export function villageArt(side: Side = 'blue') { return fantasyEntityArt('village', side); }
+export function barracksArt(side: Side) { return fantasyEntityArt('barracks', side); }
+export function towerArt(side: Side) { return fantasyEntityArt('tower', side); }
+export function troopArt(side: Side) { return fantasyEntityArt('soldier', side); }
+export function unitShopArt(type: ShopUnitType, side: Side) { return fantasyEntityArt(type, side); }
+export function fallbackIcon(side: Side) { return fantasyEntityArt('soldier', side); }
+/** The menu sees the palisade side-on; the battlefield uses its vertical footprint. */
 export function fenceArt() {
-  let stakes = '';
-  for (let i = 0; i < 12; i++) {
-    const x = 1 + i * 10.8;
-    stakes += `<path d="M${x} 44 V11 L${x + 4.5} 3 L${x + 9} 11 V44 Z"/>`;
-  }
-  return svg(
-    '0 0 132 46',
-    `<g fill="#c08448" stroke="#6b3f1d" stroke-width="1.6" stroke-linejoin="round">${stakes}</g>
-    <g fill="#8b5a2b" stroke="#5b3413" stroke-width="1.5">
-      <rect x="0.8" y="16" width="130.4" height="5"/>
-      <rect x="0.8" y="32" width="130.4" height="5"/>
-    </g>`
-  );
+  return fantasyEntityArt('fence', 'blue').replace('<g stroke-linejoin=', '<g transform="rotate(90 50 50)" stroke-linejoin=');
 }
-
-export function towerArt(side: Side) {
-  const t = TEAM[side];
-  return svg(
-    '0 0 48 74',
-    `<path d="M24 2 V10" stroke="#374151" stroke-width="2"/>
-    <path d="M25 2 h10 l-3 3 l3 3 h-10 z" fill="${t.main}" stroke="${INK}" stroke-width="1.3"/>
-    <rect x="12" y="30" width="24" height="42" fill="#e2e8f0" stroke="#475569" stroke-width="2.5"/>
-    <rect x="8" y="26" width="32" height="7" fill="#cbd5e1" stroke="#475569" stroke-width="2"/>
-    <path d="M8 28 L24 8 L40 28 Z" fill="${t.main}" stroke="${t.dark}" stroke-width="2.5" stroke-linejoin="round"/>
-    <rect x="20" y="40" width="8" height="12" rx="4" fill="#475569"/>
-    <path d="M15 62 h6 M27 56 h6" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>`
-  );
-}
-
-export function buildingArt(type: BuildingType, side: Side) {
-  switch (type) {
-    case 'castle':
-      return castleArt(side);
-    case 'village':
-      return villageArt();
-    case 'barracks':
-      return barracksArt(side);
-    case 'fence':
-      return fenceArt();
-    case 'tower':
-      return towerArt(side);
-  }
-}
-
+export function buildingArt(type: BuildingType, side: Side) { return fantasyEntityArt(type, side); }
 /**
  * The battle ground is a single illustrated texture rather than a collection
  * of coloured rectangles. It keeps the engine's 1920 x 1080 coordinates, so

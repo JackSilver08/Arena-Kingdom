@@ -29,7 +29,10 @@ import { bannerIcon, buildingArt, castleArt, envelopeIcon, fallbackIcon, hammerI
 import { BattleScene } from './BattleScene';
 import { symbolArt } from './symbols';
 import { battleView } from './visuals';
+import { battleResolution } from './battleLayout';
 import type { GameSession, SessionSignal } from './session';
+import './battleTheme.css';
+import './battleRecap.css';
 
 export type ControlMode = 'idle' | 'build' | 'troops';
 
@@ -91,6 +94,9 @@ export class GameController {
   private endTimer: number | null = null;
   private endShown = false;
   private surrenderArmed = false;
+  private cameraMode = false;
+  private replayHud: MatchView | null = null;
+  private modalFocus: HTMLElement | null = null;
   private disposers: (() => void)[] = [];
 
   constructor(
@@ -101,16 +107,16 @@ export class GameController {
     this.renderShell();
     const stage = $(root, '[data-canvas]');
     const view = battleView(stage.clientWidth, stage.clientHeight);
-    const resolution = Math.min(2, Math.max(1, (stage.clientWidth * window.devicePixelRatio) / view.width));
+    const resolution = battleResolution({ width: stage.clientWidth, height: stage.clientHeight }, view, window.devicePixelRatio);
     this.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: stage,
       width: Math.round(view.width * resolution),
       height: Math.round(view.height * resolution),
-      backgroundColor: '#cbb68c',
+      backgroundColor: '#15363c',
       banner: false,
       disableContextMenu: true,
-      input: { keyboard: false },
+      input: { keyboard: false, activePointers: 3 },
       scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
       render: { antialias: true, powerPreference: 'high-performance' }
     });
@@ -149,6 +155,13 @@ export class GameController {
 
   get canCommand() {
     return this.session.status === 'playing' && !this.view?.result;
+  }
+
+  setReplayHud(view: MatchView | null) {
+    const resetKnowledge = !view || !this.replayHud || view.timeMs < this.replayHud.timeMs;
+    this.replayHud = view;
+    if (resetKnowledge) this.rememberedEnemyCastleShare = 1;
+    this.refreshHud(true);
   }
 
   /** Called by the scene every frame. */
@@ -337,6 +350,20 @@ export class GameController {
   // ------------------------------------------------------------ input
 
   private onKey(event: KeyboardEvent) {
+    // The display panel owns its keyboard/focus while open, even though this
+    // listener was registered before the scene's listener.
+    if (this.root.querySelector('.display-settings-panel:not([hidden])')) return;
+    if (event.key === 'Tab' && this.anyModalOpen()) {
+      const dialog = this.root.querySelector<HTMLElement>('.modal-backdrop:not([hidden]) [role="dialog"]');
+      const controls = dialog ? [...dialog.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input, select')] : [];
+      if (controls.length) {
+        const index = controls.indexOf(document.activeElement as HTMLElement);
+        const next = event.shiftKey ? (index <= 0 ? controls.length - 1 : index - 1) : (index + 1) % controls.length;
+        event.preventDefault();
+        controls[next]?.focus();
+      }
+      return;
+    }
     const target = event.target as HTMLElement | null;
     const isTextInput = Boolean(
       target &&
@@ -433,6 +460,21 @@ export class GameController {
       if (!button) return;
       const action = button.dataset.action;
       switch (action) {
+        case 'camera-in':
+          this.battleScene()?.zoomCamera(1.2);
+          break;
+        case 'camera-out':
+          this.battleScene()?.zoomCamera(1 / 1.2);
+          break;
+        case 'camera-reset':
+          this.battleScene()?.resetCamera();
+          break;
+        case 'camera-mode':
+          this.cameraMode = !this.cameraMode;
+          this.battleScene()?.setCameraMode(this.cameraMode);
+          button.setAttribute('aria-pressed', String(this.cameraMode));
+          this.setHint(this.cameraMode ? 'Camera mode: drag to explore. Switch back to issue orders.' : 'Command mode: tap to select or issue an order. Pinch to zoom.');
+          break;
         case 'build':
           this.setMode(this.mode === 'build' ? 'idle' : 'build');
           break;
@@ -513,10 +555,12 @@ export class GameController {
         case 'hide-end':
           $(this.root, '[data-end]').hidden = true;
           $(this.root, '[data-show-end]').hidden = false;
+          this.restoreModalFocus();
           break;
         case 'show-end':
           $(this.root, '[data-end]').hidden = false;
           $(this.root, '[data-show-end]').hidden = true;
+          this.focusDialog($(this.root, '[data-end]'));
           break;
       }
     });
@@ -526,10 +570,27 @@ export class GameController {
     return !$(this.root, '[data-messenger]').hidden || !$(this.root, '[data-end]').hidden;
   }
 
+  private battleScene() {
+    const scene = this.game.scene.getScene('battle') as BattleScene | undefined;
+    return scene?.sys.isActive() ? scene : null;
+  }
+
+  private focusDialog(backdrop: HTMLElement) {
+    this.battleScene()?.closeDisplaySettings();
+    if (!this.modalFocus) this.modalFocus = document.activeElement as HTMLElement | null;
+    backdrop.querySelector<HTMLElement>('button:not([disabled]), a[href]')?.focus();
+  }
+
+  private restoreModalFocus() {
+    if (this.modalFocus?.isConnected) this.modalFocus.focus();
+    this.modalFocus = null;
+  }
+
   private closeModals() {
     const messenger = $(this.root, '[data-messenger]');
     if (!messenger.hidden) {
       messenger.hidden = true;
+      this.restoreModalFocus();
       this.refreshHud(true);
       return true;
     }
@@ -550,6 +611,7 @@ export class GameController {
     surrender.classList.remove('armed');
     $<HTMLButtonElement>(messenger, '[data-action="propose-peace"]').disabled = Boolean(this.view?.peace);
     messenger.hidden = false;
+    this.focusDialog(messenger);
     this.refreshHud(true);
   }
 
@@ -686,19 +748,34 @@ export class GameController {
           </div>
         </div>
 
-        <div class="hud-commands">
+        <div class="battle-camera-tools" role="group" aria-label="Battlefield camera">
+          <button type="button" data-action="camera-in" aria-label="Zoom in" title="Zoom in">+</button>
+          <button type="button" data-action="camera-out" aria-label="Zoom out" title="Zoom out">−</button>
+          <button type="button" data-action="camera-reset" aria-label="Show full battlefield" title="Show full battlefield">⌖</button>
+          <button type="button" data-action="camera-mode" aria-pressed="false" aria-label="Toggle camera drag mode" title="Camera drag mode">✥</button>
+        </div>
+        <div class="battle-minimap" data-minimap aria-label="Battlefield overview"></div>
+
+        <div class="battle-command-deck">
+        <div class="hud-selection">
+          <div class="hud-selection-crest" aria-hidden="true">♜</div>
+          <div class="hud-selection-copy"><small data-hud="selectionTitle">YOUR KINGDOM</small><strong data-hud="selectionCount">Choose your army</strong><span data-hud="selectionHealth">Select troops to issue orders</span></div>
+          <div class="hud-selection-types" data-hud="selectionTypes"></div>
+        </div>
+        <div class="hud-commands" role="group" aria-label="Army commands">
           <button type="button" class="cmd-btn" data-action="build" data-cmd="build" title="Build (B)">
-            <span class="cmd-icon">${trusted(hammerIcon())}</span><span class="yb cmd-key">B</span>
+            <span class="cmd-icon">${trusted(hammerIcon())}</span><span class="cmd-label">Build</span><span class="yb cmd-key">B</span>
           </button>
           <button type="button" class="cmd-btn" data-action="troops" data-cmd="troops" title="Troops (T)">
-            <span class="cmd-icon">${trusted(helmetIcon())}</span><span class="yb cmd-key">T</span>
+            <span class="cmd-icon">${trusted(helmetIcon())}</span><span class="cmd-label">Army</span><span class="yb cmd-key">T</span>
           </button>
           <button type="button" class="cmd-btn cmd-btn-fallback" data-action="fallback" data-cmd="fallback" title="Tactical Fall Back (F)">
-            <span class="cmd-icon">${trusted(fallbackIcon(this.mySide))}</span><span class="yb cmd-key">F</span>
+            <span class="cmd-icon">${trusted(fallbackIcon(this.mySide))}</span><span class="cmd-label">Fall back</span><span class="yb cmd-key">F</span>
           </button>
           <button type="button" class="cmd-btn" data-action="messenger" data-cmd="messenger" title="Messenger (M)">
-            <span class="cmd-icon">${trusted(envelopeIcon())}</span><span class="yb cmd-key">M</span>
+            <span class="cmd-icon">${trusted(envelopeIcon())}</span><span class="cmd-label">Diplomacy</span><span class="yb cmd-key">M</span>
           </button>
+        </div>
         </div>
 
         <div class="hud-popup" data-context hidden></div>
@@ -723,7 +800,7 @@ export class GameController {
         </div>
 
         <div class="modal-backdrop" data-end hidden>
-          <div class="modal battle-modal modal-wide" role="dialog" aria-modal="true" data-end-content></div>
+          <div class="modal battle-modal modal-wide" role="dialog" aria-modal="true" aria-label="Battle result" data-end-content></div>
         </div>
       </div>`
     );
@@ -885,13 +962,18 @@ export class GameController {
   }
 
   private refreshHud(force = false) {
-    const view = this.view;
+    const view = this.replayHud ?? this.view;
     const s = this.session;
     const me = this.mySide;
     const enemy = s.enemySide;
     if (force) this.hudElapsed = 0;
 
     const army = view ? view.units.filter((u) => u.side === me && u.type !== 'royal_guard').length : 0;
+    const selected = view?.units.filter(u => this.selection.has(u.id) && u.side === me) ?? [];
+    this.set('selectionTitle', this.replayHud ? 'BATTLE RECAP' : selected.length ? 'SELECTED ARMY' : 'YOUR KINGDOM');
+    this.set('selectionCount', this.replayHud ? 'Recorded perspective' : selected.length ? `${selected.length} troop${selected.length === 1 ? '' : 's'}` : 'Command your kingdom');
+    this.set('selectionHealth', selected.length ? `${Math.round(selected.reduce((total, u) => total + u.hp, 0))} / ${Math.round(selected.reduce((total, u) => total + u.maxHp, 0))} HP` : 'Drag to select · A selects all');
+    this.set('selectionTypes', [...new Set(selected.map(u => u.type))].map(type => `${UNIT_STATS[type].label} ${selected.filter(u => u.type === type).length}`).join(' · '));
     const supply = view ? armySupplyCapacity(view.buildings.filter((b) => b.side === me)) : 0;
     const upkeep = armyUpkeep(army, supply);
     const contextBuilding = view?.buildings.find((b) => b.id === (this.contextBarracksId ?? this.contextCastleId));
@@ -1087,7 +1169,12 @@ export class GameController {
           <button type="button" class="btn-light" data-action="hide-end">View battlefield</button>
         </div>`
     );
-    if ($(this.root, '[data-show-end]').hidden) $(this.root, '[data-end]').hidden = false;
+    if ($(this.root, '[data-show-end]').hidden) {
+      const backdrop = $(this.root, '[data-end]');
+      const wasHidden = backdrop.hidden;
+      backdrop.hidden = false;
+      if (wasHidden) this.focusDialog(backdrop);
+    }
     this.refreshHud(true);
   }
 }

@@ -104,6 +104,8 @@ export function emptyStats(): PlayerStats {
 
 export interface PlayerView {
   side: Side;
+  /** False means economy and statistics are redacted to zero for this observer, not actual zero values. */
+  privateInfoVisible?: boolean;
   gold: number;
   /** Gold received every income interval. */
   income: number;
@@ -136,7 +138,7 @@ export interface MatchView {
 export type Command =
   | { type: 'build'; building: BuildableType; x: number; y: number; rotation?: number }
   | { type: 'train'; barracksId?: number; count?: number; unitType?: UnitType }
-  /** With `targetId` the troops attack that enemy unit or building until it falls. */
+  /** With `targetId` attack a visible enemy; lost vision becomes an attack-move to its last visible point. */
   | { type: 'move'; unitIds: number[]; x: number; y: number; attack: boolean; targetId?: number; formation?: FormationType }
   | { type: 'army'; fraction: ArmyFraction; x: number; y: number; targetId?: number; formation?: FormationType }
   | { type: 'stop'; unitIds: number[] }

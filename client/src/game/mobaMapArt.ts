@@ -1,454 +1,106 @@
-import { COAST_PERIMETER, GAME_RULES, coastSamples, type CoastSample } from '@arena-kingdom/shared';
+import { GAME_RULES, MOUNTAIN_RIDGES, coastline, coastSamples, startingLayout } from '@arena-kingdom/shared';
 import type { MapViewSize } from './mapArt';
+import { blockedRidgesArt, type ArtQuality } from './terrainArt';
 
-/**
- * MOBA-style battlefield map inspired by League of Legends' Summoner's Rift.
- *
- * Replaces the military paper map with a lush, vibrant 2D top-down terrain:
- * - Rich green grass with biome variation
- * - A glowing river flowing through the neutral zone
- * - Dense jungle forests on both sides
- * - Terrain elevation (cliffs, plateaus)
- * - Lane-like pathways between kingdoms
- * - Vibrant, saturated color palette
- *
- * The geometry and coordinates are identical to the other map styles: only the
- * presentation changes, so pathfinding, placement, and hit-testing stay untouched.
- */
+/** Original vector terrain. No rendered concept, foreign asset or baked-in entity. */
+const cache = new Map<string, string>();
+const n = (value: number) => value.toFixed(1);
+const noise = (i: number) => { const v = Math.sin(i * 127.1 + 31.7) * 43758.5453; return v - Math.floor(v); };
 
-const svg = (viewBox: string, body: string) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${body}</svg>`;
-
-const SAMPLE_SPACING = 7;
-
-type Point = [number, number];
-const fmt = ([x, y]: Point) => `${x.toFixed(1)} ${y.toFixed(1)}`;
-
-const hash = (i: number, seed: number) => {
-  const v = Math.sin(i * 127.1 + seed * 311.7) * 43758.5453;
-  return (v - Math.floor(v)) * 2 - 1;
-};
-
-function smoothClosed(points: Point[]) {
-  const mid = (i: number): Point => {
-    const a = points[i], b = points[(i + 1) % points.length];
-    return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  };
-  return `M${fmt(mid(points.length - 1))}` + points.map((p, i) => `Q${fmt(p)} ${fmt(mid(i))}`).join('') + 'Z';
-}
-
-const along = ({ x, y, nx, ny, margin }: CoastSample, outset: number): Point =>
-  [x + nx * (margin + outset), y + ny * (margin + outset)];
-
-function coastPath(samples: CoastSample[], outset: number, rough: number, seed: number) {
-  const n = samples.length;
-  const coarse = (i: number) => {
-    const a = Math.floor(i / 4), f = i / 4 - a, u = f * f * (3 - 2 * f);
-    return hash(a % (n / 4), seed) * (1 - u) + hash((a + 1) % (n / 4), seed) * u;
-  };
-  return 'M' + samples.map((s, i) => fmt(along(s, outset + rough * (.65 * coarse(i) + .35 * hash(i, seed + 1))))).join('L') + 'Z';
-}
-
-/** Jungle tree cluster at position */
-function jungleTree(cx: number, cy: number, size: number, hue: number, seed: number) {
-  const trunkW = size * 0.18;
-  const canopyR = size * 0.52;
-  // Slight random offsets for organic feel
-  const ox = hash(seed, 1) * size * 0.1;
-  const oy = hash(seed, 2) * size * 0.08;
-  const x = cx + ox;
-  const y = cy + oy;
-  // Canopy color variation
-  const lightness = 32 + hash(seed, 3) * 8;
-  const sat = 55 + hash(seed, 4) * 15;
-  return `<g>
-    <ellipse cx="${x + 1.5}" cy="${y + size * 0.3}" rx="${canopyR * 0.9}" ry="${canopyR * 0.35}" fill="#0a1a08" opacity=".22"/>
-    <rect x="${x - trunkW / 2}" y="${y - size * 0.05}" width="${trunkW}" height="${size * 0.35}" fill="#4a3520" rx="1"/>
-    <circle cx="${x}" cy="${y - size * 0.1}" r="${canopyR}" fill="hsl(${hue}, ${sat}%, ${lightness}%)"/>
-    <circle cx="${x - canopyR * 0.35}" cy="${y - size * 0.18}" r="${canopyR * 0.7}" fill="hsl(${hue + 8}, ${sat + 5}%, ${lightness + 6}%)"/>
-    <circle cx="${x + canopyR * 0.4}" cy="${y - size * 0.05}" r="${canopyR * 0.65}" fill="hsl(${hue - 5}, ${sat}%, ${lightness - 3}%)"/>
-    <circle cx="${x}" cy="${y - size * 0.22}" r="${canopyR * 0.35}" fill="hsl(${hue + 12}, ${sat - 5}%, ${lightness + 12}%)" opacity=".7"/>
+function pine(x: number, y: number, size: number, id: number) {
+  const tone = id % 2 ? '#284b3c' : '#315943';
+  return `<g transform="translate(${n(x)} ${n(y)}) scale(${n(size)})">
+    <ellipse cx="4" cy="8" rx="14" ry="5" fill="#172e2d" opacity=".35"/>
+    <path d="M-2 3h4v7h-4" fill="#6b5941"/>
+    <path d="M0-30L-9-13h4L-14-3h6L-17 6Q0 12 17 6L8-3h6L5-13h4Z" fill="${tone}" stroke="#203d32" stroke-width="1"/>
+    <path d="M0-28L-8-13h5L-12-3h6L-13 5 0 2Z" fill="#61825b" opacity=".7"/>
+    <path d="M0-18L5-12M0-7l9 5M0 4l11 2" fill="none" stroke="#769361" opacity=".3"/>
   </g>`;
 }
 
-/** Dense forest grove */
-function jungleGrove(cx: number, cy: number, radius: number, count: number, seed: number) {
-  let trees = '';
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2 + hash(i, seed) * 0.5;
-    const dist = (i === 0 ? 0 : 0.3 + hash(i, seed + 1) * 0.25) * radius;
-    const size = 18 + hash(i, seed + 2) * 8;
-    const hue = 118 + hash(i, seed + 3) * 20;
-    trees += jungleTree(cx + Math.cos(angle) * dist, cy + Math.sin(angle) * dist, size, hue, seed * 100 + i);
-  }
-  return trees;
+function basePaving(side: 'blue' | 'red') {
+  return `<g data-base-paving="${side}">${startingLayout(side).buildings.map(b => {
+    const r = b.type === 'castle' ? 70 : 39;
+    const outline = `M${-r} 2Q${-r * .9} ${-r * .4} ${-r * .35} ${-r * .48}L${r * .24} ${-r * .52}Q${r * .8} ${-r * .4} ${r} ${-r * .03}L${r * .83} ${r * .29}Q${r * .4} ${r * .57} ${-r * .12} ${r * .48}L${-r * .75} ${r * .33}Z`;
+    return `<g transform="translate(${b.x} ${b.y})"><path d="${outline}" transform="translate(3 4)" fill="#344d3d" opacity=".35"/>
+      <path d="${outline}" fill="#8a9379" stroke="#a7aa87" stroke-width="1.2"/>
+      <path d="${outline}" transform="scale(.9)" fill="url(#paving)"/>
+      <path d="M${-r * .7} ${r * .29}l${r * .3} 5m${r * .7} -3 ${r * .3} -5" stroke="#c1bd98" opacity=".5"/></g>`;
+  }).join('')}</g>`;
 }
 
-/** Rock formation */
-function rockCluster(cx: number, cy: number, size: number, seed: number) {
-  const rocks: string[] = [];
-  const count = 2 + Math.abs(Math.round(hash(seed, 1) * 2));
-  for (let i = 0; i < count; i++) {
-    const ox = hash(i, seed + 10) * size * 0.6;
-    const oy = hash(i, seed + 20) * size * 0.4;
-    const r = size * (0.35 + hash(i, seed + 30) * 0.2);
-    const light = 42 + hash(i, seed + 40) * 10;
-    rocks.push(`<ellipse cx="${cx + ox + 1}" cy="${cy + oy + 2}" rx="${r}" ry="${r * 0.65}" fill="#0a0a08" opacity=".18"/>
-      <ellipse cx="${cx + ox}" cy="${cy + oy}" rx="${r}" ry="${r * 0.65}" fill="hsl(200, 8%, ${light}%)" stroke="hsl(200, 12%, ${light - 12}%)" stroke-width="1.5"/>
-      <ellipse cx="${cx + ox - r * 0.2}" cy="${cy + oy - r * 0.15}" rx="${r * 0.5}" ry="${r * 0.3}" fill="hsl(200, 6%, ${light + 10}%)" opacity=".5"/>`);
-  }
-  return `<g>${rocks.join('')}</g>`;
-}
-
-/** Grass detail patches */
-function grassPatch(cx: number, cy: number, radius: number, seed: number) {
-  let blades = '';
-  const count = 6 + Math.abs(Math.round(hash(seed, 0) * 4));
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2 + hash(i, seed) * 0.8;
-    const dist = hash(i, seed + 5) * radius * 0.8;
-    const x = cx + Math.cos(angle) * dist;
-    const y = cy + Math.sin(angle) * dist;
-    const h = 6 + hash(i, seed + 10) * 4;
-    const lean = hash(i, seed + 15) * 3;
-    const hue = 105 + hash(i, seed + 20) * 25;
-    blades += `<path d="M${x} ${y} Q${x + lean} ${y - h * 0.6} ${x + lean * 1.5} ${y - h}" stroke="hsl(${hue}, 60%, 52%)" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
-  }
-  return blades;
-}
-
-/** Flower decoration */
-function flowers(cx: number, cy: number, count: number, seed: number) {
-  let result = '';
-  for (let i = 0; i < count; i++) {
-    const x = cx + hash(i, seed) * 30;
-    const y = cy + hash(i, seed + 1) * 20;
-    const hue = [340, 45, 280, 200, 30][i % 5];
-    const r = 2.5 + hash(i, seed + 2) * 1.5;
-    result += `<circle cx="${x}" cy="${y}" r="${r}" fill="hsl(${hue}, 75%, 65%)" opacity=".85"/>
-      <circle cx="${x}" cy="${y}" r="${r * 0.4}" fill="hsl(${hue + 40}, 80%, 80%)"/>`;
-  }
-  return result;
-}
-
-export function arenaMapArtMoba(view: MapViewSize = GAME_RULES.map) {
-  const { width: W, height: H, blueLand, redLand } = GAME_RULES.map;
-  const sheetRect = { x: (W - view.width) / 2, y: (H - view.height) / 2, width: view.width, height: view.height };
-  const full = `x="${sheetRect.x}" y="${sheetRect.y}" width="${view.width}" height="${view.height}"`;
-  const samples = coastSamples(Math.round(COAST_PERIMETER / SAMPLE_SPACING / 4) * 4);
-
-  // River path through the neutral zone (the "lane river" like in LoL)
-  const riverLeft = blueLand.maxX;
-  const riverRight = redLand.minX;
-  const riverCx = (riverLeft + riverRight) / 2;
-  const riverW = riverRight - riverLeft;
-
-  // Jungle grove positions (blue side)
-  const blueGroves = [
-    { cx: 540, cy: 230, r: 70, count: 10 },
-    { cx: 620, cy: 320, r: 55, count: 8 },
-    { cx: 500, cy: 820, r: 72, count: 11 },
-    { cx: 650, cy: 760, r: 58, count: 9 },
-    { cx: 350, cy: 400, r: 62, count: 9 },
-    { cx: 340, cy: 680, r: 65, count: 9 },
-    { cx: 450, cy: 540, r: 48, count: 7 },
-    { cx: 280, cy: 280, r: 50, count: 7 },
-    { cx: 280, cy: 800, r: 55, count: 8 },
-  ];
-
-  // Mirror groves to red side
-  const allGroves = [
-    ...blueGroves,
-    ...blueGroves.map(g => ({ ...g, cx: W - g.cx }))
-  ];
-
-  let grovesSvg = '';
-  allGroves.forEach((g, i) => {
-    grovesSvg += jungleGrove(g.cx, g.cy, g.r, g.count, i * 17 + 3);
-  });
-
-  // Rock clusters
-  const rockPositions = [
-    { cx: 700, cy: 340, s: 18 }, { cx: 1220, cy: 340, s: 18 },
-    { cx: 700, cy: 740, s: 16 }, { cx: 1220, cy: 740, s: 16 },
-    { cx: 460, cy: 480, s: 14 }, { cx: 1460, cy: 480, s: 14 },
-    { cx: 460, cy: 600, s: 14 }, { cx: 1460, cy: 600, s: 14 },
-    { cx: riverCx - 30, cy: 300, s: 12 }, { cx: riverCx + 30, cy: 780, s: 12 },
-  ];
-  let rocksSvg = '';
-  rockPositions.forEach((r, i) => {
-    rocksSvg += rockCluster(r.cx, r.cy, r.s, i * 13 + 7);
-  });
-
-  // Grass detail patches
-  let grassSvg = '';
-  const grassPositions = [
-    { cx: 780, cy: 260 }, { cx: 1140, cy: 260 }, { cx: 780, cy: 820 }, { cx: 1140, cy: 820 },
-    { cx: 600, cy: 540 }, { cx: 1320, cy: 540 },
-    { cx: 750, cy: 450 }, { cx: 1170, cy: 450 }, { cx: 750, cy: 630 }, { cx: 1170, cy: 630 },
-    { cx: 900, cy: 350 }, { cx: 1020, cy: 350 }, { cx: 900, cy: 730 }, { cx: 1020, cy: 730 },
-  ];
-  grassPositions.forEach((g, i) => {
-    grassSvg += grassPatch(g.cx, g.cy, 20, i * 7 + 11);
-  });
-
-  // Flower spots
-  let flowersSvg = '';
-  const flowerPositions = [
-    { cx: 750, cy: 500 }, { cx: 1170, cy: 500 },
-    { cx: 860, cy: 380 }, { cx: 1060, cy: 700 },
-    { cx: 550, cy: 450 }, { cx: 1370, cy: 450 },
-    { cx: 550, cy: 630 }, { cx: 1370, cy: 630 },
-  ];
-  flowerPositions.forEach((f, i) => {
-    flowersSvg += flowers(f.cx, f.cy, 4, i * 11 + 5);
-  });
-
-  // Lane paths (dirt roads connecting the two sides)
-  const laneColor = '#a08b5e';
-  const laneBorder = '#7a6840';
-
-  return svg(`${sheetRect.x} ${sheetRect.y} ${view.width} ${view.height}`, `
+export function arenaMapArtMoba(view: MapViewSize = GAME_RULES.map, quality: ArtQuality = 'high', nature = true) {
+  const key = `${view.width}:${view.height}:${quality}:${nature}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
+  const { width: W, height: H } = GAME_RULES.map;
+  const x = (W - view.width) / 2, y = (H - view.height) / 2;
+  const full = `x="${x}" y="${y}" width="${view.width}" height="${view.height}"`;
+  const coast = 'M' + coastline(640).map(p => `${n(p.x)} ${n(p.y)}`).join('L') + 'Z';
+  const shore = coastSamples(220).map(p => ({ x: p.x + p.nx * p.margin, y: p.y + p.ny * p.margin, nx: p.nx, ny: p.ny }));
+  const shorelineStone = shore.map((p, i) => {
+    const q = shore[(i + 1) % shore.length];
+    const depth = 7 + noise(i + 82) * 7;
+    return `<path d="M${n(p.x)} ${n(p.y)}L${n(q.x)} ${n(q.y)} ${n(q.x + 3)} ${n(q.y + depth)} ${n(p.x + 3)} ${n(p.y + depth)}Z" fill="${['#4f686a', '#6c7c72', '#3a585e', '#8e9680'][i % 4]}" stroke="#3d5c5e" stroke-width=".6"/>`;
+  }).join('');
+  const density = quality === 'low' ? 75 : quality === 'medium' ? 135 : 210;
+  const tonalMasses = Array.from({ length: quality === 'low' ? 24 : 42 }, (_, i) => {
+    const px = 160 + noise(i * 3 + 651) * 710, py = 155 + noise(i * 3 + 652) * 770;
+    const size = 70 + noise(i * 3 + 653) * 110;
+    const shape = `<path d="M-1-.48C-.4-.8-.15-.42.17-.55S.83-.38 1-.08 .53.27.45.46-.19.38-.43.56-1.07.03-1-.48Z" fill="url(#${i % 3 ? 'sun-grass' : 'deep-grass'})"/>`;
+    return `<g transform="translate(${n(px)} ${n(py)}) scale(${n(size)} ${n(size * .57)})">${shape}</g><g transform="translate(${n(W - px)} ${n(py)}) scale(${n(size)} ${n(size * .57)})">${shape}</g>`;
+  }).join('');
+  const meadow = Array.from({ length: density }, (_, i) => {
+    const px = 200 + noise(i * 2) * 1520, py = 175 + noise(i * 2 + 1) * 720;
+    const size = 15 + noise(i + 701) * 25;
+    return `<ellipse cx="${n(px)}" cy="${n(py)}" rx="${n(size)}" ry="${n(size * .45)}" fill="${i % 3 ? '#a1b277' : '#365e43'}" opacity=".07"/>
+      ${nature ? `<path d="M${n(px)} ${n(py)}l-2-5m3 5 2-7m0 7 4-3" fill="none" stroke="#b2bc7a" stroke-width="1" opacity=".35"/>` : ''}`;
+  }).join('');
+  // Tall groves are confined to actual blocked footprints and the shore, never fake lane obstacles.
+  const ridgeTrees = nature ? MOUNTAIN_RIDGES.map((r, i) =>
+    Array.from({ length: quality === 'low' ? 2 : 4 }, (_, j) => pine(r.cx - r.rx * .5 + j * r.rx * .28, r.cy - r.ry * .35, .5 + noise(i + j + 300) * .22, j)).join('')
+  ).join('') : '';
+  const coastTrees = nature ? shore.filter((_, i) => i % (quality === 'low' ? 16 : 12) === 0).map((p, i) => {
+    const count = quality === 'low' ? 3 : 5;
+    const group = Array.from({ length: count }, (_, j) => {
+      const along = (j - count / 2) * 14;
+      const inward = 7 + noise(i * 7 + j) * 20;
+      return { x: p.x - p.ny * along - p.nx * inward, y: p.y + p.nx * along - p.ny * inward, scale: .8 + noise(i * 11 + j) * .65 };
+    }).sort((a, b) => a.y - b.y);
+    return group.map((g, j) => pine(g.x, g.y, g.scale, i + j)).join('');
+  }).join('') : '';
+  const markup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${view.width} ${view.height}">
     <defs>
-      <path id="moba-coast" d="${coastPath(samples, 0, 2.2, 7)}"/>
-      <clipPath id="moba-land"><use href="#moba-coast"/></clipPath>
-      <clipPath id="moba-view"><rect x="${sheetRect.x}" y="${sheetRect.y}" width="${view.width}" height="${view.height}"/></clipPath>
-
-      <!-- Water gradient: deep ocean -->
-      <radialGradient id="moba-ocean" cx=".5" cy=".5" r=".72">
-        <stop offset="0" stop-color="#1a5276" stop-opacity=".6"/>
-        <stop offset=".5" stop-color="#154360"/>
-        <stop offset="1" stop-color="#0b2e47"/>
-      </radialGradient>
-      <linearGradient id="moba-water-surface" x1="0" y1="0" x2=".3" y2="1">
-        <stop offset="0" stop-color="#2980b9" stop-opacity=".4"/>
-        <stop offset=".5" stop-color="#3498db" stop-opacity=".25"/>
-        <stop offset="1" stop-color="#1a6fa0" stop-opacity=".35"/>
-      </linearGradient>
-
-      <!-- Grass gradients per side -->
-      <linearGradient id="moba-blue-grass" x1="0" x2="1" y1="0" y2="0">
-        <stop offset="0" stop-color="#2d7a3a"/>
-        <stop offset=".4" stop-color="#3a9148"/>
-        <stop offset=".7" stop-color="#48a356"/>
-        <stop offset="1" stop-color="#55b060"/>
-      </linearGradient>
-      <linearGradient id="moba-red-grass" x1="1" x2="0" y1="0" y2="0">
-        <stop offset="0" stop-color="#7a3a2d"/>
-        <stop offset=".15" stop-color="#5a4a30"/>
-        <stop offset=".4" stop-color="#3a8945"/>
-        <stop offset="1" stop-color="#358040"/>
-      </linearGradient>
-      <linearGradient id="moba-grass" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#3e9e4a"/>
-        <stop offset=".35" stop-color="#2d8a3c"/>
-        <stop offset=".65" stop-color="#2a7d38"/>
-        <stop offset="1" stop-color="#256e32"/>
-      </linearGradient>
-
-      <!-- River gradient -->
-      <linearGradient id="moba-river" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#5bc0de" stop-opacity=".95"/>
-        <stop offset=".3" stop-color="#4db8d6"/>
-        <stop offset=".5" stop-color="#3aadcc"/>
-        <stop offset=".7" stop-color="#4db8d6"/>
-        <stop offset="1" stop-color="#5bc0de" stop-opacity=".95"/>
-      </linearGradient>
-      <linearGradient id="moba-river-glow" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#8be4f7" stop-opacity=".4"/>
-        <stop offset=".5" stop-color="#a8ecfa" stop-opacity=".2"/>
-        <stop offset="1" stop-color="#8be4f7" stop-opacity=".4"/>
-      </linearGradient>
-
-      <!-- Lane path gradient -->
-      <linearGradient id="moba-lane" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stop-color="#c4a86a"/>
-        <stop offset=".5" stop-color="#d4bc7e"/>
-        <stop offset="1" stop-color="#b89a5c"/>
-      </linearGradient>
-
-      <!-- Grass texture pattern -->
-      <pattern id="moba-grass-tex" width="48" height="40" patternUnits="userSpaceOnUse">
-        <path d="M6 18l2-9 2 9M28 8l2-7 2 7M18 32l2-8 2 8M40 22l1.5-6 1.5 6" fill="none" stroke="#6fd07a" stroke-width="1.2" stroke-linecap="round" opacity=".32"/>
-        <circle cx="14" cy="12" r="1.2" fill="#1e6e30" opacity=".35"/>
-        <circle cx="36" cy="34" r="1" fill="#8ce098" opacity=".22"/>
-      </pattern>
-
-      <!-- Dark grass variation pattern -->
-      <pattern id="moba-dark-grass" width="60" height="52" patternUnits="userSpaceOnUse">
-        <path d="M8 20c4-6 8-6 12 0M32 38c3-4 7-4 10 0M44 12c3-5 7-5 10 0" fill="none" stroke="#1b5c28" stroke-width="2" opacity=".18"/>
-        <circle cx="22" cy="8" r="1.5" fill="#225e2f" opacity=".3"/>
-        <circle cx="50" cy="28" r="1" fill="#72c97e" opacity=".2"/>
-      </pattern>
-
-      <!-- Cliff/elevation edge effect -->
-      <filter id="moba-cliff-shadow" x="-10%" y="-10%" width="130%" height="130%">
-        <feGaussianBlur stdDeviation="6"/>
-      </filter>
-      <filter id="moba-soft" x="-20%" y="-20%" width="140%" height="140%">
-        <feGaussianBlur stdDeviation="3"/>
-      </filter>
-
-      <!-- Water caustics pattern -->
-      <pattern id="moba-caustics" width="80" height="60" patternUnits="userSpaceOnUse">
-        <path d="M10 20c12-8 28-8 40 0M5 45c15-10 35-10 50 0M30 8c8-5 18-5 26 0" fill="none" stroke="#a8ecfa" stroke-width="2.5" opacity=".18" stroke-linecap="round"/>
-        <circle cx="60" cy="30" r="2" fill="#cef5ff" opacity=".12"/>
-      </pattern>
-
-      <!-- Terrain vignette -->
-      <radialGradient id="moba-vignette" cx=".5" cy=".5" r=".72">
-        <stop offset=".5" stop-color="#000" stop-opacity="0"/>
-        <stop offset="1" stop-color="#000" stop-opacity=".28"/>
-      </radialGradient>
-
-      <!-- Blue team territory highlight -->
-      <linearGradient id="moba-blue-tint" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stop-color="#3498db" stop-opacity=".06"/>
-        <stop offset=".6" stop-color="#3498db" stop-opacity=".02"/>
-        <stop offset="1" stop-color="#3498db" stop-opacity="0"/>
-      </linearGradient>
-      <!-- Red team territory highlight -->
-      <linearGradient id="moba-red-tint" x1="1" y1="0" x2="0" y2="0">
-        <stop offset="0" stop-color="#e74c3c" stop-opacity=".06"/>
-        <stop offset=".6" stop-color="#e74c3c" stop-opacity=".02"/>
-        <stop offset="1" stop-color="#e74c3c" stop-opacity="0"/>
-      </linearGradient>
+      <path id="fantasy-coast" d="${coast}"/>
+      <clipPath id="fantasy-land"><use href="#fantasy-coast"/></clipPath>
+      <linearGradient id="sea" x2=".3" y2="1"><stop stop-color="#163d50"/><stop offset=".55" stop-color="#205566"/><stop offset="1" stop-color="#112f40"/></linearGradient>
+      <linearGradient id="meadow" x2=".2" y2="1"><stop stop-color="#758a59"/><stop offset=".4" stop-color="#617d50"/><stop offset="1" stop-color="#496b4c"/></linearGradient>
+      <radialGradient id="sun-grass"><stop stop-color="#a9b779" stop-opacity=".35"/><stop offset=".67" stop-color="#8fa56c" stop-opacity=".2"/><stop offset="1" stop-color="#8fa56c" stop-opacity="0"/></radialGradient>
+      <radialGradient id="deep-grass"><stop stop-color="#294f3c" stop-opacity=".32"/><stop offset=".72" stop-color="#40664a" stop-opacity=".19"/><stop offset="1" stop-color="#40664a" stop-opacity="0"/></radialGradient>
+      <pattern id="grass-grain" width="58" height="43" patternUnits="userSpaceOnUse"><path d="M4 15l5-2m19 16 8-2m11-19 3-1M15 40l4-2" stroke="#b2bd88" opacity=".18"/><circle cx="35" cy="10" r="1" fill="#365641" opacity=".25"/></pattern>
+      <pattern id="water-ripples" width="94" height="64" patternUnits="userSpaceOnUse"><path d="M3 16q16-5 32 0m22 21q17-5 34 0M9 56q13-3 26 0" fill="none" stroke="#a1d6cf" stroke-width="1.4" opacity=".22"/></pattern>
+      <pattern id="paving" width="32" height="23" patternUnits="userSpaceOnUse"><path d="M1 3L16 1l-1 9-13 1Zm18-1 12 2-2 7-11-1ZM1 14l10-1 2 8H2Zm14-1 14 1 1 7-15 1Z" fill="#929a82" stroke="#697762" stroke-width=".8"/><path d="M3 4l10-2m7 1 8 2M3 15h6m8-1 10 1" stroke="#c8c3a3" opacity=".5"/></pattern>
+      <radialGradient id="edge-shade"><stop offset=".6" stop-color="#112d32" stop-opacity="0"/><stop offset="1" stop-color="#0a2230" stop-opacity=".28"/></radialGradient>
     </defs>
-
-    <!-- Deep ocean background -->
-    <rect ${full} fill="#0b2e47"/>
-    <rect ${full} fill="url(#moba-ocean)"/>
-    <rect ${full} fill="url(#moba-water-surface)"/>
-
-    <g clip-path="url(#moba-view)">
-      <!-- Animated water wave lines -->
-      <g fill="none" stroke="#5dbed4" stroke-linecap="round" opacity=".22">
-        <path d="M60 200c55-28 115-26 172 3s120 28 175-2" stroke-width="5"/>
-        <path d="M1500 260c48-22 102-20 150 5s105 24 162-3" stroke-width="4.5"/>
-        <path d="M90 840c62-25 125-22 185 8s115 25 168-3" stroke-width="5"/>
-        <path d="M1440 880c54-28 108-26 164 2s110 26 164-4" stroke-width="5"/>
-        <path d="M300 540c32-16 68-14 100 4s64 17 94-2" stroke-width="3.5"/>
-        <path d="M1420 560c32-16 68-14 100 4s64 17 94-2" stroke-width="3.5"/>
-      </g>
-
-      <!-- Island shadow -->
-      <use href="#moba-coast" fill="#041520" opacity=".4" filter="url(#moba-cliff-shadow)" transform="translate(0 10)"/>
-
-      <!-- Cliff edge (darker ring around island) -->
-      <use href="#moba-coast" fill="none" stroke="#1a4a2a" stroke-width="18" stroke-linejoin="round"/>
-      <use href="#moba-coast" fill="none" stroke="#22633a" stroke-width="12" stroke-linejoin="round"/>
-
-      <!-- Main island grass base -->
-      <use href="#moba-coast" fill="url(#moba-grass)"/>
-
-      <g clip-path="url(#moba-land)">
-        <!-- Grass texture overlay -->
-        <use href="#moba-coast" fill="url(#moba-grass-tex)" opacity=".6"/>
-        <use href="#moba-coast" fill="url(#moba-dark-grass)" opacity=".5"/>
-
-        <!-- Blue territory tint -->
-        <rect x="${blueLand.minX}" y="${blueLand.minY}" width="${blueLand.maxX - blueLand.minX}" height="${blueLand.maxY - blueLand.minY}" fill="url(#moba-blue-tint)"/>
-        <!-- Red territory tint -->
-        <rect x="${redLand.minX}" y="${redLand.minY}" width="${redLand.maxX - redLand.minX}" height="${redLand.maxY - redLand.minY}" fill="url(#moba-red-tint)"/>
-
-        <!-- Terrain elevation zones (subtle darker patches for depth) -->
-        <ellipse cx="${W * 0.22}" cy="${H * 0.28}" rx="120" ry="80" fill="#1a5c28" opacity=".15"/>
-        <ellipse cx="${W * 0.78}" cy="${H * 0.28}" rx="120" ry="80" fill="#1a5c28" opacity=".15"/>
-        <ellipse cx="${W * 0.22}" cy="${H * 0.72}" rx="120" ry="80" fill="#1a5c28" opacity=".15"/>
-        <ellipse cx="${W * 0.78}" cy="${H * 0.72}" rx="120" ry="80" fill="#1a5c28" opacity=".15"/>
-
-        <!-- ==================== RIVER (Neutral Zone) ==================== -->
-        <!-- River bed shadow -->
-        <rect x="${riverLeft - 8}" y="${sheetRect.y}" width="${riverW + 16}" height="${view.height}" fill="#0a3040" opacity=".3" filter="url(#moba-soft)"/>
-
-        <!-- River banks (earth edges) -->
-        <rect x="${riverLeft - 5}" y="${sheetRect.y}" width="10" height="${view.height}" fill="#5a7a3a" opacity=".5"/>
-        <rect x="${riverRight - 5}" y="${sheetRect.y}" width="10" height="${view.height}" fill="#5a7a3a" opacity=".5"/>
-
-        <!-- Main river body -->
-        <rect x="${riverLeft}" y="${sheetRect.y}" width="${riverW}" height="${view.height}" fill="url(#moba-river)"/>
-        <rect x="${riverLeft}" y="${sheetRect.y}" width="${riverW}" height="${view.height}" fill="url(#moba-river-glow)"/>
-        <rect x="${riverLeft}" y="${sheetRect.y}" width="${riverW}" height="${view.height}" fill="url(#moba-caustics)" opacity=".8"/>
-
-        <!-- River shimmer highlights -->
-        <g fill="none" stroke="#c8f0fa" stroke-linecap="round" opacity=".25">
-          <path d="M${riverCx - 20} ${H * 0.15}c8-4 18-4 26 0s18 4 24 0" stroke-width="3"/>
-          <path d="M${riverCx - 15} ${H * 0.35}c6-3 14-3 20 0s14 3 18 0" stroke-width="2.5"/>
-          <path d="M${riverCx - 22} ${H * 0.55}c10-5 22-5 32 0" stroke-width="3"/>
-          <path d="M${riverCx - 12} ${H * 0.75}c8-4 16-4 24 0" stroke-width="2.5"/>
-          <path d="M${riverCx - 18} ${H * 0.9}c8-4 20-4 28 0s16 4 22 0" stroke-width="2.8"/>
-        </g>
-
-        <!-- River rocks -->
-        <g>
-          <ellipse cx="${riverCx - 15}" cy="${H * 0.25}" rx="8" ry="5" fill="#5a7a78" stroke="#3a5a58" stroke-width="1.5" opacity=".6"/>
-          <ellipse cx="${riverCx + 18}" cy="${H * 0.5}" rx="10" ry="6" fill="#5a7a78" stroke="#3a5a58" stroke-width="1.5" opacity=".55"/>
-          <ellipse cx="${riverCx - 10}" cy="${H * 0.78}" rx="7" ry="4.5" fill="#5a7a78" stroke="#3a5a58" stroke-width="1.5" opacity=".6"/>
-        </g>
-
-        <!-- ==================== LANES (Dirt Paths) ==================== -->
-        <!-- Top lane -->
-        <path d="M${blueLand.maxX - 150} ${H * 0.22} C${blueLand.maxX - 60} ${H * 0.20} ${riverLeft - 20} ${H * 0.18} ${riverCx} ${H * 0.16} C${riverRight + 20} ${H * 0.18} ${redLand.minX + 60} ${H * 0.20} ${redLand.minX + 150} ${H * 0.22}"
-          fill="none" stroke="${laneBorder}" stroke-width="28" stroke-linecap="round" opacity=".35"/>
-        <path d="M${blueLand.maxX - 150} ${H * 0.22} C${blueLand.maxX - 60} ${H * 0.20} ${riverLeft - 20} ${H * 0.18} ${riverCx} ${H * 0.16} C${riverRight + 20} ${H * 0.18} ${redLand.minX + 60} ${H * 0.20} ${redLand.minX + 150} ${H * 0.22}"
-          fill="none" stroke="url(#moba-lane)" stroke-width="22" stroke-linecap="round" opacity=".7"/>
-
-        <!-- Mid lane -->
-        <path d="M${blueLand.maxX - 130} ${H * 0.5} L${riverLeft} ${H * 0.5} M${riverRight} ${H * 0.5} L${redLand.minX + 130} ${H * 0.5}"
-          fill="none" stroke="${laneBorder}" stroke-width="30" stroke-linecap="round" opacity=".35"/>
-        <path d="M${blueLand.maxX - 130} ${H * 0.5} L${riverLeft} ${H * 0.5} M${riverRight} ${H * 0.5} L${redLand.minX + 130} ${H * 0.5}"
-          fill="none" stroke="url(#moba-lane)" stroke-width="24" stroke-linecap="round" opacity=".7"/>
-
-        <!-- Bot lane -->
-        <path d="M${blueLand.maxX - 150} ${H * 0.78} C${blueLand.maxX - 60} ${H * 0.80} ${riverLeft - 20} ${H * 0.82} ${riverCx} ${H * 0.84} C${riverRight + 20} ${H * 0.82} ${redLand.minX + 60} ${H * 0.80} ${redLand.minX + 150} ${H * 0.78}"
-          fill="none" stroke="${laneBorder}" stroke-width="28" stroke-linecap="round" opacity=".35"/>
-        <path d="M${blueLand.maxX - 150} ${H * 0.78} C${blueLand.maxX - 60} ${H * 0.80} ${riverLeft - 20} ${H * 0.82} ${riverCx} ${H * 0.84} C${riverRight + 20} ${H * 0.82} ${redLand.minX + 60} ${H * 0.80} ${redLand.minX + 150} ${H * 0.78}"
-          fill="none" stroke="url(#moba-lane)" stroke-width="22" stroke-linecap="round" opacity=".7"/>
-
-        <!-- Lane dust/wear marks -->
-        <g fill="none" stroke="#e8d8a8" stroke-width="2" stroke-dasharray="3 12" opacity=".2" stroke-linecap="round">
-          <path d="M${blueLand.maxX - 120} ${H * 0.5} L${riverLeft + 5} ${H * 0.5}"/>
-          <path d="M${riverRight - 5} ${H * 0.5} L${redLand.minX + 120} ${H * 0.5}"/>
-        </g>
-
-        <!-- ==================== JUNGLE FORESTS ==================== -->
-        ${grovesSvg}
-
-        <!-- ==================== ROCKS & DETAILS ==================== -->
-        ${rocksSvg}
-
-        <!-- Grass blades -->
-        ${grassSvg}
-
-        <!-- Flowers -->
-        ${flowersSvg}
-
-        <!-- ==================== TERRITORY MARKERS ==================== -->
-        <!-- Blue territory marker -->
-        <g opacity=".75">
-          <rect x="${(blueLand.minX + blueLand.maxX) / 2 - 70}" y="${H * 0.47}" width="140" height="28" rx="14" fill="#1a3a7a" opacity=".5"/>
-          <text x="${(blueLand.minX + blueLand.maxX) / 2}" y="${H * 0.5 + 2}" text-anchor="middle" font-size="16" font-weight="bold" letter-spacing="4" fill="#6cb4f0" font-family="'Segoe UI', Arial, sans-serif" paint-order="stroke" stroke="#0a1a3a" stroke-width="3">BLUE</text>
-        </g>
-        <!-- Red territory marker -->
-        <g opacity=".75">
-          <rect x="${(redLand.minX + redLand.maxX) / 2 - 70}" y="${H * 0.47}" width="140" height="28" rx="14" fill="#7a2a1a" opacity=".5"/>
-          <text x="${(redLand.minX + redLand.maxX) / 2}" y="${H * 0.5 + 2}" text-anchor="middle" font-size="16" font-weight="bold" letter-spacing="4" fill="#f06c6c" font-family="'Segoe UI', Arial, sans-serif" paint-order="stroke" stroke="#3a0a0a" stroke-width="3">RED</text>
-        </g>
-
-        <!-- ==================== MINI-MAP STYLE BORDER LINES ==================== -->
-        <!-- Front lines (territory boundaries) - subtle MOBA-style -->
-        <path d="M${blueLand.maxX} ${blueLand.minY} V${blueLand.maxY}" stroke="#4a90d9" stroke-width="2.5" stroke-dasharray="10 6" opacity=".35"/>
-        <path d="M${redLand.minX} ${redLand.minY} V${redLand.maxY}" stroke="#d94a4a" stroke-width="2.5" stroke-dasharray="10 6" opacity=".35"/>
-      </g>
-
-      <!-- Island shoreline (clean crisp edge) -->
-      <use href="#moba-coast" fill="none" stroke="#1a4a2a" stroke-width="3" stroke-linejoin="round" opacity=".6"/>
-
-      <!-- Beach foam at the coast -->
-      <use href="#moba-coast" fill="none" stroke="#a8d8e8" stroke-width="6" stroke-linejoin="round" opacity=".12"/>
-
-      <!-- Vignette overlay for depth -->
-      <rect ${full} fill="url(#moba-vignette)"/>
+    <rect ${full} fill="url(#sea)"/>
+    <rect ${full} fill="url(#water-ripples)" opacity=".6"/>
+    <use href="#fantasy-coast" transform="translate(5 11)" fill="#142e36" stroke="#122f38" stroke-width="24" opacity=".55"/>
+    <use href="#fantasy-coast" fill="#68796a" stroke="#77a2a0" stroke-width="13"/>
+    ${shorelineStone}
+    <use href="#fantasy-coast" fill="url(#meadow)"/>
+    <g clip-path="url(#fantasy-land)">
+      <use href="#fantasy-coast" fill="none" stroke="#a6ad83" stroke-width="12" opacity=".48"/>
+      <use href="#fantasy-coast" fill="url(#grass-grain)"/>
+      ${tonalMasses}
+      ${meadow}
+      ${basePaving('blue')}${basePaving('red')}
+      ${blockedRidgesArt('moba')}
+      ${nature ? `<g data-nature="true">${ridgeTrees}${coastTrees}</g>` : ''}
     </g>
-  `);
+    <use href="#fantasy-coast" fill="none" stroke="#d0d4b5" stroke-width="2" opacity=".48"/>
+    <rect ${full} fill="url(#edge-shade)"/>
+  </svg>`;
+  cache.set(key, markup);
+  if (cache.size > 3) cache.delete(cache.keys().next().value!);
+  return markup;
 }

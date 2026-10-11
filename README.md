@@ -8,7 +8,12 @@ Arena Kingdom is a lightweight, web-first 2D real-time strategy game built aroun
 
 Players manage economy, build structures, recruit armies and command troops to destroy the enemy main castle.
 
-## What's in v0.2
+## What's in v0.8
+
+- Original fantasy MOBA terrain and the complete illustrated army/building roster; dark brass HUD, minimap, camera zoom/pan and touch camera mode
+- Low/Medium/High graphics, independent nature/weather controls, reduced motion and a stable end-of-match recap
+- Versioned snapshots, visibility-safe orders and private opponent economy; server-owned ranked queue and one active online match per account
+- Read [the implementation plan](docs/IMPLEMENTATION_PLAN.vi.md) and [verified release report](docs/IMPLEMENTATION_RESULT.vi.md) for scope and remaining roadmap work
 
 **Game**
 
@@ -48,7 +53,8 @@ Open http://localhost:5173. See [RUNNING.md](RUNNING.md) for details, production
 | `npm run dev`      | Shared engine watcher + client (5173) + server (2567)    |
 | `npm run build`    | Production build of all workspaces                       |
 | `npm start`        | Serve the built client, API and game rooms on one port   |
-| `npm test`         | Engine and AI tests                                      |
+| `npm test`         | Engine, presentation logic and server integration tests  |
+| `npm run qa`       | Static checks, typecheck, tests, build and asset budgets  |
 | `npm run simulate` | Headless bot-vs-bot matches, e.g. `-- hard normal 20`    |
 
 ## Project layout

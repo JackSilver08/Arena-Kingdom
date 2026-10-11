@@ -15,11 +15,14 @@ const required = [
   'docs/BATTLE_DOCUMENTARY_PHASE1.md',
   'docs/BATTLE_DOCUMENTARY_PHASE4.md',
   'docs/BATTLE_DOCUMENTARY_PHASE5.md',
-  'docs/BATTLE_DOCUMENTARY_PHASE6.md'
+  'docs/BATTLE_DOCUMENTARY_PHASE6.md',
+  'docs/GRAPHICS_MOBA_UPGRADE.vi.md',
+  'docs/IMPLEMENTATION_PLAN.vi.md'
 ];
 
 const checks = [
-  ['documentary map style', "mapStyle: 'documentary'", 'client/src/game/displaySettings.ts'],
+  ['default fantasy MOBA map style', "mapStyle: 'moba'", 'client/src/game/displaySettings.ts'],
+  ['legacy documentary map style available', "'documentary'", 'client/src/game/displaySettings.ts'],
   ['vintage map style', "'vintage'", 'client/src/game/mapArt.ts'],
   ['frontline depth below entities', 'frontline:', 'client/src/game/visuals.ts'],
   ['command arrow depth below entities', 'arrows:', 'client/src/game/visuals.ts'],
@@ -49,9 +52,9 @@ if (battleScene.includes('Math.min(start.y, x) && Math.min(start.y, y)')) {
 }
 
 if (failures.length) {
-  console.error('[documentary] FAIL');
+  console.error('[arena QA] FAIL');
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
 
-console.log(`[documentary] PASS: ${required.length} required files and ${checks.length + 1} regression checks`);
+console.log(`[arena QA] PASS: ${required.length} required files and ${checks.length + 1} regression checks`);

@@ -1,6 +1,6 @@
-import Phaser from 'phaser';
-import { GAME_RULES } from '@arena-kingdom/shared';
-import { BATTLE_DEPTH } from './visuals';
+import Phaser from "phaser";
+import { GAME_RULES } from "@arena-kingdom/shared";
+import { BATTLE_DEPTH } from "./visuals";
 
 interface ForestGrove {
   cx: number;
@@ -8,7 +8,14 @@ interface ForestGrove {
   radius: number;
   phase: number;
   treeCount: number;
-  trees: { ox: number; oy: number; r: number; color: number; stroke: number; swayScale: number }[];
+  trees: {
+    ox: number;
+    oy: number;
+    r: number;
+    color: number;
+    stroke: number;
+    swayScale: number;
+  }[];
 }
 
 interface DriftingLeaf {
@@ -42,7 +49,9 @@ export class LivingForestOverlay {
 
   constructor(private readonly scene: Phaser.Scene) {
     this.graphics = scene.add.graphics().setDepth(BATTLE_DEPTH.terrain + 2);
-    this.leafGraphics = scene.add.graphics().setDepth(BATTLE_DEPTH.effects - 20);
+    this.leafGraphics = scene.add
+      .graphics()
+      .setDepth(BATTLE_DEPTH.effects - 20);
 
     this.initGroves();
     this.initLeaves();
@@ -56,19 +65,19 @@ export class LivingForestOverlay {
       { cx: 520, cy: 820, r: 68, count: 10 },
       { cx: 640, cy: 780, r: 56, count: 8 },
       { cx: 350, cy: 380, r: 58, count: 8 },
-      { cx: 340, cy: 700, r: 58, count: 8 }
+      { cx: 340, cy: 700, r: 58, count: 8 },
     ];
 
     const allBases = [
       ...groveBases.map((b) => ({ ...b, mirror: false })),
-      ...groveBases.map((b) => ({ ...b, cx: W - b.cx, mirror: true }))
+      ...groveBases.map((b) => ({ ...b, cx: W - b.cx, mirror: true })),
     ];
 
     const treeFills = [0x788c58, 0x6e824e, 0x829562, 0x5e7240];
     const treeStrokes = [0x3c4928, 0x344022, 0x465430];
 
     for (const base of allBases) {
-      const trees: ForestGrove['trees'] = [];
+      const trees: ForestGrove["trees"] = [];
       for (let i = 0; i < base.count; i++) {
         const angle = (i / base.count) * Math.PI * 2 + (i % 2) * 0.4;
         const dist = (i === 0 ? 0 : 0.35 + (i % 3) * 0.22) * base.r;
@@ -78,7 +87,7 @@ export class LivingForestOverlay {
           r: 12 + (i % 4) * 3,
           color: treeFills[i % treeFills.length],
           stroke: treeStrokes[i % treeStrokes.length],
-          swayScale: 0.8 + (i % 3) * 0.3
+          swayScale: 0.8 + (i % 3) * 0.3,
         });
       }
       this.groves.push({
@@ -87,7 +96,7 @@ export class LivingForestOverlay {
         radius: base.r,
         phase: (base.cx * 0.05 + base.cy * 0.03) % (Math.PI * 2),
         treeCount: base.count,
-        trees
+        trees,
       });
     }
   }
@@ -104,7 +113,7 @@ export class LivingForestOverlay {
         vRot: (Math.random() - 0.5) * 3,
         scale: 0.6 + Math.random() * 0.6,
         alpha: 0.35 + Math.random() * 0.4,
-        color: leafColors[i % leafColors.length]
+        color: leafColors[i % leafColors.length],
       });
     }
   }
@@ -141,8 +150,13 @@ export class LivingForestOverlay {
       for (const tree of grove.trees) {
         const sway = reducedMotion
           ? 0
-          : Math.sin(t * 2.1 + grove.phase + tree.ox * 0.05) * 3.5 * strength * tree.swayScale;
-        const swayY = reducedMotion ? 0 : Math.cos(t * 1.7 + grove.phase) * 1.5 * strength * tree.swayScale;
+          : Math.sin(t * 2.1 + grove.phase + tree.ox * 0.05) *
+            3.5 *
+            strength *
+            tree.swayScale;
+        const swayY = reducedMotion
+          ? 0
+          : Math.cos(t * 1.7 + grove.phase) * 1.5 * strength * tree.swayScale;
 
         const tx = grove.cx + tree.ox + cosW * sway;
         const ty = grove.cy + tree.oy + sinW * sway + swayY;
@@ -166,6 +180,7 @@ export class LivingForestOverlay {
     }
 
     // 2. Draw Drifting Leaves
+    this.leafGraphics.clear();
     if (!reducedMotion) {
       const lg = this.leafGraphics;
       lg.clear();
@@ -174,8 +189,14 @@ export class LivingForestOverlay {
       const speedMult = strength;
 
       for (const leaf of this.leaves) {
-        leaf.x += (cosW * leaf.vx + Math.sin(t * 3 + leaf.y * 0.02) * 12) * dt * speedMult;
-        leaf.y += (sinW * leaf.vy + Math.cos(t * 2 + leaf.x * 0.02) * 8) * dt * speedMult;
+        leaf.x +=
+          (cosW * leaf.vx + Math.sin(t * 3 + leaf.y * 0.02) * 12) *
+          dt *
+          speedMult;
+        leaf.y +=
+          (sinW * leaf.vy + Math.cos(t * 2 + leaf.x * 0.02) * 8) *
+          dt *
+          speedMult;
         leaf.rotation += leaf.vRot * dt;
 
         // Wrap around world edges

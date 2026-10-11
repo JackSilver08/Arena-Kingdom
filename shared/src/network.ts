@@ -1,6 +1,7 @@
 import {
   STAT_KEYS,
   emptyStats,
+  FORMATIONS,
   type BuildingType,
   type EndReason,
   type GameEvent,
@@ -12,6 +13,8 @@ import {
 } from './types.js';
 
 /** Compact wire format for match state; flat number arrays keep messages small. */
+export const SNAPSHOT_PROTOCOL_VERSION = 6;
+
 export interface EncodedSnapshot {
   /** Wire format version. Omitted on legacy snapshots. */
   v?: number;
@@ -39,17 +42,21 @@ export function encodeSnapshot(view: MatchView, events: GameEvent[]): EncodedSna
   const p: number[] = [];
   for (const side of SIDE_CODES) {
     const player = view.players[side];
-    p.push(player.gold, player.income, ...STAT_KEYS.map((key) => round(player.stats[key])));
+    const disclosed = player.privateInfoVisible !== false;
+    p.push(disclosed ? 1 : 0, disclosed ? player.gold : 0, disclosed ? player.income : 0,
+      ...STAT_KEYS.map((key) => disclosed ? round(player.stats[key]) : 0));
   }
   const u: number[] = [];
   for (const unit of view.units) {
+    const formation = unit.formation === undefined ? -1 : FORMATIONS.indexOf(unit.formation);
     const flags =
       SIDE_CODES.indexOf(unit.side) |
       (unit.moving ? 2 : 0) |
       (unit.attacking ? 4 : 0) |
       (UNIT_CODES.indexOf(unit.type) << 3) |
-      (unit.rearguard ? 32 : 0) |
-      (unit.retreating ? 64 : 0);
+      (unit.rearguard ? 64 : 0) |
+      (unit.retreating ? 128 : 0) |
+      (formation >= 0 ? 1024 | (formation << 8) : 0);
     u.push(unit.id, flags, round(unit.x), round(unit.y), Math.max(0, round(unit.hp)), unit.maxHp);
   }
   const b: number[] = [];
@@ -71,7 +78,7 @@ export function encodeSnapshot(view: MatchView, events: GameEvent[]): EncodedSna
     );
   }
   return {
-    v: 5,
+    v: SNAPSHOT_PROTOCOL_VERSION,
     t: round(view.timeMs),
     n: round(view.nextIncomeInMs),
     p,
@@ -88,15 +95,20 @@ function encodeResult(result: MatchResult): [number, number, number] {
 }
 
 export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events: GameEvent[] } {
+  if (snap.v !== SNAPSHOT_PROTOCOL_VERSION) {
+    throw new Error(`Unsupported snapshot protocol version ${snap.v ?? 'missing'}; expected ${SNAPSHOT_PROTOCOL_VERSION}. Update the client and server together.`);
+  }
   const statCount = STAT_KEYS.length;
   const players = {} as Record<Side, PlayerView>;
   SIDE_CODES.forEach((side, index) => {
-    const offset = index * (2 + statCount);
+    const offset = index * (3 + statCount);
+    const disclosed = snap.p[offset] === 1;
     const stats = emptyStats();
     STAT_KEYS.forEach((key, i) => {
-      stats[key] = snap.p[offset + 2 + i] ?? 0;
+      stats[key] = disclosed ? snap.p[offset + 3 + i] ?? 0 : 0;
     });
-    players[side] = { side, gold: snap.p[offset] ?? 0, income: snap.p[offset + 1] ?? 0, stats };
+    players[side] = { side, privateInfoVisible: disclosed,
+      gold: disclosed ? snap.p[offset + 1] ?? 0 : 0, income: disclosed ? snap.p[offset + 2] ?? 0 : 0, stats };
   });
 
   const units: MatchView['units'] = [];
@@ -108,8 +120,9 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       moving: (flags & 2) !== 0,
       attacking: (flags & 4) !== 0,
       type: UNIT_CODES[(flags >> 3) & 0x7] ?? 'soldier',
-      rearguard: snap.v !== undefined && snap.v >= 3 ? (flags & 32) !== 0 : undefined,
-      retreating: snap.v !== undefined && snap.v >= 3 ? (flags & 64) !== 0 : undefined,
+      formation: (flags & 1024) !== 0 ? FORMATIONS[(flags >> 8) & 0x3] : undefined,
+      rearguard: (flags & 64) !== 0,
+      retreating: (flags & 128) !== 0,
       x: snap.u[i + 2],
       y: snap.u[i + 3],
       hp: snap.u[i + 4],
@@ -118,7 +131,7 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
   }
 
   const buildings: MatchView['buildings'] = [];
-  const buildingFields = snap.v !== undefined && snap.v >= 2 ? BUILDING_FIELDS : 8;
+  const buildingFields = BUILDING_FIELDS;
   for (let i = 0; i + buildingFields <= snap.b.length; i += buildingFields) {
     const flags = snap.b[i + 1];
     const type = BUILDING_CODES[(flags >> 1) & 0x7] ?? 'village';
@@ -133,7 +146,7 @@ export function decodeSnapshot(snap: EncodedSnapshot): { view: MatchView; events
       maxHp: snap.b[i + 5],
       queue: snap.b[i + 6],
       trainProgress: snap.b[i + 7] / 100,
-      trainType: snap.v !== undefined && snap.v >= 2 && snap.b[i + 8] >= 0 ? UNIT_CODES[snap.b[i + 8]] ?? 'soldier' : null
+      trainType: snap.b[i + 8] >= 0 ? UNIT_CODES[snap.b[i + 8]] ?? 'soldier' : null
     });
   }
 

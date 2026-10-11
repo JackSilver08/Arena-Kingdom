@@ -1,6 +1,10 @@
 export type MapStyle = 'documentary' | 'vintage' | 'moba';
+export type GraphicsQuality = 'low' | 'medium' | 'high';
 export interface DisplaySettings {
   mapStyle: MapStyle;
+  quality: GraphicsQuality;
+  nature: boolean;
+  weather: boolean;
   overlays: boolean;
   formations: boolean;
   reducedMotion: boolean;
@@ -19,6 +23,9 @@ const prefersReducedMotion = () => {
 
 export const DEFAULT_DISPLAY_SETTINGS: Readonly<DisplaySettings> = {
   mapStyle: 'moba',
+  quality: 'medium',
+  nature: true,
+  weather: false,
   overlays: true,
   formations: false,
   reducedMotion: prefersReducedMotion()
@@ -33,6 +40,9 @@ function normalize(value: unknown): Partial<DisplaySettings> {
   const record = value as Record<string, unknown>;
   return {
     ...(isMapStyle(record.mapStyle) ? { mapStyle: record.mapStyle } : {}),
+    ...(['low', 'medium', 'high'].includes(record.quality as string) ? { quality: record.quality as GraphicsQuality } : {}),
+    ...(typeof record.nature === 'boolean' ? { nature: record.nature } : {}),
+    ...(typeof record.weather === 'boolean' ? { weather: record.weather } : {}),
     ...(typeof record.overlays === 'boolean' ? { overlays: record.overlays } : {}),
     ...(typeof record.formations === 'boolean' ? { formations: record.formations } : {}),
     ...(typeof record.reducedMotion === 'boolean' ? { reducedMotion: record.reducedMotion } : {})

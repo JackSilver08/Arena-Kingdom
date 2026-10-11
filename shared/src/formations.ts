@@ -5,6 +5,7 @@ export interface FormationDefinition {
   shortLabel: string;
   description: string;
   attackMultiplier: number;
+  /** Defensive strength: incoming damage is divided by this multiplier. Values >1 protect troops. */
   defenseMultiplier: number;
   speedMultiplier: number;
   spacing: number;

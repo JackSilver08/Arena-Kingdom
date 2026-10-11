@@ -1,9 +1,9 @@
 :root {
-  --bg: #050b14;
-  --bg-2: #081221;
-  --panel: rgba(12, 23, 39, 0.78);
-  --panel-2: rgba(17, 33, 55, 0.72);
-  --panel-solid: #0c1727;
+  --bg: #07131b;
+  --bg-2: #0b1a25;
+  --panel: rgba(12, 27, 38, 0.88);
+  --panel-2: rgba(22, 43, 53, 0.82);
+  --panel-solid: #0c1b26;
   --line: rgba(157, 204, 255, 0.15);
   --line-strong: rgba(183, 220, 255, 0.3);
   --text: #f1f7ff;
@@ -12,7 +12,7 @@
   --blue: #4ea7ff;
   --blue-2: #b7dcff;
   --red: #ff6f75;
-  --gold: #ffcc4d;
+  --gold: #d9bc78;
   --green: #62d68b;
   --danger: #ff737a;
   --radius: 18px;

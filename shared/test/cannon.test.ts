@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MatchEngine, UNIT_STATS, decodeSnapshot, encodeSnapshot } from '../src/index.js';
+import { FORMATION_STATS, MatchEngine, UNIT_STATS, decodeSnapshot, encodeSnapshot } from '../src/index.js';
 
 function run(engine: MatchEngine, ms: number) {
   for (let elapsed = 0; elapsed < ms; elapsed += 250) {
@@ -79,7 +79,8 @@ test('Cannon splash damage hits nearby enemies with falloff', () => {
 
   run(engine, 3500);
 
-  assert.ok(primary.hp <= 120, 'the primary target should take at least the configured 80 direct damage');
+  const directDamage = UNIT_STATS.cannon.attack.damage / FORMATION_STATS.line.defenseMultiplier;
+  assert.ok(Math.abs(primary.hp - (200 - directDamage)) < 1e-9, 'the primary shot applies the target formation defence');
   assert.ok(primary.hp > 0, 'the primary target should survive the first isolated shot');
   assert.ok(splash.hp < 200, 'nearby enemy should receive splash damage');
   assert.ok(splash.hp > primary.hp, 'splash damage should be weaker than direct damage');
@@ -127,6 +128,13 @@ test('Cannon can use its dedicated building damage', () => {
   for (const unit of engine.armyOf('red')) unit.hp = 0;
 
   const target = engine.buildingsOf('red', 'barracks')[0];
+  // A spotting Soldier permits firing beyond Cannon vision while inside siege range.
+  const spotter = engine.armyOf('blue').find((u) => u.id !== cannon.id)!;
+  spotter.hp = spotter.maxHp;
+  spotter.x = target.x - 130;
+  spotter.y = target.y;
+  spotter.order = { kind: 'move', x: spotter.x, y: spotter.y, attack: false };
+  spotter.cooldownMs = 999_999;
   cannon.x = target.x - 300;
   cannon.y = target.y;
   cannon.order = { kind: 'idle' };

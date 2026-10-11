@@ -9,12 +9,15 @@ const CONTROLS: [string, string][] = [
   ['Shift + Right-click', 'Move without stopping to fight — use it to retreat'],
   ['A', 'Select your whole army'],
   ['S', 'Selected soldiers hold position'],
-  ['B', 'Build mode — then 1 Village · 2 Barracks · 3 Tower, click to place (Shift keeps building)'],
+  ['B', 'Build mode — then 1 Village · 2 Barracks · 3 Fence · 4 Tower, click to place (Shift keeps building)'],
   ['R', 'Recruit a soldier at the least busy barracks (Shift + R queues 5)'],
   ['Click your Barracks', 'Recruit a soldier at that barracks'],
   ['T', 'Troop command — then 1 All · 2 ⅓ · 3 ⅔, click a destination'],
   ['F', 'Tactical Fall Back: selected troops split into retreaters and a rearguard; with no selection, the whole regular army falls back.'],
   ['M', 'Messenger: propose peace or surrender'],
+  ['O', 'Graphics settings: quality, nature, weather and reduced motion'],
+  ['Mouse wheel / middle-drag', 'Zoom at the cursor / pan the camera (wheel rotates fences in build mode)'],
+  ['Camera buttons / minimap', 'Zoom, show the whole map, or jump to a location. On touch, use Camera mode to pan; pinch with two fingers to zoom.'],
   ['Esc', 'Cancel the current order or clear the selection']
 ];
 
@@ -52,7 +55,7 @@ export function guidePage(): Page {
             <div class="panel">
               <h2>💰 Economy</h2>
               <ul class="checklist">
-                <li>Start with <strong>${economy.startingGold} gold</strong>, 2 villages, a barracks and 4 soldiers.</li>
+                <li>Start with <strong>${economy.startingGold} gold</strong>, 3 villages, a barracks and 3 soldiers.</li>
                 <li>Every <strong>${economy.incomeIntervalMs / 1000}s</strong> your castle pays +${economy.castleIncome} and each village +${economy.villageIncome}.</li>
                 <li>Losing villages cuts your income — protect them or hit your enemy's.</li>
               </ul>
@@ -65,6 +68,18 @@ export function guidePage(): Page {
                 <li>They automatically fight enemies that come within range. Army limit: ${limits.maxUnitsPerSide}.</li>
               </ul>
             </div>
+          </div>
+
+          <div class="panel">
+            <h2>Army roster</h2>
+            <div class="table-scroll"><table class="table">
+              <thead><tr><th>Unit</th><th>Gold</th><th>HP</th><th>Role</th></tr></thead>
+              <tbody>${(['soldier', 'archer', 'knight', 'scout', 'cannon'] as const).map(type => html`<tr>
+                <td><strong>${UNIT_STATS[type].label}</strong></td><td>${UNIT_STATS[type].cost}g</td><td>${UNIT_STATS[type].hp}</td>
+                <td>${({ soldier: 'Shielded infantry', archer: 'Ranged support', knight: 'Fast cavalry', scout: 'Castle-trained vision; cannot attack', cannon: 'Slow siege with splash damage' })[type]}</td>
+              </tr>`)}</tbody>
+            </table></div>
+            <p class="muted">Villages can deploy Militia; the Castle can deploy Royal Guards. These defenders act autonomously. Weather is cosmetic and does not change combat or vision.</p>
           </div>
 
           <div class="panel">

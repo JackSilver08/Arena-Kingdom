@@ -46,7 +46,7 @@ import {
 type Order =
   | { kind: 'idle' }
   | { kind: 'move'; x: number; y: number; attack: boolean }
-  | { kind: 'attack'; targetId: number };
+  | { kind: 'attack'; targetId: number; lastVisible?: Vec2 };
 
 export interface UnitState extends UnitView {
   order: Order;
@@ -235,6 +235,13 @@ export class MatchEngine {
 
   command(side: Side, cmd: Command): CommandResult {
     if (this.ended) return { ok: false, error: 'The match is over.' };
+    if ((cmd.type === 'move' || cmd.type === 'army') && cmd.targetId !== undefined) {
+      const target = this.findEntity(cmd.targetId);
+      if (!target || target.side === side || target.hp <= 0 || !this.visibilityForSide(side)(target.x, target.y)) {
+        // Identical feedback for hidden, missing, friendly and dead IDs prevents entity probing.
+        return { ok: false, error: 'Target is not visible or available.' };
+      }
+    }
     switch (cmd.type) {
       case 'build':
         return this.build(side, cmd.building, cmd.x, cmd.y, cmd.rotation);
@@ -287,16 +294,31 @@ export class MatchEngine {
    * is revealed only around friendly units and buildings with vision.
    */
   viewForSide(side: Side): MatchView {
-    const sources = this.visionSources(side);
-    const visible = (x:number,y:number) =>
-      isPointInTerritory(side,x,y) ||
-      isInNeutralZone(x,y) ||
-      sources.some((source) => dist(source.x, source.y, x, y) <= source.radius);
+    const visible = this.visibilityForSide(side);
+    const players = {} as Record<Side, PlayerView>;
+    for (const playerSide of SIDES) {
+      const player = this.state.players[playerSide];
+      const disclosed = playerSide === side || this.ended;
+      players[playerSide] = { side: playerSide, privateInfoVisible: disclosed,
+        gold: disclosed ? player.gold : 0, income: disclosed ? player.income : 0,
+        stats: disclosed ? { ...player.stats } : emptyStats() };
+    }
 
     return {
-      ...this.state,
-      units: this.state.units.filter((u) => u.side === side || visible(u.x, u.y)),
-      buildings: this.state.buildings.filter((b) => b.side === side || visible(b.x, b.y))
+      timeMs: this.state.timeMs,
+      nextIncomeInMs: this.state.nextIncomeInMs,
+      players,
+      peace: this.state.peace ? { ...this.state.peace } : null,
+      result: this.state.result ? { ...this.state.result } : null,
+      units: this.state.units.filter((u) => this.ended || u.side === side || visible(u.x, u.y)).map((u) => ({
+        id: u.id, side: u.side, type: u.type, formation: u.formation, garrisonVillageId: u.garrisonVillageId,
+        rearguard: u.rearguard, retreating: u.retreating, x: u.x, y: u.y, hp: u.hp, maxHp: u.maxHp,
+        moving: u.moving, attacking: u.attacking
+      })),
+      buildings: this.state.buildings.filter((b) => this.ended || b.side === side || visible(b.x, b.y)).map((b) => ({
+        id: b.id, side: b.side, type: b.type, x: b.x, y: b.y, hp: b.hp, maxHp: b.maxHp,
+        queue: b.queue, trainProgress: b.trainProgress, trainType: b.trainType, rotation: b.rotation
+      }))
     };
   }
 
@@ -305,18 +327,14 @@ export class MatchEngine {
    * and match results remain authoritative; enemy world events require their coordinates to be visible.
    */
   eventsForSide(side: Side, events: readonly GameEvent[]) {
-    const sources = this.visionSources(side);
-    const visible = (x:number,y:number) =>
-      isPointInTerritory(side,x,y) ||
-      isInNeutralZone(x,y) ||
-      sources.some((source) => dist(source.x, source.y, x, y) <= source.radius);
+    const visible = this.visibilityForSide(side);
 
     return events.filter((event) => {
       switch (event.type) {
         case 'shot':
         case 'arrowShot':
         case 'cannonShot':
-          return event.side === side || visible(event.fromX, event.fromY) || visible(event.toX, event.toY);
+          return event.side === side || (visible(event.fromX, event.fromY) && visible(event.toX, event.toY));
         case 'unitDied':
         case 'unitTrained':
         case 'buildingPlaced':
@@ -344,6 +362,13 @@ export class MatchEngine {
       if (radius > 0 && unit.hp > 0) sources.push({ x: unit.x, y: unit.y, radius });
     }
     return sources;
+  }
+
+  /** One visibility rule for observer DTOs, event filtering, commands and combat acquisition. */
+  private visibilityForSide(side: Side) {
+    const sources = this.visionSources(side);
+    return (x: number, y: number) => isPointInTerritory(side, x, y) || isInNeutralZone(x, y) ||
+      sources.some((source) => dist(source.x, source.y, x, y) <= source.radius);
   }
 
   // ---------------------------------------------------------------- commands
@@ -749,7 +774,7 @@ export class MatchEngine {
       for (const u of units) {
         this.clearFallback(u);
         u.formation = selectedFormation;
-        u.order = { kind: 'attack', targetId: target.id };
+        u.order = { kind: 'attack', targetId: target.id, lastVisible: { x: target.x, y: target.y } };
         this.resetNavigation(u);
       }
       return true;
@@ -911,6 +936,7 @@ export class MatchEngine {
   private updateUnits(dt: number) {
     const s = this.state;
     this.updateFallback();
+    const visibility = { blue: this.visibilityForSide('blue'), red: this.visibilityForSide('red') };
     for (const u of s.units) {
       u.prevX = u.x;
       u.prevY = u.y;
@@ -929,13 +955,20 @@ export class MatchEngine {
       const step = (stats.speed * formation.speedMultiplier * fallbackSpeed * dt) / 1000;
 
       let target: Entity | null = null;
+      const visible = visibility[u.side];
       if (u.order.kind === 'attack') {
         const explicit = this.findEntity(u.order.targetId);
-        if (explicit && explicit.hp > 0 && explicit.side !== u.side) target = explicit;
-        else u.order = { kind: 'idle' };
+        if (explicit && explicit.hp > 0 && explicit.side !== u.side && visible(explicit.x, explicit.y)) {
+          u.order.lastVisible = { x: explicit.x, y: explicit.y };
+          target = explicit;
+        } else {
+          const last = u.order.lastVisible;
+          u.order = last ? { kind: 'move', ...last, attack: true } : { kind: 'idle' };
+          this.resetNavigation(u);
+        }
       }
       const engage = u.type !== 'scout' && (u.order.kind === 'idle' || (u.order.kind === 'move' && u.order.attack));
-      if (!target && engage) target = this.pickTarget(u);
+      if (!target && engage) target = this.pickTarget(u, visible);
 
       // A walled-off route turns the blocking fence into the target for a while.
       let blocker: Entity | null = null;
@@ -948,10 +981,12 @@ export class MatchEngine {
       const aim = blocker && u.blockedFor === goalKey && (target || u.order.kind === 'move') ? blocker : target;
 
       if (aim) {
-        u.targetId = aim.id;
+        // Static collision navigation may approach a blocking wall, but a hidden obstacle
+        // is never a combat target or a shot endpoint until friendly vision reveals it.
+        u.targetId = visible(aim.x, aim.y) ? aim.id : null;
         const attack = isBuilding(aim) ? stats.buildingAttack ?? stats.attack : stats.attack;
         const reach = this.edgeDistance(u, aim) - stats.radius;
-        if (reach <= attack.range) {
+        if (reach <= attack.range && visible(aim.x, aim.y)) {
           if (u.cooldownMs <= 0) {
             u.cooldownMs = attack.cooldownMs;
             u.lastAttackMs = s.timeMs;
@@ -1274,7 +1309,7 @@ export class MatchEngine {
   }
 
   /** Enemy troops first, then the current building target, then buildings in range. Fences are never picked. */
-  private pickTarget(u: UnitState): Entity | null {
+  private pickTarget(u: UnitState, visible: (x: number, y: number) => boolean): Entity | null {
     const aggro = UNIT_STATS[u.type].aggroRange;
 
     let nearestUnit: UnitState | null = null;
@@ -1282,14 +1317,14 @@ export class MatchEngine {
     for (const other of this.state.units) {
       if (other.side === u.side || other.hp <= 0) continue;
       const d = dist(u.x, u.y, other.x, other.y);
-      if (d <= nearestUnitDist) {
+      if (d <= nearestUnitDist && visible(other.x, other.y)) {
         nearestUnitDist = d;
         nearestUnit = other;
       }
     }
 
     const current = u.targetId !== null ? this.findEntity(u.targetId) : undefined;
-    if (current && current.hp > 0 && current.side !== u.side && !(isBuilding(current) && current.type === 'fence')) {
+    if (current && current.hp > 0 && current.side !== u.side && visible(current.x, current.y) && !(isBuilding(current) && current.type === 'fence')) {
       const gap = this.edgeDistance(u, current);
       if (!isBuilding(current) && gap <= aggro * LEASH_MULTIPLIER) return current;
       if (isBuilding(current) && !nearestUnit && gap <= aggro * LEASH_MULTIPLIER) return current;
@@ -1302,7 +1337,7 @@ export class MatchEngine {
     for (const b of this.state.buildings) {
       if (b.side === u.side || b.hp <= 0 || b.type === 'fence') continue;
       const gap = distanceToBuilding(b, u.x, u.y);
-      if (gap <= nearestBuildingGap) {
+      if (gap <= nearestBuildingGap && visible(b.x, b.y)) {
         nearestBuildingGap = gap;
         nearestBuilding = b;
       }
@@ -1519,7 +1554,7 @@ export class MatchEngine {
       if (target.fallbackRole === 'rearguard') {
         effective *= 1 - GAME_RULES.fallback.rearguardDamageReduction;
       }
-      effective *= FORMATION_STATS[target.formation ?? 'line'].defenseMultiplier;
+      effective /= FORMATION_STATS[target.formation ?? 'line'].defenseMultiplier;
 
       if (attackerType === 'knight' && this.isKnightCounterFormation(target)) {
         effective *= 0.97;

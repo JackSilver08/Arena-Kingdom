@@ -1,8 +1,9 @@
-import { Client, type Room } from 'colyseus.js';
+import { Client, type Room } from "colyseus.js";
 import {
   BotController,
   DIFFICULTY_LABELS,
   MatchEngine,
+  SNAPSHOT_PROTOCOL_VERSION,
   decodeSnapshot,
   opponentOf,
   type Command,
@@ -16,10 +17,11 @@ import {
   type RoomEndMessage,
   type RoomLobbyMessage,
   type RoomWelcomeMessage,
-  type Side
-} from '@arena-kingdom/shared';
-import { SERVER_URL, api } from '../lib/api';
-import { session as auth } from '../lib/session';
+  type Side,
+} from "@arena-kingdom/shared";
+import { SERVER_URL, api } from "../lib/api";
+import { session as auth } from "../lib/session";
+import { joinRanked } from './rankedQueue';
 
 export interface SessionPlayer {
   side: Side;
@@ -31,35 +33,52 @@ export interface SessionPlayer {
   connected: boolean;
 }
 
-export type SessionStatus = 'waiting' | 'countdown' | 'playing' | 'reconnecting' | 'ended' | 'closed';
+export type SessionStatus =
+  "waiting" | "countdown" | "playing" | "reconnecting" | "ended" | "closed";
 
 export interface SessionEnd {
   result: MatchResult;
   matchId: string | null;
   ratings: RatingChange[];
   /** Whether the result made it into the match history. */
-  saved: 'saved' | 'saving' | 'guest' | 'failed';
+  saved: "saved" | "saving" | "guest" | "failed";
 }
 
 export type SessionSignal =
-  | { type: 'notice'; ok: boolean; text: string }
-  | { type: 'status' }
-  | { type: 'players' }
-  | { type: 'end' };
+  | { type: "notice"; ok: boolean; text: string }
+  | { type: "status" }
+  | { type: "players" }
+  | { type: "end" };
 
 export abstract class GameSession {
   abstract readonly mode: MatchMode;
-  mySide: Side = 'blue';
+  mySide: Side = "blue";
   view: MatchView | null = null;
-  status: SessionStatus = 'waiting';
+  status: SessionStatus = "waiting";
   countdownEndsAt = 0;
   end: SessionEnd | null = null;
   difficulty: Difficulty | null = null;
   roomId: string | null = null;
   isPrivate = false;
   players: Record<Side, SessionPlayer> = {
-    blue: { side: 'blue', name: 'Blue kingdom', avatar: '🔵', username: null, rating: null, isBot: false, connected: true },
-    red: { side: 'red', name: 'Red kingdom', avatar: '🔴', username: null, rating: null, isBot: false, connected: true }
+    blue: {
+      side: "blue",
+      name: "Blue kingdom",
+      avatar: "🔵",
+      username: null,
+      rating: null,
+      isBot: false,
+      connected: true,
+    },
+    red: {
+      side: "red",
+      name: "Red kingdom",
+      avatar: "🔴",
+      username: null,
+      rating: null,
+      isBot: false,
+      connected: true,
+    },
   };
   private listeners = new Set<(signal: SessionSignal) => void>();
 
@@ -85,7 +104,7 @@ export abstract class GameSession {
 // ------------------------------------------------------------------ vs AI
 
 export class LocalSession extends GameSession {
-  readonly mode = 'ai';
+  readonly mode = "ai";
   private engine = new MatchEngine();
   private bot: BotController;
   private disposed = false;
@@ -93,28 +112,28 @@ export class LocalSession extends GameSession {
   constructor(difficulty: Difficulty) {
     super();
     this.difficulty = difficulty;
-    this.bot = new BotController('red', difficulty);
+    this.bot = new BotController("red", difficulty);
     const user = auth.user;
     this.players.blue = {
-      side: 'blue',
-      name: user?.displayName ?? 'You',
-      avatar: user?.avatar ?? '🛡️',
+      side: "blue",
+      name: user?.displayName ?? "You",
+      avatar: user?.avatar ?? "🛡️",
       username: user?.username ?? null,
       rating: null,
       isBot: false,
-      connected: true
+      connected: true,
     };
     this.players.red = {
-      side: 'red',
+      side: "red",
       name: `${DIFFICULTY_LABELS[difficulty]} AI`,
-      avatar: '🤖',
+      avatar: "🤖",
       username: null,
       rating: null,
       isBot: true,
-      connected: true
+      connected: true,
     };
-    this.view = this.engine.viewForSide('blue');
-    this.status = 'playing';
+    this.view = this.engine.viewForSide("blue");
+    this.status = "playing";
   }
 
   update(deltaMs: number) {
@@ -124,41 +143,49 @@ export class LocalSession extends GameSession {
       this.engine.update(deltaMs);
     }
     const events = this.engine.drainEvents();
-    this.view = this.engine.viewForSide('blue');
-    if (this.engine.state.result && !this.end) this.finish(this.engine.state.result);
-    return this.engine.eventsForSide('blue', events);
+    this.view = this.engine.viewForSide("blue");
+    if (this.engine.state.result && !this.end)
+      this.finish(this.engine.state.result);
+    return this.engine.eventsForSide("blue", events);
   }
 
   send(command: Command) {
-    const result = this.engine.command('blue', command);
-    if (!result.ok) this.emit({ type: 'notice', ok: false, text: result.error });
-    else if (result.message) this.emit({ type: 'notice', ok: true, text: result.message });
+    const result = this.engine.command("blue", command);
+    if (!result.ok)
+      this.emit({ type: "notice", ok: false, text: result.error });
+    else if (result.message)
+      this.emit({ type: "notice", ok: true, text: result.message });
   }
 
   private finish(result: MatchResult) {
-    this.status = 'ended';
+    this.status = "ended";
     const user = auth.user;
-    this.end = { result, matchId: null, ratings: [], saved: user ? 'saving' : 'guest' };
-    this.emit({ type: 'status' });
-    this.emit({ type: 'end' });
+    this.end = {
+      result,
+      matchId: null,
+      ratings: [],
+      saved: user ? "saving" : "guest",
+    };
+    this.emit({ type: "status" });
+    this.emit({ type: "end" });
     if (!user || !this.difficulty) return;
     const { blue, red } = this.engine.state.players;
     api
       .reportAiMatch({
         difficulty: this.difficulty,
-        side: 'blue',
+        side: "blue",
         winner: result.winner,
         reason: result.reason,
         durationMs: result.timeMs,
-        stats: { blue: blue.stats, red: red.stats }
+        stats: { blue: blue.stats, red: red.stats },
       })
       .then(({ id }) => {
-        if (this.end) this.end = { ...this.end, matchId: id, saved: 'saved' };
+        if (this.end) this.end = { ...this.end, matchId: id, saved: "saved" };
       })
       .catch(() => {
-        if (this.end) this.end = { ...this.end, saved: 'failed' };
+        if (this.end) this.end = { ...this.end, saved: "failed" };
       })
-      .finally(() => !this.disposed && this.emit({ type: 'end' }));
+      .finally(() => !this.disposed && this.emit({ type: "end" }));
   }
 
   dispose() {
@@ -168,14 +195,24 @@ export class LocalSession extends GameSession {
 
 // ------------------------------------------------------------------ online
 
-const RECONNECT_KEY = 'ak.reconnect';
+const RECONNECT_KEY = "ak.reconnect";
 const RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY_MS = 2500;
 
 function colyseusEndpoint() {
   if (SERVER_URL) return SERVER_URL;
   // In development Vite proxies /colyseus to the game server.
-  return import.meta.env.DEV ? `${window.location.origin}/colyseus` : window.location.origin;
+  return import.meta.env.DEV
+    ? `${window.location.origin}/colyseus`
+    : window.location.origin;
+}
+function onlineClient() {
+  return new Client(colyseusEndpoint(), {
+    headers: {
+      "X-Arena-Protocol": String(SNAPSHOT_PROTOCOL_VERSION),
+      ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {}),
+    },
+  });
 }
 
 export function clearReconnectToken() {
@@ -202,15 +239,21 @@ export function storedReconnectToken() {
 /** Human-readable text for matchmaking failures. */
 export function describeJoinError(error: unknown) {
   const e = error as { code?: number; message?: string };
-  if (e.code === 401) return 'Your session expired. Please sign in again.';
-  if (e.code === 409) return e.message || 'You are already in that room.';
-  if (e.message?.includes('not found') || e.code === 4212) return 'No room found with that code. Check it and try again.';
-  if (e.message?.includes('locked') || e.code === 4216) return 'That room is already full.';
-  return e.message || 'Could not reach the game server.';
+  if (e.code === 401) return "Your session expired. Please sign in again.";
+  if (e.code === 409) return e.message || "You are already in that room.";
+  if (e.code === 426)
+    return "The game protocol changed. Reload this page before joining.";
+  if (e.code === 429)
+    return "Too many matchmaking requests. Wait a minute and try again.";
+  if (e.message?.includes("not found") || e.code === 4212)
+    return "No room found with that code. Check it and try again.";
+  if (e.message?.includes("locked") || e.code === 4216)
+    return "That room is already full.";
+  return e.message || "Could not reach the game server.";
 }
 
 export class OnlineSession extends GameSession {
-  readonly mode = 'pvp';
+  readonly mode = "pvp";
   private client: Client;
   private room!: Room;
   private events: GameEvent[] = [];
@@ -224,23 +267,59 @@ export class OnlineSession extends GameSession {
     this.attach(room);
   }
 
-  static async join(kind: 'ranked' | 'create' | 'code', code = '') {
-    const client = new Client(colyseusEndpoint());
-    const options = { token: auth.token };
-    const room =
-      kind === 'ranked'
-        ? await client.joinOrCreate('arena', options)
-        : kind === 'create'
-          ? await client.create('arena', { ...options, private: true })
-          : await client.joinById(code.trim(), options);
+  static async join(
+    kind: "ranked" | "create" | "code",
+    code = "",
+    signal?: AbortSignal,
+  ) {
+    const client = onlineClient();
+    const token = auth.token;
+    const options = {
+      token,
+      private: true,
+      protocolVersion: SNAPSHOT_PROTOCOL_VERSION,
+    };
+    const queue = async (
+      method: "POST" | "GET" | "DELETE",
+      abort?: AbortSignal,
+    ) => {
+      const response = await fetch(`${SERVER_URL}/api/ranked`, {
+        method,
+        signal: abort,
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token ?? ""}`,
+        },
+        body:
+          method === "POST"
+            ? JSON.stringify({ protocolVersion: SNAPSHOT_PROTOCOL_VERSION })
+            : undefined,
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw Object.assign(new Error(data.error ?? "Matchmaking failed."), {
+          code: response.status,
+        });
+      return data as {
+        status: string;
+        reservation?: Parameters<Client["consumeSeatReservation"]>[0];
+      };
+    };
+    const room = kind === 'ranked'
+      ? await joinRanked(queue, reservation => client.consumeSeatReservation(reservation), signal)
+      : kind === 'create' ? await client.create('arena', options) : await client.joinById(code.trim(), options);
+    if (signal?.aborted) {
+      await room.leave(true);
+      throw new DOMException('Cancelled', 'AbortError');
+    }
     return new OnlineSession(client, room);
   }
 
   static async reconnect(token: string) {
-    const client = new Client(colyseusEndpoint());
+    const client = onlineClient();
     const room = await client.reconnect(token);
     const session = new OnlineSession(client, room);
-    session.status = 'playing';
+    session.status = "playing";
     return session;
   }
 
@@ -248,14 +327,14 @@ export class OnlineSession extends GameSession {
     this.room = room;
     storeReconnect(room.reconnectionToken);
 
-    room.onMessage('welcome', (message: RoomWelcomeMessage) => {
+    room.onMessage("welcome", (message: RoomWelcomeMessage) => {
       this.mySide = message.side;
       this.roomId = message.roomId;
       this.isPrivate = message.isPrivate;
-      this.emit({ type: 'players' });
+      this.emit({ type: "players" });
     });
 
-    room.onMessage('lobby', (message: RoomLobbyMessage) => {
+    room.onMessage("lobby", (message: RoomLobbyMessage) => {
       this.roomId = message.roomId;
       this.isPrivate = message.isPrivate;
       for (const player of message.players) {
@@ -266,48 +345,60 @@ export class OnlineSession extends GameSession {
           username: player.username,
           rating: player.rating,
           isBot: false,
-          connected: player.connected
+          connected: player.connected,
         };
       }
       const seated = new Set(message.players.map((p) => p.side));
-      for (const side of ['blue', 'red'] as const) {
-        if (!seated.has(side)) this.players[side] = { ...this.players[side], name: 'Waiting…', avatar: '⌛', username: null, rating: null };
+      for (const side of ["blue", "red"] as const) {
+        if (!seated.has(side))
+          this.players[side] = {
+            ...this.players[side],
+            name: "Waiting…",
+            avatar: "⌛",
+            username: null,
+            rating: null,
+          };
       }
-      if (message.phase === 'countdown') this.countdownEndsAt = performance.now() + message.countdownMs;
-      if (this.status !== 'reconnecting' || message.phase === 'ended') this.status = message.phase;
-      this.emit({ type: 'players' });
-      this.emit({ type: 'status' });
+      if (message.phase === "countdown")
+        this.countdownEndsAt = performance.now() + message.countdownMs;
+      if (this.status !== "reconnecting" || message.phase === "ended")
+        this.status = message.phase;
+      this.emit({ type: "players" });
+      this.emit({ type: "status" });
     });
 
-    room.onMessage('s', (snapshot: EncodedSnapshot) => {
+    room.onMessage("s", (snapshot: EncodedSnapshot) => {
       const { view, events } = decodeSnapshot(snapshot);
       this.view = view;
       this.events.push(...events);
     });
 
-    room.onMessage('notice', (message: { ok: boolean; message?: string; error?: string }) => {
-      const text = message.ok ? message.message : message.error;
-      if (text) this.emit({ type: 'notice', ok: message.ok, text });
-    });
+    room.onMessage(
+      "notice",
+      (message: { ok: boolean; message?: string; error?: string }) => {
+        const text = message.ok ? message.message : message.error;
+        if (text) this.emit({ type: "notice", ok: message.ok, text });
+      },
+    );
 
-    room.onMessage('end', (message: RoomEndMessage) => {
-      this.end = { ...message, saved: message.matchId ? 'saved' : 'failed' };
-      this.status = 'ended';
+    room.onMessage("end", (message: RoomEndMessage) => {
+      this.end = { ...message, saved: message.matchId ? "saved" : "failed" };
+      this.status = "ended";
       storeReconnect(null);
       const mine = message.ratings.find((r) => r.side === this.mySide);
       if (mine && auth.user) auth.setUser({ ...auth.user, rating: mine.after });
-      this.emit({ type: 'status' });
-      this.emit({ type: 'end' });
+      this.emit({ type: "status" });
+      this.emit({ type: "end" });
     });
 
     room.onLeave((code) => {
       if (this.disposed || this.room !== room) return;
       // 4000 = left on purpose; a finished match is also not worth reconnecting to.
-      if (code === 4000 || code === 1000 || this.status === 'ended' || this.status === 'waiting') {
-        if (this.status !== 'ended') {
-          this.status = 'closed';
+      if (code === 4000 || code === 1000 || this.status === "ended") {
+        if (this.status !== "ended") {
+          this.status = "closed";
           storeReconnect(null);
-          this.emit({ type: 'status' });
+          this.emit({ type: "status" });
         }
         return;
       }
@@ -316,9 +407,13 @@ export class OnlineSession extends GameSession {
   }
 
   private async reconnectLoop(token: string) {
-    this.status = 'reconnecting';
-    this.emit({ type: 'status' });
-    for (let attempt = 0; attempt < RECONNECT_ATTEMPTS && !this.disposed; attempt++) {
+    this.status = "reconnecting";
+    this.emit({ type: "status" });
+    for (
+      let attempt = 0;
+      attempt < RECONNECT_ATTEMPTS && !this.disposed;
+      attempt++
+    ) {
       await new Promise((resolve) => setTimeout(resolve, RECONNECT_DELAY_MS));
       try {
         const room = await this.client.reconnect(token);
@@ -327,19 +422,27 @@ export class OnlineSession extends GameSession {
           return;
         }
         this.attach(room);
-        this.status = 'playing';
-        this.emit({ type: 'status' });
-        this.emit({ type: 'notice', ok: true, text: 'Reconnected to the battle.' });
+        this.status = "playing";
+        this.emit({ type: "status" });
+        this.emit({
+          type: "notice",
+          ok: true,
+          text: "Reconnected to the battle.",
+        });
         return;
       } catch {
         // Try again until the server's reconnection window closes.
       }
     }
     if (this.disposed) return;
-    this.status = 'closed';
+    this.status = "closed";
     storeReconnect(null);
-    this.emit({ type: 'status' });
-    this.emit({ type: 'notice', ok: false, text: 'Connection to the battle was lost.' });
+    this.emit({ type: "status" });
+    this.emit({
+      type: "notice",
+      ok: false,
+      text: "Connection to the battle was lost.",
+    });
   }
 
   update() {
@@ -349,13 +452,13 @@ export class OnlineSession extends GameSession {
   }
 
   send(command: Command) {
-    if (this.status === 'playing') this.room.send('cmd', command);
+    if (this.status === "playing") this.room.send("cmd", command);
   }
 
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
-    if (this.status !== 'ended') storeReconnect(null);
+    if (this.status !== "ended") storeReconnect(null);
     void this.room.leave(true).catch(() => undefined);
   }
 }

@@ -1,6 +1,5 @@
 import type { GameEvent, MatchView } from '@arena-kingdom/shared';
 import type { BattleScene } from './BattleScene';
-import './battleRecap.css';
 
 export interface BattleReplayFrame {
   view: MatchView;
@@ -15,6 +14,14 @@ export interface BattleReplayRecorder {
 const SAMPLE_MS = 250;
 const MAX_FRAMES = 9_000;
 const SPEEDS = [0.25, 0.5, 1, 2];
+
+export function recentReplayEvents(frames: readonly BattleReplayFrame[], index: number) {
+  const recent: BattleReplayFrame[] = [];
+  for (let i = Math.min(index, frames.length - 1); i >= 0 && recent.length < 6; i--) {
+    if (frames[i].events.length) recent.push(frames[i]);
+  }
+  return recent;
+}
 
 function cloneView(view: MatchView): MatchView {
   return {
@@ -41,6 +48,8 @@ function formatTime(timeMs: number) {
 function eventLabel(event: GameEvent) {
   switch (event.type) {
     case 'shot': return 'Fire';
+    case 'arrowShot': return 'Arrow fired';
+    case 'cannonShot': return 'Cannon fired';
     case 'hit': return 'Hit';
     case 'unitDied': return `${event.side === 'blue' ? 'Blue' : 'Red'} troop lost`;
     case 'unitTrained': return `${event.side === 'blue' ? 'Blue' : 'Red'} troop trained`;
@@ -55,6 +64,8 @@ function eventLabel(event: GameEvent) {
 
 export class BattleRecap implements BattleReplayRecorder {
   private readonly recorded: BattleReplayFrame[] = [];
+  private pendingEvents: GameEvent[] = [];
+  private finalized = false;
   private panel: HTMLDivElement | null = null;
   private trigger: HTMLButtonElement | null = null;
   private playing = false;
@@ -63,6 +74,7 @@ export class BattleRecap implements BattleReplayRecorder {
   private cursorMs = 0;
   private lastTick = 0;
   private destroyed = false;
+  private readoutIndex = -1;
 
   constructor(
     private readonly scene: BattleScene,
@@ -76,12 +88,28 @@ export class BattleRecap implements BattleReplayRecorder {
   }
 
   record(view: MatchView, events: GameEvent[]) {
-    if (this.destroyed || this.playing) return;
+    if (this.destroyed || this.playing || this.finalized) return;
+    // Events between samples belong to the next snapshot. Combat never bypasses
+    // the sample cadence, avoiding a full state clone for every rendered frame.
+    this.pendingEvents.push(...events.map(event => ({ ...event } as GameEvent)));
+    if (this.pendingEvents.length > 512) this.pendingEvents.splice(0, this.pendingEvents.length - 512);
     const last = this.recorded[this.recorded.length - 1];
     const elapsedHint = view.timeMs - (last?.view.timeMs ?? -SAMPLE_MS);
-    if (elapsedHint < SAMPLE_MS && !view.result && !events.length) return;
-    this.recorded.push({ view: cloneView(view), events: events.map((event) => ({ ...event } as GameEvent)) });
-    if (this.recorded.length > MAX_FRAMES) this.recorded.splice(0, this.recorded.length - MAX_FRAMES);
+    if (elapsedHint < SAMPLE_MS && !view.result) return;
+    this.recorded.push({ view: cloneView(view), events: this.pendingEvents });
+    this.pendingEvents = [];
+    this.finalized = Boolean(view.result);
+    // Beyond a 37.5 minute recording, compact older samples instead of losing
+    // the opening. Normal 20-minute matches fit without any compaction.
+    if (this.recorded.length > MAX_FRAMES) {
+      const compact: BattleReplayFrame[] = [this.recorded[0]];
+      for (let i = 1; i < this.recorded.length - 1; i += 2) {
+        const next = this.recorded[Math.min(i + 1, this.recorded.length - 2)];
+        compact.push({ view: next.view, events: [...this.recorded[i].events, ...(next === this.recorded[i] ? [] : next.events)].slice(-512) });
+      }
+      compact.push(this.recorded[this.recorded.length - 1]);
+      this.recorded.splice(0, this.recorded.length, ...compact);
+    }
   }
 
   frames() {
@@ -120,6 +148,7 @@ export class BattleRecap implements BattleReplayRecorder {
     this.battleRoot.append(this.panel);
     this.render();
     this.seek(this.index);
+    this.panel.querySelector<HTMLButtonElement>('[data-recap="close"]')?.focus();
   }
 
   private close() {
@@ -130,10 +159,12 @@ export class BattleRecap implements BattleReplayRecorder {
     if (end) end.hidden = false;
     this.trigger?.removeAttribute('hidden');
     this.scene.setReplayView(null);
+    end?.querySelector<HTMLElement>('button, a[href]')?.focus();
   }
 
   private render() {
     if (!this.panel) return;
+    this.readoutIndex = -1;
     const duration = this.recorded[this.recorded.length - 1].view.timeMs;
     const events = this.recorded.flatMap((frame, frameIndex) =>
       frame.events.length ? [{ frameIndex, timeMs: frame.view.timeMs, labels: frame.events.map(eventLabel) }] : []
@@ -146,7 +177,7 @@ export class BattleRecap implements BattleReplayRecorder {
     this.panel.innerHTML = `
       <div class="battle-recap-head">
         <div>
-          <span class="battle-recap-kicker">BATTLE DOCUMENTARY</span>
+          <span class="battle-recap-kicker">ARENA KINGDOM · YOUR PERSPECTIVE</span>
           <strong>Battle Recap</strong>
           <small>Scrub the campaign, then replay it at quarter speed or double speed.</small>
         </div>
@@ -163,19 +194,19 @@ export class BattleRecap implements BattleReplayRecorder {
       </div>
       <div class="battle-recap-timeline">
         <div class="battle-recap-events">
-          ${events.map((event) => `<button type="button" class="battle-recap-event" style="left:${(event.timeMs / Math.max(1, duration)) * 100}%" title="${event.labels.join(', ')}" data-recap-index="${event.frameIndex}"></button>`).join('')}
+          ${events.filter((_, index) => index % Math.max(1, Math.ceil(events.length / 300)) === 0).map((event) => `<button type="button" class="battle-recap-event" style="left:${(event.timeMs / Math.max(1, duration)) * 100}%" title="${event.labels.join(', ')}" aria-label="${formatTime(event.timeMs)}: ${event.labels.join(', ')}" data-recap-index="${event.frameIndex}"></button>`).join('')}
         </div>
         <input data-recap="scrub" type="range" min="0" max="${this.recorded.length - 1}" step="1" value="${this.index}" aria-label="Battle timeline">
         <div class="battle-recap-scale"><span>00:00</span><span>${formatTime(duration)}</span></div>
       </div>
       <div class="battle-recap-summary">
-        <span><b>Blue</b> ${blueAlive} troops</span>
-        <span><b>Red</b> ${redAlive} troops</span>
+        <span data-recap="blueCount">Blue ${blueAlive} troops</span>
+        <span data-recap="redCount">Red ${redAlive} troops</span>
         <span>${totalEvents} recorded events</span>
         <span>Influence + frontline reconstructed from each frame</span>
       </div>
       <div class="battle-recap-events-list">
-        ${events.slice(Math.max(0, events.length - 6)).reverse().map((event) => `<span>${formatTime(event.timeMs)} · ${event.labels.join(' · ')}</span>`).join('') || '<span>No discrete events were recorded.</span>'}
+        ${this.recentEventsMarkup()}
       </div>`;
 
     this.panel.querySelector<HTMLButtonElement>('[data-recap="close"]')?.addEventListener('click', () => this.close());
@@ -189,7 +220,7 @@ export class BattleRecap implements BattleReplayRecorder {
     this.panel.querySelectorAll<HTMLButtonElement>('[data-recap-speed]').forEach((button) => {
       button.addEventListener('click', () => {
         this.speed = Number(button.dataset.recapSpeed);
-        this.render();
+        this.panel?.querySelectorAll<HTMLButtonElement>('[data-recap-speed]').forEach(control => control.classList.toggle('active', Number(control.dataset.recapSpeed) === this.speed));
         this.renderPlayState();
       });
     });
@@ -257,18 +288,31 @@ export class BattleRecap implements BattleReplayRecorder {
       }
     }
     if (rerender) {
-      this.render();
+      this.syncReadout();
       this.renderPlayState();
     }
   }
 
   private syncReadout() {
+    if (this.readoutIndex === this.index) return;
+    this.readoutIndex = this.index;
     const clock = this.panel?.querySelector<HTMLElement>('[data-recap="clock"]');
     const scrub = this.panel?.querySelector<HTMLInputElement>('[data-recap="scrub"]');
     const current = this.recorded[this.index]?.view.timeMs ?? 0;
     const duration = this.recorded[this.recorded.length - 1]?.view.timeMs ?? 0;
     if (clock) clock.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
     if (scrub) scrub.value = String(this.index);
+    const view = this.recorded[this.index]?.view;
+    for (const side of ['blue', 'red'] as const) {
+      const count = this.panel?.querySelector<HTMLElement>(`[data-recap="${side}Count"]`);
+      if (count) count.textContent = `${side === 'blue' ? 'Blue' : 'Red'} ${view?.units.filter(unit => unit.side === side).length ?? 0} troops`;
+    }
+    const list = this.panel?.querySelector<HTMLElement>('.battle-recap-events-list');
+    if (list) list.innerHTML = this.recentEventsMarkup();
+  }
+
+  private recentEventsMarkup() {
+    return recentReplayEvents(this.recorded, this.index).map(frame => `<span>${formatTime(frame.view.timeMs)} · ${frame.events.map(eventLabel).join(' · ')}</span>`).join('') || '<span>No events before this point.</span>';
   }
 
   private renderPlayState() {

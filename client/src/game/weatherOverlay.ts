@@ -1,6 +1,12 @@
-import Phaser from 'phaser';
-import { GAME_RULES, WEATHER_CONFIGS, weatherAtTime, type WeatherType } from '@arena-kingdom/shared';
-import { BATTLE_DEPTH } from './visuals';
+import Phaser from "phaser";
+import {
+  GAME_RULES,
+  WEATHER_CONFIGS,
+  weatherAtTime,
+  type WeatherType,
+} from "@arena-kingdom/shared";
+import { BATTLE_DEPTH } from "./visuals";
+import type { PresentationQuality } from "./presentationVisibility";
 
 const { width: W, height: H } = GAME_RULES.map;
 
@@ -9,15 +15,6 @@ interface RainDrop {
   y: number;
   len: number;
   speed: number;
-  alpha: number;
-}
-
-interface FogPatch {
-  x: number;
-  y: number;
-  rx: number;
-  ry: number;
-  speedX: number;
   alpha: number;
 }
 
@@ -30,31 +27,21 @@ interface WindStream {
 }
 
 /**
- * Tactical Weather Overlay for Arena Kingdom:
- * Displays dynamic rainstorms, rolling fog banks, gale winds, and atmospheric paper tints.
+ * Cosmetic weather only. Sparse rain/wind and restrained mood; never changes visibility.
  */
 export class WeatherOverlay {
   private readonly graphics: Phaser.GameObjects.Graphics;
-  private readonly flashGraphics: Phaser.GameObjects.Graphics;
-  private currentWeather: WeatherType = 'fair';
-  private weatherElapsedMs = 0;
-  private timer = 0;
+  private currentWeather: WeatherType = "fair";
+  private quality: PresentationQuality = "medium";
   private enabled = true;
 
   // Rain particles
   private readonly raindrops: RainDrop[] = [];
-  // Fog banks
-  private readonly fogPatches: FogPatch[] = [];
   // Wind lines
   private readonly windStreams: WindStream[] = [];
 
-  // Lightning
-  private lightningTimer = 0;
-  private lightningAlpha = 0;
-
   constructor(private readonly scene: Phaser.Scene) {
-    this.graphics = scene.add.graphics().setDepth(BATTLE_DEPTH.effects - 10);
-    this.flashGraphics = scene.add.graphics().setDepth(BATTLE_DEPTH.effects + 50);
+    this.graphics = scene.add.graphics().setDepth(BATTLE_DEPTH.overlay - 30);
 
     this.initParticles();
   }
@@ -67,19 +54,7 @@ export class WeatherOverlay {
         y: Math.random() * (H + 100) - 50,
         len: 12 + Math.random() * 14,
         speed: 680 + Math.random() * 260,
-        alpha: 0.18 + Math.random() * 0.28
-      });
-    }
-
-    // Fog patches
-    for (let i = 0; i < 12; i++) {
-      this.fogPatches.push({
-        x: Math.random() * W,
-        y: 180 + Math.random() * 700,
-        rx: 140 + Math.random() * 120,
-        ry: 60 + Math.random() * 50,
-        speedX: 12 + Math.random() * 18,
-        alpha: 0.12 + Math.random() * 0.14
+        alpha: 0.18 + Math.random() * 0.28,
       });
     }
 
@@ -90,7 +65,7 @@ export class WeatherOverlay {
         y: 160 + Math.random() * 740,
         len: 40 + Math.random() * 80,
         speed: 480 + Math.random() * 320,
-        alpha: 0.15 + Math.random() * 0.25
+        alpha: 0.15 + Math.random() * 0.25,
       });
     }
   }
@@ -103,45 +78,41 @@ export class WeatherOverlay {
     return WEATHER_CONFIGS[this.currentWeather];
   }
 
+  setQuality(quality: PresentationQuality) {
+    this.quality = quality;
+  }
+
   setEnabled(enabled: boolean) {
     this.enabled = enabled;
     if (!enabled) {
       this.graphics.clear();
-      this.flashGraphics.clear();
     }
   }
 
   update(matchElapsedMs: number, delta: number, reducedMotion = false) {
     if (!this.enabled) return;
 
-    this.weatherElapsedMs = matchElapsedMs;
     const newWeather = weatherAtTime(matchElapsedMs);
     if (newWeather !== this.currentWeather) {
       this.currentWeather = newWeather;
     }
 
-    if (!reducedMotion) {
-      this.timer += delta * 0.001;
-    }
-
     const g = this.graphics;
-    const fg = this.flashGraphics;
     g.clear();
-    fg.clear();
 
     const dt = delta * 0.001;
 
     switch (this.currentWeather) {
-      case 'rain':
-        this.renderRain(g, fg, dt, reducedMotion);
+      case "rain":
+        this.renderRain(g, dt, reducedMotion);
         break;
-      case 'fog':
+      case "fog":
         this.renderFog(g, dt, reducedMotion);
         break;
-      case 'gale':
+      case "gale":
         this.renderGale(g, dt, reducedMotion);
         break;
-      case 'fair':
+      case "fair":
       default:
         this.renderFair(g);
         break;
@@ -150,20 +121,23 @@ export class WeatherOverlay {
 
   private renderRain(
     g: Phaser.GameObjects.Graphics,
-    fg: Phaser.GameObjects.Graphics,
     dt: number,
-    reducedMotion: boolean
+    reducedMotion: boolean,
   ) {
     // 1. Cool overcast paper mood wash
     g.fillStyle(0x384852, 0.14);
     g.fillRect(0, 0, W, H);
 
+    if (reducedMotion) return;
     // 2. Slanted rain streaks (falling at angle ~65 degrees)
     const slantX = 0.42;
     const slantY = 0.91;
 
     g.lineStyle(1.2, 0x485864, 0.35);
-    for (const drop of this.raindrops) {
+    for (const drop of this.raindrops.slice(
+      0,
+      this.quality === "low" ? 35 : this.quality === "medium" ? 65 : 100,
+    )) {
       if (!reducedMotion) {
         drop.x += slantX * drop.speed * dt;
         drop.y += slantY * drop.speed * dt;
@@ -179,56 +153,37 @@ export class WeatherOverlay {
       g.lineTo(drop.x + slantX * drop.len, drop.y + slantY * drop.len);
       g.strokePath();
     }
-
-    // 3. Lightning flash occasionally
-    if (!reducedMotion) {
-      this.lightningTimer += dt;
-      if (this.lightningTimer > 9.0 && Math.random() < 0.03) {
-        this.lightningTimer = 0;
-        this.lightningAlpha = 0.35;
-      }
-      if (this.lightningAlpha > 0) {
-        fg.fillStyle(0xf4faff, this.lightningAlpha);
-        fg.fillRect(0, 0, W, H);
-        this.lightningAlpha = Math.max(0, this.lightningAlpha - dt * 2.8);
-      }
-    }
   }
 
-  private renderFog(g: Phaser.GameObjects.Graphics, dt: number, reducedMotion: boolean) {
-    // Translucent soft atmospheric veil
-    g.fillStyle(0xced8dc, 0.12);
+  private renderFog(
+    g: Phaser.GameObjects.Graphics,
+    _dt: number,
+    _reducedMotion: boolean,
+  ) {
+    // Weather mist is a still, very faint hue. War fog owns the visibility mask.
+    g.fillStyle(0x81a0a7, 0.045);
     g.fillRect(0, 0, W, H);
-
-    // Moving fog banks
-    for (const patch of this.fogPatches) {
-      if (!reducedMotion) {
-        patch.x += patch.speedX * dt;
-        if (patch.x - patch.rx > W) {
-          patch.x = -patch.rx;
-          patch.y = 180 + Math.random() * 700;
-        }
-      }
-
-      // Soft oval fog cloud
-      g.fillStyle(0xe2ebef, patch.alpha);
-      g.fillEllipse(patch.x, patch.y, patch.rx * 2, patch.ry * 2);
-      g.fillStyle(0xd5e1e7, patch.alpha * 0.7);
-      g.fillEllipse(patch.x + 15, patch.y + 5, patch.rx * 1.5, patch.ry * 1.4);
-    }
   }
 
-  private renderGale(g: Phaser.GameObjects.Graphics, dt: number, reducedMotion: boolean) {
+  private renderGale(
+    g: Phaser.GameObjects.Graphics,
+    dt: number,
+    reducedMotion: boolean,
+  ) {
     // Subtle cool-gray paper wash
     g.fillStyle(0x3e423a, 0.06);
     g.fillRect(0, 0, W, H);
 
+    if (reducedMotion) return;
     // Fast horizontal wind streaks
     const windAngle = WEATHER_CONFIGS.gale.windAngle;
     const cosW = Math.cos(windAngle);
     const sinW = Math.sin(windAngle);
 
-    for (const stream of this.windStreams) {
+    for (const stream of this.windStreams.slice(
+      0,
+      this.quality === "low" ? 8 : this.quality === "medium" ? 16 : 24,
+    )) {
       if (!reducedMotion) {
         stream.x += cosW * stream.speed * dt;
         stream.y += sinW * stream.speed * dt;
@@ -254,6 +209,5 @@ export class WeatherOverlay {
 
   destroy() {
     this.graphics.destroy();
-    this.flashGraphics.destroy();
   }
 }

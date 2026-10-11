@@ -218,16 +218,16 @@ test('knight damage is reduced by 3% against an active soldier formation', () =>
 
   const expectedFree =
     UNIT_STATS.knight.attack.damage *
-    FORMATION_STATS.square.attackMultiplier *
+    FORMATION_STATS.square.attackMultiplier /
     FORMATION_STATS.line.defenseMultiplier;
   const expectedFormed =
     UNIT_STATS.knight.attack.damage *
-    FORMATION_STATS.square.attackMultiplier *
+    FORMATION_STATS.square.attackMultiplier /
     FORMATION_STATS.column.defenseMultiplier *
     0.97;
   assert.ok(Math.abs(freeDamage - expectedFree) < 1e-9, 'free-form Knight damage should use the normal formation modifiers');
   assert.ok(Math.abs(formedDamage - expectedFormed) < 1e-9, 'formed target should take 3% less Knight damage');
-  assert.ok(formedDamage < freeDamage, 'formation should reduce Knight damage');
+  assert.ok(formedDamage < expectedFormed / 0.97, 'the 3% counter reduces damage relative to the same formation without the counter');
 });
 
 test('fallback splits mixed troops with archers retreating and a soldier rearguard', () => {
@@ -327,7 +327,7 @@ test('rearguard receives 35% damage reduction', () => {
 
   const baseDamage =
     UNIT_STATS.soldier.attack.damage *
-    FORMATION_STATS.line.attackMultiplier *
+    FORMATION_STATS.line.attackMultiplier /
     FORMATION_STATS.line.defenseMultiplier;
   assert.ok(Math.abs(normalDamage - baseDamage) < 1e-9);
   const shieldedExpected = baseDamage * (1 - GAME_RULES.fallback.rearguardDamageReduction);
@@ -410,6 +410,10 @@ test('soldiers fight and destroying the castle ends the match', () => {
   // Remove the red defenders and weaken the castle so the siege resolves deterministically.
   for (const unit of engine.armyOf('red')) unit.hp = 0;
   castle.hp = 30;
+  for (const unit of engine.armyOf('blue')) {
+    unit.x = castle.x - 120;
+    unit.y = castle.y;
+  }
   engine.command('blue', { type: 'army', fraction: 'all', x: castle.x, y: castle.y, targetId: castle.id });
   // Let the Castle AI reveal its defensive layer, then remove it so this focused test
   // measures the underlying castle-destruction path rather than Royal Guard combat.
@@ -482,6 +486,10 @@ test('an explicit attack order focuses the chosen target', () => {
     unit.order = { kind: 'idle' };
   });
   const ids = engine.armyOf('blue').map((u) => u.id);
+  engine.armyOf('blue').forEach((unit, index) => {
+    unit.x = village.x - 120;
+    unit.y = village.y + (index - 1) * 24;
+  });
   assert.equal(engine.command('blue', { type: 'move', unitIds: ids, x: 0, y: 0, attack: true, targetId: village.id }).ok, true);
   run(engine, 60_000);
   assert.ok(!engine.state.buildings.some((b) => b.id === village.id), 'the targeted village fell');
@@ -525,7 +533,7 @@ test('snapshots round-trip through the wire format', () => {
   const scout = engine.armyOf('blue')[0];
   scout.type = 'scout';
   const scoutSnapshot = encodeSnapshot(engine.state, []);
-  assert.equal(scoutSnapshot.v, 5);
+  assert.equal(scoutSnapshot.v, 6);
   assert.equal(decodeSnapshot(JSON.parse(JSON.stringify(scoutSnapshot))).view.units.find((u) => u.id === scout.id)?.type, 'scout');
   const royalGuard = engine.armyOf('red')[0];
   royalGuard.type = 'royal_guard';

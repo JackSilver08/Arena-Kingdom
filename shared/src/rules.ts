@@ -1,7 +1,7 @@
 import { coastline, isInsideMountain, isWalkableLand } from './island.js';
 import type { ArmyFraction, BuildableType, BuildingType, Side, UnitType, Vec2 } from './types.js';
 
-export const GAME_VERSION = '0.7.0';
+export const GAME_VERSION = '0.8.0';
 
 type Rect={minX:number;maxX:number;minY:number;maxY:number};
 /** Each kingdom builds on its side of its front line; the strip between them is no man's land. */
