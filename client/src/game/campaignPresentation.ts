@@ -61,7 +61,7 @@ export function campaignKeySvg(): string {
       + '<path d="' + path + '" fill="none" stroke="' + CAMPAIGN_INK.ink + '" stroke-width="' + (attack ? 8 : 5) + '"/>'
       + '<path d="' + path + '" fill="none" stroke="' + color + '" stroke-width="' + (attack ? 5 : 2.8)
       + '" ' + (attack ? '' : 'stroke-dasharray="12 8"') + '/>'
-      + '<path d="M314 ' + (y + 17) + 'l-22-20 5 14-17 9Z" fill="' + color + '" stroke="' + CAMPAIGN_INK.ink + '" stroke-width="2"/>'
+      + (index === 2 ? '' : '<path d="M314 ' + (y + 17) + 'l-22-20 5 14-17 9Z" fill="' + color + '" stroke="' + CAMPAIGN_INK.ink + '" stroke-width="2"/>')
       + '<text x="345" y="' + (y + 22) + '" fill="' + CAMPAIGN_INK.ink + '" font-family="Georgia,serif" font-size="19">' + label + '</text>'
       + '</g>';
   }).join('');

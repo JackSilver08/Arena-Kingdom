@@ -30,6 +30,8 @@ test('P3 legend is generated from live palette and documents orders not routes',
   assert.match(svg, /Attack \/ ASSAULT/);
   assert.match(svg, /Front line \/ INFLUENCE/);
   assert.match(svg, /not pathfinder routes/);
+  assert.equal((svg.match(/l-22-20 5 14-17 9Z/g) ?? []).length, 2,
+    'only move and assault have arrowheads; a frontline is not an order');
   for (const color of [ATLAS_COLORS.blue,ATLAS_COLORS.red,ATLAS_COLORS.ink]) {
     assert.ok(svg.includes(color));
   }

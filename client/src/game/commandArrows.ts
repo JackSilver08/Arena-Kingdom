@@ -193,14 +193,19 @@ export class CommandArrowOverlay {
     const heavy = arrow.kind === 'attack';
     g.lineStyle(heavy ? 14 : 10, paper, fade * .88);
     g.strokePoints(points, false);
-    g.lineStyle(heavy ? 7 : 4.2, ink, fade * .91);
-    g.strokePoints(points, false);
-    // March route is dotted; attack is a bold continuous campaign arrow.
-    g.lineStyle(heavy ? 4.8 : 2.8, team, fade);
-    if (heavy) g.strokePoints(points, false);
-    else for (let i = 1; i < points.length; i += 3) {
+    // Dashed march lines are ink strokes, never a continuous black line
+    // underneath. Assault arrows remain solid and heavier.
+    if (heavy) {
+      g.lineStyle(7, ink, fade * .91);
+      g.strokePoints(points, false);
+      g.lineStyle(4.8, team, fade);
+      g.strokePoints(points, false);
+    } else for (let i = 1; i < points.length; i += 3) {
       const start = points[i - 1];
       const end = points[Math.min(i + 1, points.length - 1)];
+      g.lineStyle(4.2, ink, fade * .92);
+      g.lineBetween(start.x, start.y, end.x, end.y);
+      g.lineStyle(2.8, team, fade);
       g.lineBetween(start.x, start.y, end.x, end.y);
     }
     const direction = tangent(arrow.from, arrow.control, arrow.to, .99);
