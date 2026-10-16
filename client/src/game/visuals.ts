@@ -3,6 +3,8 @@ import { GAME_RULES, MOUNTAIN_RIDGES, coastline, type BuildingType, type Side, t
 import { svgDataUrl } from './art';
 import { arenaMapArtV2, type MapViewSize } from './mapArt';
 import { arenaMapArtMoba } from './mobaMapArt';
+import { arenaMapArtAtlas } from './atlasMapArt';
+import { ATLAS_SIZE, atlasEntityArt, type AtlasEntity } from './atlasEntityArt';
 import type { SymbolSize } from './symbols';
 import { FANTASY_SIZE, fantasyEntityArt, type FantasyEntity } from './fantasyArt';
 import { terrainRasterSize, type ArtQuality } from './terrainArt';
@@ -51,6 +53,7 @@ const mapTextureKey = (view: MapViewSize, style: MapStyle, quality: ArtQuality, 
 
 /** Pick the correct map art generator based on the chosen style. */
 function mapArtForStyle(view: MapViewSize, style: MapStyle, quality: ArtQuality, nature: boolean): string {
+  if (style === 'atlas') return arenaMapArtAtlas(view, quality, nature);
   if (style === 'moba') return arenaMapArtMoba(view, quality, nature);
   return arenaMapArtV2(view, style);
 }
@@ -112,6 +115,13 @@ export class BattleVisualRenderer {
       for (const type of Object.keys(FANTASY_SIZE) as FantasyEntity[]) {
         const size = FANTASY_SIZE[type];
         this.load(`${type}-${side}`, fantasyEntityArt(type, side), Math.round(size.width * scale), Math.round(size.height * scale));
+      }
+    }
+    // Pre-rasterise the compact hand-inked roster once. Sprites share textures.
+    for (const side of ['blue', 'red'] as const) {
+      for (const type of Object.keys(ATLAS_SIZE) as AtlasEntity[]) {
+        const size = ATLAS_SIZE[type];
+        this.load(`atlas-${type}-${side}`, atlasEntityArt(type, side), Math.round(size.width * scale), Math.round(size.height * scale));
       }
     }
     this.loadTerrain();
@@ -198,12 +208,17 @@ export class BattleVisualRenderer {
     }
   }
 
+  get isAtlas() { return this.mapStyle === 'atlas'; }
+
   building(type: BuildingType, side: Side): EntityVisual {
-    return { key: buildingTextureKey(type, side), ...FANTASY_SIZE[type] };
+    return this.isAtlas
+      ? { key: `atlas-${type}-${side}`, ...ATLAS_SIZE[type] }
+      : { key: buildingTextureKey(type, side), ...FANTASY_SIZE[type] };
   }
 
   unit(type: UnitType, side: Side): EntityVisual {
-    const glyph = FANTASY_SIZE[type];
-    return { key: unitTextureKey(type, side), ...glyph, anchorY: glyph.anchorY };
+    return this.isAtlas
+      ? { key: `atlas-${type}-${side}`, ...ATLAS_SIZE[type] }
+      : { key: unitTextureKey(type, side), ...FANTASY_SIZE[type] };
   }
 }

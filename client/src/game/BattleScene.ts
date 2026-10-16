@@ -214,10 +214,11 @@ export class BattleScene extends Phaser.Scene {
           this.waves.setEnabled(settings.nature);
           // MOBA terrain owns its tree silhouettes; the legacy forest would obscure ridges/units.
           this.forest.setEnabled(
-            settings.nature && settings.mapStyle !== "moba",
+            settings.nature && (settings.mapStyle === "documentary" || settings.mapStyle === "vintage"),
           );
           this.weather.setEnabled(settings.weather);
           this.weather.setQuality(settings.quality);
+          this.refreshEntityArt();
           if (
             settings.reducedMotion ||
             this.effects > presentationBudget(settings.quality).effects
@@ -880,6 +881,32 @@ export class BattleScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- sync
 
+  /** Skin switches replace live textures, not unit/building simulation objects. */
+  private refreshEntityArt() {
+    const view = this.replayView ?? this.controller.view;
+    if (!view) return;
+    const units = new Map(view.units.map(u => [u.id, u]));
+    for (const [id, sprite] of this.units) {
+      const unit = units.get(id);
+      if (!unit) continue;
+      const art = this.visuals.unit(unit.type, unit.side);
+      this.tweens.killTweensOf(sprite.image);
+      sprite.image.setTexture(art.key).setOrigin(.5, art.anchorY)
+        .setDisplaySize(art.width, art.height).setAlpha(1).setRotation(0);
+    }
+    const buildings = new Map(view.buildings.map(b => [b.id, b]));
+    for (const [id, sprite] of this.buildings) {
+      const building = buildings.get(id);
+      if (!building) continue;
+      const art = this.visuals.building(building.type, building.side);
+      this.tweens.killTweensOf(sprite.image);
+      sprite.image.setTexture(art.key).setOrigin(.5, art.anchorY)
+        .setDisplaySize(art.width, art.height).setAlpha(1);
+      sprite.queue?.setPosition(building.x + art.width / 2 - 4,
+        building.y - art.height * art.anchorY);
+    }
+  }
+
   private sync(view: MatchView, delta: number) {
     const frame = ++this.frameNo;
     const smooth =
@@ -1245,15 +1272,22 @@ export class BattleScene extends Phaser.Scene {
         const sprite = this.units.get(u.id);
         const x = sprite?.x ?? u.x,
           y = sprite?.y ?? u.y;
-        // The footprint remains readable while the tall fantasy sprite stands above it.
-        g.fillStyle(0x3ca8ff, 0.14);
-        g.fillEllipse(x, y + 1, 34, 16);
-        g.lineStyle(4.5, 0x071722, 0.92);
-        g.strokeEllipse(x, y + 1, 34, 16);
-        g.lineStyle(2, 0xddc389, 1);
-        g.strokeEllipse(x, y + 1, 34, 16);
-        g.lineStyle(1, 0x9cdded, 0.9);
-        g.strokeEllipse(x, y + 1, 27, 11);
+        if (this.visuals.isAtlas) {
+          // A selected tactical counter uses a rectangular brass outline.
+          g.fillStyle(0x3ca8ff, .13);
+          g.fillRoundedRect(x - 23, y - 18, 46, 36, 4);
+          g.lineStyle(2.5, 0xddc389, 1);
+          g.strokeRoundedRect(x - 23, y - 18, 46, 36, 4);
+        } else {
+          g.fillStyle(0x3ca8ff, 0.14);
+          g.fillEllipse(x, y + 1, 34, 16);
+          g.lineStyle(4.5, 0x071722, 0.92);
+          g.strokeEllipse(x, y + 1, 34, 16);
+          g.lineStyle(2, 0xddc389, 1);
+          g.strokeEllipse(x, y + 1, 34, 16);
+          g.lineStyle(1, 0x9cdded, 0.9);
+          g.strokeEllipse(x, y + 1, 27, 11);
+        }
       }
     }
 

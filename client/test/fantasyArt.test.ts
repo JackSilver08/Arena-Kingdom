@@ -4,9 +4,10 @@ import { existsSync } from 'node:fs';
 import { BUILDING_STATS, GAME_RULES, MOUNTAIN_RIDGES, UNIT_STATS, isWalkableLand } from '@arena-kingdom/shared';
 import { arenaMapArtMoba } from '../src/game/mobaMapArt.ts';
 import { arenaMapArtV2 } from '../src/game/mapArt.ts';
+import { arenaMapArtAtlas } from '../src/game/atlasMapArt.ts';
 
 test('every terrain skin identifies exactly the authoritative blocked ridges', () => {
-  for (const markup of [arenaMapArtMoba(), arenaMapArtV2(GAME_RULES.map, 'documentary'), arenaMapArtV2(GAME_RULES.map, 'vintage')]) {
+  for (const markup of [arenaMapArtMoba(), arenaMapArtAtlas(), arenaMapArtV2(GAME_RULES.map, 'documentary'), arenaMapArtV2(GAME_RULES.map, 'vintage')]) {
     assert.equal((markup.match(/data-blocked-ridge=/g) ?? []).length, MOUNTAIN_RIDGES.length);
     MOUNTAIN_RIDGES.forEach((ridge, index) => {
       assert.ok(markup.includes(`data-blocked-ridge="${index}"`));

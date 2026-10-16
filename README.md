@@ -10,7 +10,7 @@ Players manage economy, build structures, recruit armies and command troops to d
 
 ## What's in v0.8
 
-- Original fantasy MOBA terrain and the complete illustrated army/building roster; dark brass HUD, minimap, camera zoom/pan and touch camera mode
+- Default Medieval Tactical Atlas (hand-drawn parchment map, medieval buildings and military counters), with optional fantasy MOBA, documentary and vintage skins; dark brass HUD, minimap, camera zoom/pan and touch camera mode
 - Low/Medium/High graphics, independent nature/weather controls, reduced motion and a stable end-of-match recap
 - Versioned snapshots, visibility-safe orders and private opponent economy; server-owned ranked queue and one active online match per account
 - Read [the implementation plan](docs/IMPLEMENTATION_PLAN.vi.md) and [verified release report](docs/IMPLEMENTATION_RESULT.vi.md) for scope and remaining roadmap work

@@ -7,6 +7,8 @@ const required = [
   'client/src/game/displaySettings.ts',
   'client/src/game/displaySettingsPanel.ts',
   'client/src/game/visuals.ts',
+  'client/src/game/atlasMapArt.ts',
+  'client/src/game/atlasEntityArt.ts',
   'client/src/game/frontlineOverlay.ts',
   'client/src/game/commandArrows.ts',
   'client/src/game/battleRecap.ts',
@@ -21,7 +23,8 @@ const required = [
 ];
 
 const checks = [
-  ['default fantasy MOBA map style', "mapStyle: 'moba'", 'client/src/game/displaySettings.ts'],
+  ['default medieval tactical atlas map style', "mapStyle: 'atlas'", 'client/src/game/displaySettings.ts'],
+  ['atlas sprites wired to renderer', 'atlasEntityArt(type, side)', 'client/src/game/visuals.ts'],
   ['legacy documentary map style available', "'documentary'", 'client/src/game/displaySettings.ts'],
   ['vintage map style', "'vintage'", 'client/src/game/mapArt.ts'],
   ['frontline depth below entities', 'frontline:', 'client/src/game/visuals.ts'],

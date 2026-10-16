@@ -1,4 +1,4 @@
-export type MapStyle = 'documentary' | 'vintage' | 'moba';
+export type MapStyle = 'atlas' | 'documentary' | 'vintage' | 'moba';
 export type GraphicsQuality = 'low' | 'medium' | 'high';
 export interface DisplaySettings {
   mapStyle: MapStyle;
@@ -22,7 +22,7 @@ const prefersReducedMotion = () => {
 };
 
 export const DEFAULT_DISPLAY_SETTINGS: Readonly<DisplaySettings> = {
-  mapStyle: 'moba',
+  mapStyle: 'atlas',
   quality: 'medium',
   nature: true,
   weather: false,
@@ -32,7 +32,7 @@ export const DEFAULT_DISPLAY_SETTINGS: Readonly<DisplaySettings> = {
 };
 
 function isMapStyle(value: unknown): value is MapStyle {
-  return value === 'documentary' || value === 'vintage' || value === 'moba';
+  return value === 'atlas' || value === 'documentary' || value === 'vintage' || value === 'moba';
 }
 
 function normalize(value: unknown): Partial<DisplaySettings> {

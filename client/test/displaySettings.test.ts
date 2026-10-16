@@ -13,7 +13,7 @@ const settings = await import('../src/game/displaySettings');
 test('new and old saved preferences receive safe quality and nature defaults', () => {
   stored = null;
   const fresh = settings.loadDisplaySettings();
-  assert.equal(fresh.mapStyle, 'moba');
+  assert.equal(fresh.mapStyle, 'atlas');
   assert.equal(fresh.quality, 'medium');
   assert.equal(fresh.reducedMotion, true);
   stored = JSON.stringify({ mapStyle: 'vintage', formations: true });
@@ -22,6 +22,10 @@ test('new and old saved preferences receive safe quality and nature defaults', (
   assert.equal(migrated.quality, 'medium');
   assert.equal(migrated.nature, true);
   assert.equal(migrated.weather, false);
+  stored = JSON.stringify({ mapStyle: 'moba' });
+  assert.equal(settings.loadDisplaySettings().mapStyle, 'moba');
+  stored = JSON.stringify({ mapStyle: 'atlas' });
+  assert.equal(settings.loadDisplaySettings().mapStyle, 'atlas');
 });
 
 test('malformed storage cannot enable invalid graphics presets', () => {

@@ -159,7 +159,7 @@ export class DisplaySettingsPanel {
     mapRow.innerHTML = '<span><b>Map style</b><small>Switches the battlefield plate immediately</small></span>';
     const select = document.createElement('select');
     select.dataset.setting = 'mapStyle';
-    select.innerHTML = '<option value="moba">Fantasy MOBA</option><option value="documentary">Documentary</option><option value="vintage">Vintage</option>';
+    select.innerHTML = '<option value="atlas">Medieval Tactical Atlas</option><option value="moba">Fantasy MOBA</option><option value="documentary">Documentary</option><option value="vintage">Vintage</option>';
     select.addEventListener('change', () => {
       this.set({ ...this.settings, mapStyle: select.value as MapStyle });
     });
