@@ -1,0 +1,179 @@
+/* P3: illustrated war-council presentation. Only applies to the Atlas skin.
+ * Layout, focus order, hit targets and controls stay the same for all modes. */
+.battle[data-map-style="atlas"] {
+  --ink: #42372b;
+  --battle-line: #927c5c;
+  --battle-muted: #796852;
+  --yellow: #ac7c3d;
+  --map-edge: #806f55;
+  color: #3f352a;
+}
+.battle[data-map-style="atlas"] .hud-panel {
+  color: #3f352a;
+  background:
+    repeating-linear-gradient(120deg, #a78b5b08 0 1px, transparent 1px 8px),
+    linear-gradient(175deg, #f6e9cbea, #d4c19aec);
+  border: 2px solid #7d6143;
+  outline: 1px solid #d6b681;
+  outline-offset: -5px;
+  box-shadow: 0 4px 12px #291b0a45;
+}
+.battle[data-map-style="atlas"] .hud-back {
+  color: #3f352a;
+  background: #e9d6ac;
+  border: 1px solid #806747;
+}
+.battle[data-map-style="atlas"] .hud-back:hover { background: #dbc191; }
+.battle[data-map-style="atlas"] .hud-timer,
+.battle[data-map-style="atlas"] .hud-names b,
+.battle[data-map-style="atlas"] .res .yb,
+.battle[data-map-style="atlas"] .hud-selection-copy strong { color: #352b21; }
+.battle[data-map-style="atlas"] .hud-names span,
+.battle[data-map-style="atlas"] .res-sub { color: #67553e; }
+.battle[data-map-style="atlas"] .castle-bar {
+  background: #8e7553;
+  border: 1px solid #5f4b37;
+}
+.battle[data-map-style="atlas"] .income-meter { background: #aa9472; }
+.battle[data-map-style="atlas"] .income-meter i { background: #4f7653; }
+
+.battle[data-map-style="atlas"] .battle-camera-tools button,
+.battle[data-map-style="atlas"] .display-settings-toggle {
+  background: #eee0bef5;
+  color: #473829;
+  border: 2px solid #725b40;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 2px #f5edd3, 0 3px 8px #291b0a33;
+}
+.battle[data-map-style="atlas"] .battle-camera-tools button:hover,
+.battle[data-map-style="atlas"] .battle-camera-tools button[aria-pressed="true"],
+.battle[data-map-style="atlas"] .display-settings-toggle:hover {
+  background: #dfc797;
+  color: #33281f;
+  border-color: #8a6435;
+}
+.battle[data-map-style="atlas"] .battle-minimap {
+  background: #e5d3ac;
+  border: 3px double #675035;
+  outline: 1px solid #c5a979;
+  padding: 4px;
+  box-shadow: inset 0 0 0 2px #f5e8c9, 0 5px 14px #26180b44;
+}
+.battle[data-map-style="atlas"] .battle-minimap canvas {
+  background: #9fc0cd;
+  border: 1px solid #7d694c !important;
+  border-radius: 0 !important;
+}
+.battle[data-map-style="atlas"] .battle-command-deck {
+  color: #3e3225;
+  border: 3px double #614d35;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 39px, #81633c0a 39px 40px),
+    linear-gradient(160deg, #f7ebcefa, #ddc69ff8);
+  box-shadow: inset 0 0 0 3px #ead8b1, 0 8px 24px #241c124a;
+  padding-top: 8px;
+}
+.battle[data-map-style="atlas"] .campaign-deck-kicker {
+  display: block;
+  text-align: center;
+  font: 600 9px/1.3 Georgia, serif;
+  letter-spacing: .26em;
+  color: #806544;
+  margin-bottom: 3px;
+}
+.battle .campaign-deck-kicker { display: none; }
+.battle[data-map-style="atlas"] .hud-selection { border-bottom: 1px solid #a38c69; }
+.battle[data-map-style="atlas"] .hud-selection-crest {
+  background: #ead8b1;
+  color: #5b452e;
+  border: 2px double #91704d;
+}
+.battle[data-map-style="atlas"] .hud-selection-copy small { color: #7f5c33; }
+.battle[data-map-style="atlas"] .hud-selection-copy span,
+.battle[data-map-style="atlas"] .hud-selection-types { color: #75654e; }
+.battle[data-map-style="atlas"] .cmd-btn {
+  border: 1px solid #91754e;
+  background: linear-gradient(#f5e8c7, #d7bd90);
+  color: #3b3125;
+  box-shadow: inset 0 0 0 1px #f8efd6;
+}
+.battle[data-map-style="atlas"] .cmd-btn:hover,
+.battle[data-map-style="atlas"] .cmd-btn.active {
+  background: #c8a76e;
+  border-color: #63472a;
+  color: #251c14;
+}
+.battle[data-map-style="atlas"] .cmd-icon { filter: sepia(.25) saturate(.75); }
+.battle[data-map-style="atlas"] .cmd-key {
+  background: #705a3e;
+  color: #f6ebce;
+}
+.battle[data-map-style="atlas"] .cmd-btn.active .cmd-key {
+  background: #3d3226;
+  color: #f7edd5;
+}
+.battle[data-map-style="atlas"] .hud-hint {
+  border: 1px solid #877151;
+  background: #f1e3c4f2;
+  color: #4c392b;
+  box-shadow: 0 2px 9px #291d1240;
+}
+.battle[data-map-style="atlas"] .hud-popup,
+.battle[data-map-style="atlas"] .hud-popup[data-mode="troops"],
+.battle[data-map-style="atlas"] .hud-popup[data-mode="recruit"] {
+  border: 3px double #806344;
+  background: #e9d8b5fc;
+  color: #3e3124;
+}
+.battle[data-map-style="atlas"] .hud-popup small,
+.battle[data-map-style="atlas"] .popup-note,
+.battle[data-map-style="atlas"] .troops-stat,
+.battle[data-map-style="atlas"] .troops-hint,
+.battle[data-map-style="atlas"] .formation-mods,
+.battle[data-map-style="atlas"] .barracks-context-head span,
+.battle[data-map-style="atlas"] .fence-rotation-head span { color: #69573d; }
+.battle[data-map-style="atlas"] .hud-popup .option,
+.battle[data-map-style="atlas"] .formation-option,
+.battle[data-map-style="atlas"] .fraction-option,
+.battle[data-map-style="atlas"] .fence-direction,
+.battle[data-map-style="atlas"] .barracks-unit-option,
+.battle[data-map-style="atlas"] .troops-fraction,
+.battle[data-map-style="atlas"] .fence-rotate-btn {
+  background: #f1e3c4;
+  border-color: #9c8160;
+  color: #3a3025;
+}
+.battle[data-map-style="atlas"] .hud-popup .option.active,
+.battle[data-map-style="atlas"] .formation-option.active,
+.battle[data-map-style="atlas"] .fraction-option.active,
+.battle[data-map-style="atlas"] .fence-direction.active,
+.battle[data-map-style="atlas"] .troops-fraction.active {
+  background: #c8ad7f;
+  border-color: #685034;
+  color: #271d15;
+}
+.battle[data-map-style="atlas"] .display-settings-panel,
+.battle[data-map-style="atlas"] .battle-recap-panel {
+  background: #ead9baf9;
+  border: 3px double #6f5234;
+  color: #423425;
+}
+.battle[data-map-style="atlas"] .display-setting-row { border-top-color: #ae936c; }
+.battle[data-map-style="atlas"] .display-setting-row small,
+.battle[data-map-style="atlas"] .display-settings-note { color: #725e44; }
+.battle[data-map-style="atlas"] .display-setting-row select {
+  background: #f2e5c8; color: #3e3124; border: 1px solid #886849;
+}
+.battle[data-map-style="atlas"] .display-settings-close {
+  background: #e4ceaa; color: #41301d; border-color: #8b7151;
+}
+.battle[data-map-style="atlas"] .stage-banner,
+.battle[data-map-style="atlas"] .battle-toast {
+  background: #eee0c0ed; color: #3e3124; border-color: #92714c;
+}
+@media (max-width: 720px) {
+  .battle[data-map-style="atlas"] .hud-panel { outline-offset: -3px; }
+  .battle[data-map-style="atlas"] .battle-command-deck { padding: 5px; }
+  .battle[data-map-style="atlas"] .campaign-deck-kicker { font-size: 8px; letter-spacing: .15em; }
+  .battle[data-map-style="atlas"] .cmd-btn { min-height: 44px; }
+}

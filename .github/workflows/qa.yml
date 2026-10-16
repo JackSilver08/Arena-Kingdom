@@ -60,5 +60,15 @@ jobs:
           path: artifacts/medieval-campaign-entities.svg
           retention-days: 30
 
+      - name: Export P3 historical campaign order legend
+        run: node --import tsx tools/export-campaign-p3.ts
+
+      - name: Upload P3 campaign legend proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: medieval-campaign-commands
+          path: artifacts/medieval-campaign-commands.svg
+          retention-days: 30
+
       - name: Economy balance lab
         run: npm run simulate:balance -- 4

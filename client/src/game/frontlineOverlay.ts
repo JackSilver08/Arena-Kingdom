@@ -13,6 +13,8 @@ import { COLORS } from './symbols';
 import { BATTLE_DEPTH } from './visuals';
 import { CommandArrowOverlay } from './commandArrows';
 import type { GameController } from './GameController';
+import { DISPLAY_SETTINGS_EVENT, loadDisplaySettings, type DisplaySettings, type MapStyle } from './displaySettings';
+import { campaignOverlayTheme, campaignSideColorNumber } from './campaignPresentation';
 
 const PAPER = 0xf3e8c8;
 const GRID_SAMPLE = 40;
@@ -42,6 +44,15 @@ export class FrontlineOverlay {
   private perfSamples = 0;
   private perfElapsed = 0;
   private enabled = true;
+  private style: MapStyle = loadDisplaySettings().mapStyle;
+  private readonly onSettings = (event: Event) => {
+    const settings = (event as CustomEvent<DisplaySettings>).detail;
+    if (settings) {
+      this.style = settings.mapStyle;
+      this.drawInfluenceCells();
+      this.drawFrontLines(true);
+    }
+  };
 
   constructor(private readonly scene: Phaser.Scene, controller?: GameController) {
     this.field = createInfluenceField(GRID_SAMPLE);
@@ -53,6 +64,7 @@ export class FrontlineOverlay {
     const activeController = controller ?? (scene as unknown as { controller?: GameController }).controller;
     if (!activeController) throw new Error('FrontlineOverlay requires a GameController.');
     this.commandArrows = new CommandArrowOverlay(scene, activeController);
+    window.addEventListener(DISPLAY_SETTINGS_EVENT, this.onSettings);
   }
 
   update(view: MatchView, deltaMs: number, enabled: boolean, reducedMotion: boolean) {
@@ -103,6 +115,7 @@ export class FrontlineOverlay {
   }
 
   destroy() {
+    window.removeEventListener(DISPLAY_SETTINGS_EVENT, this.onSettings);
     this.influence.destroy();
     this.frontline.destroy();
     this.commandArrows.destroy();
@@ -124,7 +137,7 @@ export class FrontlineOverlay {
         if (Math.abs(score) < 0.05) continue;
         const side: Side = score >= 0 ? 'blue' : 'red';
         const strength = Math.min(1, Math.abs(score) / 4);
-        const alpha = 0.08 + strength * 0.06;
+        const alpha = this.style === 'atlas' ? .035 + strength * .055 : .08 + strength * .06;
         g.fillStyle(color(side), alpha);
         g.fillRect(this.field.originX + col * this.field.cellSize, y, this.field.cellSize + 1, this.field.cellSize + 1);
       }
@@ -133,7 +146,7 @@ export class FrontlineOverlay {
     for (const polygon of this.contours.polygons) {
       if (polygon.points.length < 4) continue;
       const c = center(polygon.points);
-      g.fillStyle(color(polygon.side), 0.08);
+      g.fillStyle(color(polygon.side), this.style === 'atlas' ? .055 : .08);
       g.fillPoints(polygon.points.map((point) => new Phaser.Geom.Point(point.x, point.y)), true);
       g.fillStyle(PAPER, 0.03);
       g.fillCircle(c.x, c.y, 3);
@@ -143,12 +156,26 @@ export class FrontlineOverlay {
   private drawFrontLines(reducedMotion: boolean) {
     const g = this.frontline;
     g.clear();
-    const pulse = reducedMotion ? 0 : Math.sin(this.scene.time.now * 0.002) * 0.025;
+    const atlas = this.style === 'atlas';
+    const theme = campaignOverlayTheme(this.style);
+    const pulse = reducedMotion || atlas ? 0 : Math.sin(this.scene.time.now * 0.002) * 0.025;
     for (const points of this.contours.frontLines) {
       if (points.length < 3) continue;
       const side: Side = center(points).x < 960 ? 'blue' : 'red';
-      const teamColor = color(side);
+      const teamColor = atlas ? campaignSideColorNumber(side) : color(side);
       const closed = Math.hypot(points[0].x - points[points.length - 1].x, points[0].y - points[points.length - 1].y) < 2;
+      if (atlas) {
+        const vertices = points.map(p => new Phaser.Geom.Point(p.x, p.y));
+        g.lineStyle(6, theme.paper, .84);
+        g.strokePoints(vertices, closed);
+        g.lineStyle(2.3, theme.ink, .78);
+        g.strokePoints(vertices, closed);
+        g.lineStyle(1.6, teamColor, .8);
+        // Campaign boundary marks. Alternate segments, no expensive canvas masks.
+        for (let i = 1; i < points.length; i += 2)
+          g.lineBetween(points[i - 1].x,points[i - 1].y,points[i].x,points[i].y);
+        continue;
+      }
       g.lineStyle(12, teamColor, 0.10 + pulse);
       g.strokePoints(points.map((point) => new Phaser.Geom.Point(point.x, point.y)), closed);
       g.lineStyle(5, teamColor, 0.24 + pulse);

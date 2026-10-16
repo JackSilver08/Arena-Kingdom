@@ -33,6 +33,7 @@ import { battleView } from './visuals';
 import { battleResolution } from './battleLayout';
 import type { GameSession, SessionSignal } from './session';
 import './battleTheme.css';
+import './campaignHud.css';
 import './battleRecap.css';
 
 export type ControlMode = 'idle' | 'build' | 'troops';
@@ -768,7 +769,8 @@ export class GameController {
         </div>
         <div class="battle-minimap" data-minimap aria-label="Battlefield overview"></div>
 
-        <div class="battle-command-deck">
+        <div class="battle-command-deck" aria-label="War council command panel">
+        <div class="campaign-deck-kicker" aria-hidden="true">WAR COUNCIL · FIELD COMMANDS</div>
         <div class="hud-selection">
           <div class="hud-selection-crest" aria-hidden="true">♜</div>
           <div class="hud-selection-copy"><small data-hud="selectionTitle">YOUR KINGDOM</small><strong data-hud="selectionCount">Choose your army</strong><span data-hud="selectionHealth">Select troops to issue orders</span></div>

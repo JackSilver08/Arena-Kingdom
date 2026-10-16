@@ -3,6 +3,8 @@ import type { ArmyFraction, MatchView, Side } from '@arena-kingdom/shared';
 import type { GameController } from './GameController';
 import { BATTLE_DEPTH } from './visuals';
 import { COLORS } from './symbols';
+import { DISPLAY_SETTINGS_EVENT, loadDisplaySettings, type DisplaySettings, type MapStyle } from './displaySettings';
+import { campaignOverlayTheme, campaignSideColorNumber } from './campaignPresentation';
 
 export type CommandArrowKind = 'move' | 'attack';
 
@@ -89,6 +91,11 @@ export class CommandArrowOverlay {
   private pointerDown: { button: number; x: number; y: number; shift: boolean } | null = null;
   private nextId = 1;
   private phase = 0;
+  private style: MapStyle = loadDisplaySettings().mapStyle;
+  private readonly onSettings = (event: Event) => {
+    const settings = (event as CustomEvent<DisplaySettings>).detail;
+    if (settings) this.style = settings.mapStyle;
+  };
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -98,6 +105,7 @@ export class CommandArrowOverlay {
     scene.input.on('pointerdown', this.onPointerDown, this);
     scene.input.on('pointerup', this.onPointerUp, this);
     scene.input.on('pointerupoutside', this.onPointerUp, this);
+    window.addEventListener(DISPLAY_SETTINGS_EVENT, this.onSettings);
   }
 
   update(enabled: boolean, reducedMotion: boolean) {
@@ -112,6 +120,7 @@ export class CommandArrowOverlay {
     this.scene.input.off('pointerdown', this.onPointerDown, this);
     this.scene.input.off('pointerup', this.onPointerUp, this);
     this.scene.input.off('pointerupoutside', this.onPointerUp, this);
+    window.removeEventListener(DISPLAY_SETTINGS_EVENT, this.onSettings);
     this.graphics.destroy();
   }
 
@@ -161,14 +170,66 @@ export class CommandArrowOverlay {
       to,
       control: curveControl(from, to, this.phase++),
       bornAt: this.scene.time.now,
-      expiresAt: this.scene.time.now + LIFETIME_MS,
+      expiresAt: this.scene.time.now + (this.style === 'atlas' ? 3300 : LIFETIME_MS),
       phase: this.phase
     };
     this.arrows.push(arrow);
     if (this.arrows.length > MAX_ARROWS) this.arrows.splice(0, this.arrows.length - MAX_ARROWS);
   }
 
+  private drawCampaignArrow(arrow: CommandArrow, now: number) {
+    // Inked command diagram: never a promised pathfinding route. Only local
+    // player orders are recorded by the pointer event listeners.
+    const g = this.graphics;
+    const { paper, ink } = campaignOverlayTheme('atlas');
+    const team = campaignSideColorNumber(arrow.side);
+    const age = now - arrow.bornAt;
+    const fade = Math.min(1, age / 180, (arrow.expiresAt - now) / 500);
+    if (fade <= 0) return;
+    const points = Array.from({length: 25}, (_, i) => {
+      const p = bezier(arrow.from, arrow.control, arrow.to, i / 24);
+      return new Phaser.Math.Vector2(p.x, p.y);
+    });
+    const heavy = arrow.kind === 'attack';
+    g.lineStyle(heavy ? 14 : 10, paper, fade * .88);
+    g.strokePoints(points, false);
+    g.lineStyle(heavy ? 7 : 4.2, ink, fade * .91);
+    g.strokePoints(points, false);
+    // March route is dotted; attack is a bold continuous campaign arrow.
+    g.lineStyle(heavy ? 4.8 : 2.8, team, fade);
+    if (heavy) g.strokePoints(points, false);
+    else for (let i = 1; i < points.length; i += 3) {
+      const start = points[i - 1];
+      const end = points[Math.min(i + 1, points.length - 1)];
+      g.lineBetween(start.x, start.y, end.x, end.y);
+    }
+    const direction = tangent(arrow.from, arrow.control, arrow.to, .99);
+    const theta = Math.atan2(direction.y, direction.x);
+    const tip = arrow.to;
+    const size = heavy ? 22 : 17;
+    const wing = .52;
+    const lx = tip.x - Math.cos(theta - wing) * size;
+    const ly = tip.y - Math.sin(theta - wing) * size;
+    const rx = tip.x - Math.cos(theta + wing) * size;
+    const ry = tip.y - Math.sin(theta + wing) * size;
+    g.fillStyle(paper, fade);
+    g.fillTriangle(tip.x,tip.y,lx-Math.cos(theta)*3,ly-Math.sin(theta)*3,rx-Math.cos(theta)*3,ry-Math.sin(theta)*3);
+    g.fillStyle(team, fade);
+    g.fillTriangle(tip.x,tip.y,lx,ly,rx,ry);
+    g.lineStyle(1.5, ink, fade);
+    g.lineBetween(lx,ly,tip.x,tip.y);
+    g.lineBetween(tip.x,tip.y,rx,ry);
+    g.lineStyle(2, ink, fade * .8);
+    g.strokeCircle(arrow.from.x, arrow.from.y, 6);
+    g.fillStyle(team, fade * .85);
+    g.fillCircle(arrow.from.x,arrow.from.y,3);
+  }
+
   private drawArrow(arrow: CommandArrow, now: number, reducedMotion: boolean) {
+    if (this.style === 'atlas') {
+      this.drawCampaignArrow(arrow, now);
+      return;
+    }
     const g = this.graphics;
     const lifetime = arrow.expiresAt - arrow.bornAt;
     const age = now - arrow.bornAt;
