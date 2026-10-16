@@ -196,6 +196,10 @@ export class DisplaySettingsPanel {
   }
 
   private syncControls() {
+    // Visible proof of the active skin, rather than an ambiguous Display label.
+    this.button.textContent = this.settings.mapStyle === 'atlas' ? 'ATLAS' : 'DISPLAY';
+    this.button.title = `Current map: ${this.settings.mapStyle} (O)`;
+    this.root.closest('.battle')?.setAttribute('data-map-style', this.settings.mapStyle);
     const style = this.panel.querySelector<HTMLSelectElement>('[data-setting="mapStyle"]');
     if (style) style.value = this.settings.mapStyle;
     const quality = this.panel.querySelector<HTMLSelectElement>('[data-setting="quality"]');

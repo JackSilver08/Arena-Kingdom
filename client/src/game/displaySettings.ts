@@ -11,6 +11,12 @@ export interface DisplaySettings {
 }
 
 const STORAGE_KEY = 'arena-kingdom.display-settings';
+/**
+ * Previous builds stored an explicit old default (documentary/moba) without a
+ * schema version. Migrate that one time to the newly approved Atlas skin.
+ * Future explicit choices stay untouched.
+ */
+const STYLE_SCHEMA_VERSION = 2;
 export const DISPLAY_SETTINGS_EVENT = 'arena-kingdom:display-settings';
 
 const prefersReducedMotion = () => {
@@ -53,7 +59,20 @@ export function loadDisplaySettings(): DisplaySettings {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_DISPLAY_SETTINGS };
-    return { ...DEFAULT_DISPLAY_SETTINGS, ...normalize(JSON.parse(raw)) };
+    const parsed: unknown = JSON.parse(raw);
+    const record = parsed && typeof parsed === 'object'
+      ? parsed as Record<string, unknown> : {};
+    const next = { ...DEFAULT_DISPLAY_SETTINGS, ...normalize(parsed) };
+    if (record.styleSchemaVersion !== STYLE_SCHEMA_VERSION) {
+      next.mapStyle = 'atlas';
+      // Preserve quality, motion and all other preferences. Do not dispatch a
+      // settings event while loading; Phaser has not initialized its scene yet.
+      try {
+        window.localStorage.setItem(STORAGE_KEY,
+          JSON.stringify({ ...next, styleSchemaVersion: STYLE_SCHEMA_VERSION }));
+      } catch { /* private mode or locked storage */ }
+    }
+    return next;
   } catch {
     return { ...DEFAULT_DISPLAY_SETTINGS };
   }
@@ -62,7 +81,7 @@ export function loadDisplaySettings(): DisplaySettings {
 export function saveDisplaySettings(settings: DisplaySettings): DisplaySettings {
   const next = { ...DEFAULT_DISPLAY_SETTINGS, ...normalize(settings) };
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...next, styleSchemaVersion: STYLE_SCHEMA_VERSION }));
   } catch {
     // Storage can be unavailable in private browsing or locked-down contexts.
   }

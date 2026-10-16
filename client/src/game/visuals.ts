@@ -194,8 +194,9 @@ export class BattleVisualRenderer {
       const red = key.endsWith('-red');
       ctx.scale(size.width / 100, size.height / 100);
       ctx.fillStyle = '#a9b5a5'; ctx.strokeStyle = '#243b43'; ctx.lineWidth = 4;
-      const type = key.split('-')[0] as FantasyEntity;
-      const foot = FANTASY_SIZE[type]?.anchorY ?? .8;
+      const atlas = key.startsWith('atlas-');
+      const type = key.replace(/^atlas-/, '').replace(/-(blue|red)$/, '') as FantasyEntity;
+      const foot = atlas ? (ATLAS_SIZE[type]?.anchorY ?? .5) : (FANTASY_SIZE[type]?.anchorY ?? .8);
       ctx.fillRect(25, foot * 100 - 40, 50, 40); ctx.strokeRect(25, foot * 100 - 40, 50, 40);
       ctx.fillStyle = red ? '#cd5960' : '#459bd3'; ctx.fillRect(40, foot * 100 - 29, 20, 16);
     }

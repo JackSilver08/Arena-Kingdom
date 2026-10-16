@@ -18,14 +18,21 @@ test('new and old saved preferences receive safe quality and nature defaults', (
   assert.equal(fresh.reducedMotion, true);
   stored = JSON.stringify({ mapStyle: 'vintage', formations: true });
   const migrated = settings.loadDisplaySettings();
-  assert.equal(migrated.mapStyle, 'vintage');
+  assert.equal(migrated.mapStyle, 'atlas', 'migrate old skin to the approved atlas');
+  assert.equal(migrated.formations, true, 'retain unrelated preferences');
   assert.equal(migrated.quality, 'medium');
   assert.equal(migrated.nature, true);
   assert.equal(migrated.weather, false);
-  stored = JSON.stringify({ mapStyle: 'moba' });
-  assert.equal(settings.loadDisplaySettings().mapStyle, 'moba');
-  stored = JSON.stringify({ mapStyle: 'atlas' });
-  assert.equal(settings.loadDisplaySettings().mapStyle, 'atlas');
+  assert.equal(JSON.parse(stored!).styleSchemaVersion, 2);
+  stored = JSON.stringify({ mapStyle: 'moba', quality: 'high', weather: true });
+  const previousMoba = settings.loadDisplaySettings();
+  assert.equal(previousMoba.mapStyle, 'atlas', 'older saved MOBA default must not hide Atlas');
+  assert.equal(previousMoba.quality, 'high');
+  assert.equal(previousMoba.weather, true);
+  const moba = settings.saveDisplaySettings({ ...previousMoba, mapStyle: 'moba' });
+  assert.equal(settings.loadDisplaySettings().mapStyle, moba.mapStyle, 'new user choice persists');
+  const vintage = settings.saveDisplaySettings({ ...moba, mapStyle: 'vintage' });
+  assert.equal(settings.loadDisplaySettings().mapStyle, vintage.mapStyle);
 });
 
 test('malformed storage cannot enable invalid graphics presets', () => {
@@ -43,6 +50,6 @@ test('saved independent nature and weather preferences survive reload and publis
   const next = settings.saveDisplaySettings({ ...settings.DEFAULT_DISPLAY_SETTINGS,
     quality: 'low', nature: false, weather: true });
   assert.deepEqual(settings.loadDisplaySettings(), next);
-  assert.equal(events.length, 1);
-  assert.equal((events[0] as CustomEvent).detail.weather, true);
+  assert.equal((events.at(-1) as CustomEvent).detail.weather, true);
+  assert.equal(JSON.parse(stored!).styleSchemaVersion, 2);
 });

@@ -28,6 +28,7 @@ import { $, html, setHtml, trusted, type SafeHtml } from '../lib/html';
 import { bannerIcon, buildingArt, castleArt, envelopeIcon, fallbackIcon, hammerIcon, helmetIcon, houseIcon, moneyBagIcon, unitShopArt } from './art';
 import { BattleScene } from './BattleScene';
 import { symbolArt } from './symbols';
+import { DISPLAY_SETTINGS_EVENT, loadDisplaySettings } from './displaySettings';
 import { battleView } from './visuals';
 import { battleResolution } from './battleLayout';
 import type { GameSession, SessionSignal } from './session';
@@ -136,6 +137,17 @@ export class GameController {
       this.session.on((signal) => this.onSignal(signal))
     );
     this.bindButtons();
+    const refreshArt = () => {
+      // Phaser changes sprites separately. Refresh menu glyphs and castle badges.
+      this.contextKey = '';
+      this.hudCache.delete('myCastleIcon');
+      this.hudCache.delete('enemyCastleIcon');
+      const icon = this.root.querySelector<HTMLElement>('.cmd-btn-fallback .cmd-icon');
+      if (icon) setHtml(icon, trusted(fallbackIcon(this.mySide)));
+      this.refreshHud(true);
+    };
+    window.addEventListener(DISPLAY_SETTINGS_EVENT, refreshArt);
+    this.disposers.push(() => window.removeEventListener(DISPLAY_SETTINGS_EVENT, refreshArt));
     this.refreshHud(true);
   }
 
@@ -978,7 +990,7 @@ export class GameController {
     const upkeep = armyUpkeep(army, supply);
     const contextBuilding = view?.buildings.find((b) => b.id === (this.contextBarracksId ?? this.contextCastleId));
     const contextStatus = contextBuilding ? `${contextBuilding.queue}|${contextBuilding.trainType ?? '-'}|${Math.round(contextBuilding.trainProgress * 10)}` : '';
-    const contextKey = `${me}|${this.mode}|${this.buildType}|${this.buildType === 'fence' && this.mode === 'build' ? this.buildFenceRotation : '-'}|${this.fraction}|${this.formation}|${this.contextBarracksId ?? '-'}|${this.contextCastleId ?? '-'}|${contextStatus}|${this.mode === 'troops' ? `${army}|${supply}|${upkeep}|${this.selection.size}` : ''}`;
+    const contextKey = `${loadDisplaySettings().mapStyle}|${me}|${this.mode}|${this.buildType}|${this.buildType === 'fence' && this.mode === 'build' ? this.buildFenceRotation : '-'}|${this.fraction}|${this.formation}|${this.contextBarracksId ?? '-'}|${this.contextCastleId ?? '-'}|${contextStatus}|${this.mode === 'troops' ? `${army}|${supply}|${upkeep}|${this.selection.size}` : ''}`;
     if (contextKey !== this.contextKey) {
       this.contextKey = contextKey;
       const popup = $(this.root, '[data-context]');

@@ -1,22 +1,29 @@
 import type { BuildingType, Side } from '@arena-kingdom/shared';
 import type { ShopUnitType } from './unitShopAssets';
 import { fantasyEntityArt } from './fantasyArt';
+import { atlasEntityArt } from './atlasEntityArt';
+import { loadDisplaySettings } from './displaySettings';
+
+const entityArt = (type: Parameters<typeof atlasEntityArt>[0], side: Side) =>
+  loadDisplaySettings().mapStyle === 'atlas'
+    ? atlasEntityArt(type, side)
+    : fantasyEntityArt(type, side);
 
 /** Menus and gameplay share the same original materials and silhouettes. */
 const svg = (viewBox: string, body: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">${body}</svg>`;
 
-export function castleArt(side: Side) { return fantasyEntityArt('castle', side); }
-export function villageArt(side: Side = 'blue') { return fantasyEntityArt('village', side); }
-export function barracksArt(side: Side) { return fantasyEntityArt('barracks', side); }
-export function towerArt(side: Side) { return fantasyEntityArt('tower', side); }
-export function troopArt(side: Side) { return fantasyEntityArt('soldier', side); }
-export function unitShopArt(type: ShopUnitType, side: Side) { return fantasyEntityArt(type, side); }
-export function fallbackIcon(side: Side) { return fantasyEntityArt('soldier', side); }
+export function castleArt(side: Side) { return entityArt('castle', side); }
+export function villageArt(side: Side = 'blue') { return entityArt('village', side); }
+export function barracksArt(side: Side) { return entityArt('barracks', side); }
+export function towerArt(side: Side) { return entityArt('tower', side); }
+export function troopArt(side: Side) { return entityArt('soldier', side); }
+export function unitShopArt(type: ShopUnitType, side: Side) { return entityArt(type, side); }
+export function fallbackIcon(side: Side) { return entityArt('soldier', side); }
 /** The menu sees the palisade side-on; the battlefield uses its vertical footprint. */
 export function fenceArt() {
-  return fantasyEntityArt('fence', 'blue').replace('<g stroke-linejoin=', '<g transform="rotate(90 50 50)" stroke-linejoin=');
+  return entityArt('fence', 'blue').replace('<g stroke-linejoin=', '<g transform="rotate(90 50 50)" stroke-linejoin=');
 }
-export function buildingArt(type: BuildingType, side: Side) { return fantasyEntityArt(type, side); }
+export function buildingArt(type: BuildingType, side: Side) { return entityArt(type, side); }
 /**
  * The battle ground is a single illustrated texture rather than a collection
  * of coloured rectangles. It keeps the engine's 1920 x 1080 coordinates, so

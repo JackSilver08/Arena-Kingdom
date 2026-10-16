@@ -21,3 +21,12 @@ Medieval Tactical Atlas is the new default map presentation for Arena Kingdom. I
 ## QA
 
 Run npm run qa. Atlas tests check terrain geometry, roster, deterministic output, quality presets and absence of baked-in units. Also manually verify fresh and saved profiles, style switching, zoom, placement and fence rotation, barracks recruitment, fog, mobile controls and replay before a broad release.
+
+## Upgrade from older persisted skins
+
+Existing installations saved a map style in localStorage, so changing the default
+alone left returning players stuck on Documentary/MOBA. The display settings
+loader now migrates pre-Atlas preferences once (style schema version 2) to the
+approved Atlas. All other preferences are preserved, and any deliberate
+subsequent map selection persists. The settings button displays ATLAS while
+the new skin is active.
