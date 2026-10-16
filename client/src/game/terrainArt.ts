@@ -1,5 +1,6 @@
 import { MOUNTAIN_RIDGES } from '@arena-kingdom/shared';
 import type { MapStyle } from './displaySettings';
+import { engravedRidgesArt } from './atlasRidgeEngraving';
 
 export type ArtQuality = 'low' | 'medium' | 'high';
 
@@ -18,6 +19,7 @@ export function terrainRasterSize(width: number, height: number, quality: ArtQua
 
 /** A single source for blocked terrain in every skin. The marked ellipse IS engine geometry. */
 export function blockedRidgesArt(style: MapStyle) {
+  if (style === 'atlas') return engravedRidgesArt();
   const fantasy = style === 'moba';
   const stone = fantasy ? '#50616a' : style === 'vintage' ? '#8e7959' : '#77807a';
   const light = fantasy ? '#a2ad92' : '#c7bb97';

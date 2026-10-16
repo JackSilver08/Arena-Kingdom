@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { MapStyle } from './displaySettings';
 import {
   GAME_RULES,
   isInNeutralZone,
@@ -22,6 +23,13 @@ export class FogOfWar {
   private readonly baseline = document.createElement("canvas");
   private quality: PresentationQuality = "medium";
   private lastUpdate = -Infinity;
+  private mapStyle: MapStyle = 'atlas';
+
+  setMapStyle(style: MapStyle) {
+    if (this.mapStyle === style) return;
+    this.mapStyle = style;
+    this.lastUpdate = -Infinity;
+  }
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -132,7 +140,9 @@ export class FogOfWar {
     };
     const memory = this.explored.getContext("2d")!;
     reveal(memory);
-    ctx.fillStyle = "rgba(3,12,22,0.88)";
+    ctx.fillStyle = this.mapStyle === 'atlas'
+      ? 'rgba(55,49,39,0.80)'
+      : 'rgba(3,12,22,0.88)';
     ctx.fillRect(0, 0, this.texture.width, this.texture.height);
     // Explored terrain remains muted; this texture never holds entity positions.
     ctx.globalCompositeOperation = "destination-out";

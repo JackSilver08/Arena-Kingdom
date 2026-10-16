@@ -2,12 +2,21 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { BUILDING_STATS, GAME_RULES, MOUNTAIN_RIDGES, UNIT_STATS, coastline, isWalkableLand } from '@arena-kingdom/shared';
 import { arenaMapArtAtlas } from '../src/game/atlasMapArt.ts';
+import { ATLAS_MAP_VERSION, ATLAS_COLORS } from '../src/game/atlasStyle.ts';
 import { ATLAS_SIZE, atlasEntityArt } from '../src/game/atlasEntityArt.ts';
 
 test('tactical atlas uses authoritative shoreline, mountain footprints and terrain dimensions', () => {
   const art = arenaMapArtAtlas();
   const start = coastline(480)[0];
   assert.ok(art.includes('data-map-style="atlas"'));
+  assert.equal(ATLAS_MAP_VERSION, 2);
+  assert.ok(art.includes('data-campaign-plate="2"'));
+  assert.ok(art.includes('data-cartography="watercolor-relief"'));
+  assert.ok(art.includes('data-cartography="terrain-ink"'));
+  assert.ok(art.includes('data-engraving="mountain"'));
+  assert.ok(art.includes('data-grove="ink"'));
+  assert.ok(art.includes(ATLAS_COLORS.ink));
+  assert.ok(art.includes(ATLAS_COLORS.sea));
   assert.ok(art.includes('viewBox="0 0 1920 1080"'));
   assert.ok(art.includes('id="atlas-coast" d="M' + start.x.toFixed(1) + ' ' + start.y.toFixed(1)));
   assert.equal((art.match(/data-blocked-ridge=/g) ?? []).length, MOUNTAIN_RIDGES.length);
@@ -20,6 +29,18 @@ test('tactical atlas uses authoritative shoreline, mountain footprints and terra
   assert.ok(art.includes('data-cartography="frame"'));
   assert.doesNotMatch(art, /<image|data-entity=|data-shallow-water|data-road|data-river/);
 });
+test('inked forest and terrain layers respect reduced detail without moving obstacles', () => {
+  const sparse = arenaMapArtAtlas(GAME_RULES.map, 'low', false);
+  const detailed = arenaMapArtAtlas(GAME_RULES.map, 'high', true);
+  assert.equal((sparse.match(/data-grove="ink"/g) ?? []).length, 16);
+  assert.equal((detailed.match(/data-grove="ink"/g) ?? []).length, 16);
+  assert.ok(detailed.match(/stroke-linejoin="round"/g)!.length >
+    sparse.match(/stroke-linejoin="round"/g)!.length);
+  assert.equal((sparse.match(/data-blocked-ridge=/g) ?? []).length, 5);
+  assert.equal((detailed.match(/data-blocked-ridge=/g) ?? []).length, 5);
+  assert.doesNotMatch(detailed, /data-road|data-river|data-route|data-unit|data-building/);
+});
+
 test('atlas terrain obeys presentation quality and viewport settings', () => {
   const large = { width: 2400, height: 1400 };
   for (const quality of ['low', 'medium', 'high'] as const) {

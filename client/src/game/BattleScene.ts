@@ -211,7 +211,8 @@ export class BattleScene extends Phaser.Scene {
           this.natureEnabled = settings.nature;
           this.weatherEnabled = settings.weather;
           this.fog.setQuality(settings.quality);
-          this.waves.setEnabled(settings.nature);
+          this.fog.setMapStyle(settings.mapStyle);
+          this.waves.setEnabled(settings.nature && settings.mapStyle !== 'atlas');
           // MOBA terrain owns its tree silhouettes; the legacy forest would obscure ridges/units.
           this.forest.setEnabled(
             settings.nature && (settings.mapStyle === "documentary" || settings.mapStyle === "vintage"),

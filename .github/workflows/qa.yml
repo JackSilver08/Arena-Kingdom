@@ -40,5 +40,15 @@ jobs:
       - name: Bundle budget
         run: npm run check:bundle
 
+      - name: Export campaign atlas artwork
+        run: node --import tsx tools/export-campaign-plate.ts
+
+      - name: Upload actual generated SVG for visual review
+        uses: actions/upload-artifact@v4
+        with:
+          name: medieval-campaign-map
+          path: artifacts/medieval-campaign-map.svg
+          retention-days: 30
+
       - name: Economy balance lab
         run: npm run simulate:balance -- 4
