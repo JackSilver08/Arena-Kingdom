@@ -3,7 +3,7 @@ import test from 'node:test';
 import { BUILDING_STATS, GAME_RULES, MOUNTAIN_RIDGES, UNIT_STATS, coastline, isWalkableLand } from '@arena-kingdom/shared';
 import { arenaMapArtAtlas } from '../src/game/atlasMapArt.ts';
 import { ATLAS_MAP_VERSION, ATLAS_COLORS } from '../src/game/atlasStyle.ts';
-import { ATLAS_SIZE, atlasEntityArt } from '../src/game/atlasEntityArt.ts';
+import { ATLAS_ENTITY_VERSION, ATLAS_SIZE, atlasEntityArt, atlasUnitGlyph } from '../src/game/atlasEntityArt.ts';
 
 test('tactical atlas uses authoritative shoreline, mountain footprints and terrain dimensions', () => {
   const art = arenaMapArtAtlas();
@@ -56,6 +56,8 @@ test('atlas terrain obeys presentation quality and viewport settings', () => {
 test('all seven military counters and five medieval building glyphs are original vector art', () => {
   const roster = [...Object.keys(UNIT_STATS), ...Object.keys(BUILDING_STATS)].sort();
   assert.deepEqual(Object.keys(ATLAS_SIZE).sort(), roster);
+  assert.equal(ATLAS_ENTITY_VERSION, 2);
+  const glyphs = new Set<string>();
   const signatures = new Set<string>();
   for (const type of roster as Array<keyof typeof ATLAS_SIZE>) {
     const dim = ATLAS_SIZE[type];
@@ -71,7 +73,30 @@ test('all seven military counters and five medieval building glyphs are original
       assert.equal(svg, atlasEntityArt(type, side));
     }
     assert.notEqual(atlasEntityArt(type,'blue'), atlasEntityArt(type,'red'));
-    signatures.add(atlasEntityArt(type, 'blue'));
+    if (type in UNIT_STATS) {
+      const glyph = atlasUnitGlyph(type as keyof typeof UNIT_STATS);
+      assert.match(glyph, /data-counter-glyph=/);
+      glyphs.add(glyph);
+    }
+    const blue = atlasEntityArt(type, 'blue');
+    const red = atlasEntityArt(type, 'red');
+    // Neutral ink-and-parchment is identical; only faction paint differs.
+    const stripFaction = (svg: string) => svg
+      .replaceAll(ATLAS_COLORS.blue, 'TEAM')
+      .replaceAll(ATLAS_COLORS.red, 'TEAM')
+      .replace(/data-team="(blue|red)"/, 'data-team="TEAM"');
+    assert.equal(stripFaction(blue), stripFaction(red));
+    if (type in BUILDING_STATS) assert.match(blue, /data-landmark=/);
+    else {
+      assert.match(blue, /data-counter-type=/);
+      assert.match(blue, /data-team-accent="counter-frame"/);
+      assert.ok(dim.width > dim.height, 'counter is rectangular');
+    }
+    assert.match(blue, /data-art="campaign-engraved-v2"/);
+    assert.match(blue, /data-entity-version="2"/);
+    assert.ok(blue.length < 15000, 'texture source stays compact');
+    signatures.add(blue);
   }
   assert.equal(signatures.size, roster.length, 'all silhouettes differ');
+  assert.equal(glyphs.size, Object.keys(UNIT_STATS).length, 'unique ink counter glyphs');
 });

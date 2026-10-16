@@ -21,6 +21,7 @@ import { createBattleRecap } from "./battleRecap";
 import { FrontlineOverlay } from "./frontlineOverlay";
 import type { MapViewSize } from "./mapArt";
 import { BATTLE_DEPTH, BattleVisualRenderer, battleView } from "./visuals";
+import { counterOutline, pointInsideCounter } from "./atlasInteraction";
 import {
   clampCamera,
   zoomAt,
@@ -819,13 +820,20 @@ export class BattleScene extends Phaser.Scene {
 
   private unitAt(units: UnitView[], x: number, y: number) {
     let best: UnitView | null = null;
-    let bestDist = UNIT_RADIUS + 10;
+    const atlas = this.visuals.isAtlas;
+    let bestDist = atlas ? Infinity : UNIT_RADIUS + 10;
     for (const u of units) {
-      // Banners are drawn above their feet, so test around the flag too.
-      const d = Math.min(
-        Math.hypot(u.x - x, u.y - y),
-        Math.hypot(u.x - x, u.y - 12 - y),
-      );
+      // The tactical counter's clickable area matches its rectangular art,
+      // without changing the engine's collision radius or command semantics.
+      if (atlas && !pointInsideCounter(
+        { x, y }, { x: u.x, y: u.y }, this.visuals.unit(u.type, u.side)
+      )) continue;
+      const d = atlas
+        ? Math.hypot(u.x - x, u.y - y)
+        : Math.min(
+            Math.hypot(u.x - x, u.y - y),
+            Math.hypot(u.x - x, u.y - 12 - y),
+          );
       if (d <= bestDist) {
         best = u;
         bestDist = d;
@@ -984,14 +992,15 @@ export class BattleScene extends Phaser.Scene {
         sprite.attackUntil = this.time.now + 100;
       sprite.wasAttacking = u.attacking;
       sprite.lastHp = u.hp;
-      if (u.moving && !this.reducedMotion) sprite.bob += delta * 0.016;
+      // A military counter slides on the map; it never walks or bounces.
+      if (u.moving && !this.reducedMotion && !this.visuals.isAtlas) sprite.bob += delta * 0.016;
       const bobY =
-        u.moving && !this.reducedMotion && this.quality !== "low"
+        u.moving && !this.reducedMotion && !this.visuals.isAtlas && this.quality !== "low"
           ? -Math.abs(Math.sin(sprite.bob)) * 1.5
           : 0;
       const recoiling =
         !this.reducedMotion &&
-        u.type === "cannon" &&
+        u.type === "cannon" && !this.visuals.isAtlas &&
         this.time.now < sprite.attackUntil;
       sprite.image.setPosition(
         sprite.x + (recoiling ? (u.side === "blue" ? -1.5 : 1.5) : 0),
@@ -1003,7 +1012,7 @@ export class BattleScene extends Phaser.Scene {
         sprite.image.setTint(0xffefc6);
       else sprite.image.clearTint();
       sprite.image.setRotation(
-        !this.reducedMotion && this.quality !== "low" && u.attacking
+        !this.visuals.isAtlas && !this.reducedMotion && this.quality !== "low" && u.attacking
           ? Math.sin(this.time.now * 0.018) * 0.04
           : 0,
       );
@@ -1275,10 +1284,12 @@ export class BattleScene extends Phaser.Scene {
           y = sprite?.y ?? u.y;
         if (this.visuals.isAtlas) {
           // A selected tactical counter uses a rectangular brass outline.
+          const art = this.visuals.unit(u.type, u.side);
+          const frame = counterOutline({ x, y }, art);
           g.fillStyle(0x3ca8ff, .13);
-          g.fillRoundedRect(x - 23, y - 18, 46, 36, 4);
+          g.fillRoundedRect(frame.x, frame.y, frame.width, frame.height, 3);
           g.lineStyle(2.5, 0xddc389, 1);
-          g.strokeRoundedRect(x - 23, y - 18, 46, 36, 4);
+          g.strokeRoundedRect(frame.x, frame.y, frame.width, frame.height, 3);
         } else {
           g.fillStyle(0x3ca8ff, 0.14);
           g.fillEllipse(x, y + 1, 34, 16);

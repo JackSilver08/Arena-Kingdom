@@ -9,6 +9,8 @@ const required = [
   'client/src/game/visuals.ts',
   'client/src/game/atlasMapArt.ts',
   'client/src/game/atlasEntityArt.ts',
+  'tools/export-campaign-entities.ts',
+  'client/src/game/atlasInteraction.ts',
   'client/src/game/atlasStyle.ts',
   'client/src/game/campaignEngraving.ts',
   'client/src/game/atlasRidgeEngraving.ts',
@@ -28,6 +30,8 @@ const required = [
 const checks = [
   ['default medieval tactical atlas map style', "mapStyle: 'atlas'", 'client/src/game/displaySettings.ts'],
   ['atlas sprites wired to renderer', 'atlasEntityArt(type, side)', 'client/src/game/visuals.ts'],
+  ['campaign counters and buildings revised', 'ATLAS_ENTITY_VERSION = 2', 'client/src/game/atlasEntityArt.ts'],
+  ['atlas selection frame uses actual counter sizes', 'counterOutline({ x, y }, art)', 'client/src/game/BattleScene.ts'],
   ['hand-inked groves used on atlas', 'engravedGroves(quality,nature,W)', 'client/src/game/atlasMapArt.ts'],
   ['mountain engraving matches shared ridges', 'engravedRidgesArt()', 'client/src/game/terrainArt.ts'],
   ['legacy documentary map style available', "'documentary'", 'client/src/game/displaySettings.ts'],

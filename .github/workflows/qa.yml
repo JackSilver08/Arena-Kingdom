@@ -50,5 +50,15 @@ jobs:
           path: artifacts/medieval-campaign-map.svg
           retention-days: 30
 
+      - name: Export P2 buildings and military counters
+        run: node --import tsx tools/export-campaign-entities.ts
+
+      - name: Upload P2 entity art proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: medieval-campaign-entities
+          path: artifacts/medieval-campaign-entities.svg
+          retention-days: 30
+
       - name: Economy balance lab
         run: npm run simulate:balance -- 4
